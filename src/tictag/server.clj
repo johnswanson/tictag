@@ -24,7 +24,7 @@
 
 (defn handle-sms [db body]
   (let [{:keys [id tags]} (parse-body body)
-        long-time (get-in @db [:pends id])]
+        long-time (db/pending-timestamp db id)]
     (timbre/tracef "Handling SMS. id: %s, tags: %s, long-time: %s" (pr-str id) (pr-str tags) (pr-str long-time))
     (assert long-time)
     (db/add-tags db long-time tags)
@@ -83,11 +83,7 @@
         (let [long-time (tc/to-long time)
               id        (str (rand-int 1000))]
           (timbre/debug "CHIME!")
-          (e/swap! (:db db)
-                 (fn [db]
-                   (-> db
-                       (assoc-in [:pends id] long-time)
-                       (update-in [:pings long-time] identity))))
+          (db/add-pending! (:db db) long-time id)
           (twilio/send-message!
            config/twilio
            (:text-number config)

@@ -14,10 +14,23 @@
   (stop [component]
     (dissoc component :db)))
 
+(defn add-pending! [db long-time id]
+  (e/swap!
+   db
+   (fn [db]
+     (-> db
+         (assoc-in [:pends id] long-time)
+         (update-in [:pings long-time] identity)))))
+
+(defn pending-timestamp [db id]
+  (get-in @db [:pends id]))
+
 (defn add-tags' [db long-time tags & [local-time]]
   (-> db
-      (assoc-in [:pings long-time :tags] tags)
-      (assoc-in [:pings long-time :local-time] local-time)))
+      (assoc-in [:pings long-time]
+                {:tags       tags
+                 :timestamp  long-time
+                 :local-time local-time})))
 
 
 (defn add-tags [db long-time tags & [local-time]]
