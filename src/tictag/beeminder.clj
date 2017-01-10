@@ -4,7 +4,8 @@
             [taoensso.timbre :as timbre]
             [clojure.string :as str]
             [tictag.config :as config :refer [config]]
-            [clojure.data :refer [diff]]))
+            [clojure.data :refer [diff]]
+            [tictag.config :refer [config]]))
 
 (defn goal-url [user goal]
   (format "https://www.beeminder.com/api/v1/users/%s/goals/%s.json" user goal))
@@ -64,14 +65,15 @@
             ;; we save anything that exists in our new datapoints
             to-save             (filter :value
                                         (for [[daystamp value] days
-                                              :let             [{id :id old-value :value}
+                                              :let             [hours (* (/ (:tagtime-gap config) 60 60) value)
+                                                                {id :id old-value :value}
                                                                 (first
                                                                  (existing-map daystamp))]]
                                           {:id       id
                                            :daystamp daystamp
                                            :value    (when (or (not old-value)
-                                                               (not= (int old-value) value))
-                                                       value)}))
+                                                               (not= (float old-value) (float hours)))
+                                                       (float hours))}))
             ;; we delete anything that
             ;; a) has a day that doesn't appear in our new datapoints, or
             ;; b) is a second datapoint for a day that appears in our new datapoints
