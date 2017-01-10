@@ -6,8 +6,9 @@
             [clj-time.core :as t]
             [tictag.server :as server]
             [tictag.client :as client]
-            [tictag.config :as config]
-            [tictag.db :as db]))
+            [tictag.config :as config :refer [config]]
+            [tictag.db :as db]
+            [tictag.beeminder :as bm]))
 
 (clojure.tools.namespace.repl/set-refresh-dirs "dev" "src")
 
@@ -21,7 +22,7 @@
             (server/map->Server
              {:config config/server})
             [:db])
-   :db (db/->Database)
+   :db (db/->Database (:server-db-file config/config))
    :chimer (component/using
             (server/map->ServerChimer {})
             [:db])))

@@ -10,7 +10,8 @@
             [clojure.string :as str]
             [clj-time.coerce :as tc]
             [clj-time.format :as f]
-            [clj-time.core :as t]))
+            [clj-time.core :as t]
+            [clj-time.local]))
 
 (defn play! [sound]
   (future (sh "/usr/bin/play" sound)))
@@ -27,10 +28,10 @@
                                "-sb" "#00f"
                                "-sf" "#fff"
                                :in (str/join "\n" tag-list))))]
-    (deref call (* 1000 60 5) "afk\n")))
+    (deref call (* 1000 60 5) nil)))
 
 (defn request-tags [prompt]
-  (let [response-str (get-one-line prompt [])]
+  (when-let [response-str (get-one-line prompt [])]
     (-> response-str
         (subs 0 (dec (count response-str)))
         (str/lower-case)
@@ -45,9 +46,9 @@
                         :headers {"Content-Type" "application/edn"}
                         :body (pr-str {:tags tags
                                        :local-time
-                                       (f/unparse
-                                        (f/formatters :date-hour-minute-second)
-                                        (t/to-time-zone time (t/default-time-zone)))})})]
+                                       (clj-time.local/format-local-time
+                                        (t/to-time-zone time (t/default-time-zone))
+                                        :date-hour-minute-second)})})]
     (if (= status 200)
       (play! "/usr/share/sounds/ubuntu/stereo/message-new-instant.ogg")
       (do
@@ -63,11 +64,12 @@
                   {:ch (a/chan (a/dropping-buffer 1))})]
       (go-loop []
         (when-let [time (<! chimes)]
-          (let [tags (request-tags
-                      (format "[%s] PING!"
-                              (f/unparse
-                               (f/formatters :date-hour-minute-second)
-                               (t/to-time-zone time (t/default-time-zone)))))]
+          (timbre/debug "Pinging client")
+          (when-let [tags (request-tags
+                           (format "[%s] PING!"
+                                   (clj-time.local/format-local-time
+                                    (t/to-time-zone time (t/default-time-zone))
+                                    :date-hour-minute-second)))]
             (send-tags-to-server time tags))
           (recur)))
       (assoc component :stop #(a/close! chimes))))

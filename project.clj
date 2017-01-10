@@ -10,9 +10,9 @@
   :main tictag.main
   :repl-options {:init-ns user}
   :dependencies [[org.clojure/clojure "1.8.0"]
+                 [org.clojure/data.csv "0.1.3"]
                  [org.clojure/core.async "0.2.395"]
                  [org.clojure/tools.cli "0.3.5"]
-                 [alandipert/enduro "1.2.0"]
                  [ring/ring-defaults "0.2.1"]
                  [fogus/ring-edn "0.3.0"]
                  [clj-time "0.12.2"]

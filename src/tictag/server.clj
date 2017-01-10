@@ -1,5 +1,7 @@
 (ns tictag.server
   (:require [clj-time.coerce :as tc]
+            [clj-time.format :as f]
+            [clj-time.core :as t]
             [chime :refer [chime-at]]
             [com.stuartsierra.component :as component]
             [org.httpkit.server :as http]
@@ -12,8 +14,7 @@
             [tictag.tagtime]
             [tictag.config :as config :refer [config]]
             [clojure.string :as str]
-            [clojure.java.io :as io]
-            [alandipert.enduro :as e]))
+            [clojure.java.io :as io]))
 
 (def delimiters #"[ ,]")
 
@@ -22,12 +23,18 @@
     {:id id
      :tags (set tags)}))
 
+(defn local-time [long-time]
+  (f/unparse
+   (f/formatters :date-hour-minute-second)
+   (t/to-time-zone (tc/from-long long-time)
+                   (t/default-time-zone))))
+
 (defn handle-sms [db body]
   (let [{:keys [id tags]} (parse-body body)
         long-time (db/pending-timestamp db id)]
-    (timbre/tracef "Handling SMS. id: %s, tags: %s, long-time: %s" (pr-str id) (pr-str tags) (pr-str long-time))
+    (timbre/debugf "Handling SMS. id: %s, tags: %s, long-time: %s" (pr-str id) (pr-str tags) (pr-str long-time))
     (assert long-time)
-    (db/add-tags db long-time tags)
+    (db/add-tags db long-time tags (local-time long-time))
     (twilio/response
      (format
       "<Response><Message>Thanks for %s</Message></Response>"
@@ -61,7 +68,7 @@
     (timbre/debug "Starting server")
     (assoc component :stop (http/run-server
                             (-> routes
-                                (wrap-db (:db db))
+                                (wrap-db db)
                                 (wrap-defaults api-defaults)
                                 (wrap-edn-params))
                             config)))
@@ -83,7 +90,7 @@
         (let [long-time (tc/to-long time)
               id        (str (rand-int 1000))]
           (timbre/debug "CHIME!")
-          (db/add-pending! (:db db) long-time id)
+          (db/add-pending! db long-time id)
           (twilio/send-message!
            config/twilio
            (:text-number config)
@@ -99,7 +106,7 @@
             (map->Server
              {:config config/server})
             [:db])
-   :db (db/->Database)
+   :db (db/->Database (:server-db-file config))
    :chimer (component/using
             (map->ServerChimer {})
             [:db])))

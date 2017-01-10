@@ -1,37 +1,35 @@
 (ns tictag.db
-  (:require [tictag.config :refer [config]]
-            [alandipert.enduro :as e]
-            [com.stuartsierra.component :as component]
-            [taoensso.timbre :as timbre]))
+  (:require [com.stuartsierra.component :as component]
+            [taoensso.timbre :as timbre]
+            [clojure.string :as str]
+            [clojure.data.csv :as csv]
+            [clojure.java.io :as io]
+            [tictag.beeminder :as beeminder]
+            [tictag.config :as config :refer [config]]))
 
-(defrecord Database []
+(defrecord Database [file]
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting database")
     (assoc component :db
-           (e/file-atom {:pings {}}
-                        (:server-db-file config))))
+           (atom {:pends {}})))
   (stop [component]
     (dissoc component :db)))
 
-(defn add-pending! [db long-time id]
-  (e/swap!
-   db
-   (fn [db]
-     (-> db
-         (assoc-in [:pends id] long-time)
-         (update-in [:pings long-time] identity)))))
+(defn add-pending! [{:keys [db]} long-time id]
+  (swap! db assoc-in [:pends id] long-time))
 
 (defn pending-timestamp [db id]
-  (get-in @db [:pends id]))
+  (get-in @(:db db) [:pends id]))
 
-(defn add-tags' [db long-time tags & [local-time]]
-  (-> db
-      (assoc-in [:pings long-time]
-                {:tags       tags
-                 :timestamp  long-time
-                 :local-time local-time})))
+(defn spit-tags [file long-time tags local-time]
+  (spit file (format "%d,%s,%s\n" long-time (str/join " " tags) local-time) :append true))
+
+(defn add-tags [{file :file} long-time tags local-time]
+  (spit-tags file long-time tags local-time)
+  (beeminder/sync! {:auth-token (:beeminder-auth-token config)}
+                   (:beeminder-user config)
+                   (:beeminder-goals config)
+                   (csv/read-csv (io/reader file))))
 
 
-(defn add-tags [db long-time tags & [local-time]]
-  (e/swap! db add-tags' long-time tags local-time))
