@@ -1,10 +1,11 @@
 (ns tictag.tagtime
   (:require [clojure.string :as str]
             [clj-time.coerce :as tc]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [tictag.config :as config]))
 
-(def gap (* 30 60))
-(def FIRSTSEED 666)
+(def gap (:tagtime-gap config/config))
+(def FIRSTSEED (:tagtime-seed config/config))
 (def IA 16807)
 (def IM 2147483647)
 (def FIRSTPING 1184083200)
