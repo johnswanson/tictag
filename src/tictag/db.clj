@@ -63,8 +63,8 @@
    :local-day (local-day local_time)
    :timestamp timestamp})
 
-(defn get-pings [db]
-  (map to-ping (j/query db ["select * from pings"])))
+(defn get-pings [db & [query]]
+  (map to-ping (j/query db (or query ["select * from pings"]))))
 
 (defn add-tags [{db :db} long-time tags local-time]
   (let [pings (j/with-db-connection [db-handle db]
@@ -82,3 +82,24 @@
   "An infinite list of pings from tagtime"
   [{tagtime :tagtime}]
   (:pings tagtime))
+
+(defn update-tags-query [{:keys [tags timestamp]}]
+  ["update pings set tags=? where timestamp=?" (str/join " " tags) timestamp])
+
+(defn update-tags! [db pings]
+  (doseq [ping pings]
+    (j/execute! db (update-tags-query ping))))
+
+(defn sleepy-pings
+  "Return the most recent contiguous set of pings marked :afk in the database"
+  [{db :db}]
+  (->> ["select * from pings order by timestamp desc limit 100"]
+       (get-pings db)
+       (drop-while (comp not :afk :tags))
+       (take-while (comp :afk :tags))))
+
+(defn sleep [ping]
+  (assoc ping :tags #{"sleep"}))
+
+(defn make-pings-sleepy! [{db :db} pings]
+  (update-tags! db (map sleep pings)))

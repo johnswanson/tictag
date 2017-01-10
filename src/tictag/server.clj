@@ -22,18 +22,31 @@
 (defn parse-body [body]
   (let [[id & tags] (str/split (str/lower-case body) delimiters)]
     {:id id
-     :tags (set tags)}))
+     :tags tags}))
 
 (defn handle-sms [db body]
-  (let [{:keys [id tags]} (parse-body body)
-        long-time (db/pending-timestamp db id)]
-    (timbre/debugf "Handling SMS. id: %s, tags: %s, long-time: %s" (pr-str id) (pr-str tags) (pr-str long-time))
-    (assert long-time)
-    (db/add-tags db long-time tags (utils/local-time-from-long long-time))
-    (twilio/response
-     (format
-      "<Response><Message>Thanks for %s</Message></Response>"
-      id))))
+  (let [[cmd & args] (str/split (str/lower-case body) #" ")]
+    (case cmd
+
+      ;; this is the only command implemented so far...
+      "sleep"
+      (let [pings (db/sleepy-pings db)]
+        (db/make-pings-sleepy! db (db/sleepy-pings db))
+        (twilio/response (format "<Response><Message>Sleeping pings from %s to %s</Message></Response>"
+                                 (:local-time (first pings))
+                                 (:local-time (last pings)))))
+
+      ;; default
+      (let [id        cmd
+            tags      args
+            long-time (db/pending-timestamp db id)]
+        (timbre/debugf "Handling SMS. id: %s, tags: %s, long-time: %s" (pr-str id) (pr-str tags) (pr-str long-time))
+        (assert long-time)
+        (db/add-tags db long-time tags (utils/local-time-from-long long-time))
+        (twilio/response
+         (format
+          "<Response><Message>Thanks for %s</Message></Response>"
+          id))))))
 
 (def sms (POST "/sms" [Body :as {db :db}] (handle-sms db Body)))
 
