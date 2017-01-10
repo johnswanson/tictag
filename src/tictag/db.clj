@@ -53,7 +53,7 @@
   (swap! pends add-pend! id long-time))
 
 (defn pending-timestamp [{:keys [pends]} id]
-  (first (filter #(= (first %) id) @pends)))
+  (second (first (filter #(= (first %) id) @pends))))
 
 (defn local-day [local-time] (str/replace (subs local-time 0 10) #"-" ""))
 
