@@ -80,7 +80,7 @@
           (when-let [tags (request-tags
                            (format "[%s] PING!"
                                    (utils/local-time time)))]
-            (send-tags-to-server shared-secret server-url time tags))
+            (send-tags-to-server server-url shared-secret time tags))
           (recur)))
       (assoc component :stop #(a/close! chimes))))
   (stop [component]
