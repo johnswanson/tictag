@@ -23,7 +23,7 @@
 
    :tagtime-seed {:default "666"
                   :conversion #(Integer. %)}
-   :tagtime-gap {:default (str (* 2 60))
+   :tagtime-gap {:default (str (* 45 60))
                  :doc "The number of seconds between pings on average, default: 30*60 (30 minutes)"
                  :conversion #(Integer. %)}})
 
