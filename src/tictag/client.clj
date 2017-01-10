@@ -12,6 +12,7 @@
             [clj-time.core :as t]
             [clj-time.local]
             [tictag.tagtime :as tagtime]
+            [tictag.client-config]
             [tictag.utils :as utils]
             [clojure.edn :as edn]))
 
@@ -41,13 +42,14 @@
           (str/split #"[ ,]")
           (set)))))
 
-(defn send-tags-to-server [server-url time tags]
+(defn send-tags-to-server [server-url secret time tags]
   (let [{status :status :as response}
         @(http/request {:method :put
                         :timeout 3000
                         :url (str server-url "/time/" (tc/to-long time))
                         :headers {"Content-Type" "application/edn"}
                         :body (pr-str {:tags tags
+                                       :secret secret
                                        :local-time
                                        (utils/local-time time)})})]
     (if (= status 200)
@@ -61,7 +63,8 @@
   (start [component]
     (timbre/debug "Beginning client chimer")
     (timbre/debug "Fetching config from remote...")
-    (let [{:keys [tagtime-seed tagtime-gap]} (-> (format "%s/config" server-url)
+    (let [shared-secret (tictag.client-config/shared-secret)
+          {:keys [tagtime-seed tagtime-gap]} (-> (format "%s/config" server-url)
                                                  (http/get {:as :text})
                                                  deref
                                                  :body
@@ -77,7 +80,7 @@
           (when-let [tags (request-tags
                            (format "[%s] PING!"
                                    (utils/local-time time)))]
-            (send-tags-to-server server-url time tags))
+            (send-tags-to-server shared-secret server-url time tags))
           (recur)))
       (assoc component :stop #(a/close! chimes))))
   (stop [component]

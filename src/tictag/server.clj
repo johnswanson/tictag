@@ -58,12 +58,18 @@
     {:status 200 :body ""}))
 
 (def timestamp
-  (PUT "/time/:timestamp" [timestamp tags local-time :as {db :db}]
-    (handle-timestamp db timestamp tags local-time)))
+  (PUT "/time/:timestamp" [secret timestamp tags local-time :as {db :db shared-secret :shared-secret}]
+    (if (= secret shared-secret)
+      (handle-timestamp db timestamp tags local-time)
+      {:status 401 :body "unauthorized"})))
 
 (defn wrap-db [handler db]
   (fn [req]
     (handler (assoc req :db db))))
+
+(defn wrap-shared-secret [handler secret]
+  (fn [req]
+    (handler (assoc req :shared-secret secret))))
 
 (def routes
   (compojure.core/routes
@@ -77,12 +83,13 @@
                            :headers {"Content-Type" "text/plain"}
                            :body    "healthy!"})))
 
-(defrecord Server [db config]
+(defrecord Server [db config shared-secret]
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting server")
     (assoc component :stop (http/run-server
                             (-> routes
+                                (wrap-shared-secret shared-secret)
                                 (wrap-db db)
                                 (wrap-defaults api-defaults)
                                 (wrap-edn-params))
@@ -121,7 +128,8 @@
   (let [tagtime (tagtime/tagtime (:tagtime-gap config) (:tagtime-seed config))]
     {:server (component/using
               (map->Server
-               {:config config/server})
+               {:config config/server
+                :shared-secret (:tictag-shared-secret config)})
               [:db])
      :db (db/->Database (:server-db-file config) tagtime)
      :chimer (component/using

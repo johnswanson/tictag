@@ -25,6 +25,8 @@
 
    :local-time-zone {:default "America/Los_Angeles"}
 
+   :tictag-shared-secret {:default "FIXMENOW"}
+
    :tagtime-seed {:default    666
                   :conversion #(Integer. %)}
    :tagtime-gap  {:default    (* 45 60)
