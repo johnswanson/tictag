@@ -8,7 +8,8 @@
             [tictag.config :as config :refer [config]]
             [tictag.tagtime :as tagtime]
             [clojure.java.jdbc :as j]
-            [tictag.utils :as utils]))
+            [tictag.utils :as utils]
+            [amalloy.ring-buffer :refer [ring-buffer]]))
 
 (defn table-exists? [db name]
   (seq
@@ -32,7 +33,7 @@
           (create-pings! db)))
       (assoc component
              :db db-spec
-             :pends (atom {}))))
+             :pends (atom (ring-buffer 16)))))
   (stop [component]
     (dissoc component :db)))
 
@@ -44,12 +45,15 @@
     (str/join " " tags)
     (or local-time (utils/local-time-from-long long-time))]))
 
+(defn add-pend! [rb id long-time]
+  (into rb [[id long-time]]))
+
 (defn add-pending! [{:keys [pends db]} long-time id]
   (insert-tag! db long-time ["afk"])
-  (swap! pends assoc id long-time))
+  (swap! pends add-pend! id long-time))
 
 (defn pending-timestamp [{:keys [pends]} id]
-  (get @pends id))
+  (first (filter #(= (first %) id) @pends)))
 
 (defn local-day [local-time] (str/replace (subs local-time 0 10) #"-" ""))
 

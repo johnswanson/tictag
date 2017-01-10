@@ -17,6 +17,7 @@
                  [org.xerial/sqlite-jdbc "3.15.1"]
                  [ring/ring-defaults "0.2.1"]
                  [fogus/ring-edn "0.3.0"]
+                 [amalloy/ring-buffer "1.2.1"]
                  [clj-time "0.12.2"]
                  [jarohen/chime "0.2.0"]
                  [http-kit "2.2.0"]

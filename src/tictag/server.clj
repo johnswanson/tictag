@@ -83,20 +83,22 @@
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting server chimer (for twilio sms)")
-    (assoc
-     component
-     :stop
-     (chime-at
-      (db/pings db)
-      (fn [time]
-        (let [long-time (tc/to-long time)
-              id        (str (rand-int 1000))]
-          (timbre/debug "CHIME!")
-          (db/add-pending! db long-time id)
-          (twilio/send-message!
-           config/twilio
-           (:text-number config)
-           (format "PING %s" id)))))))
+    (let [state (atom (cycle (shuffle (range 1000))))
+          next! (fn [] (swap! state next) (str (first @state)))]
+      (assoc
+       component
+       :stop
+       (chime-at
+        (db/pings db)
+        (fn [time]
+          (let [long-time (tc/to-long time)
+                id        (next!)]
+            (timbre/debug "CHIME!")
+            (db/add-pending! db long-time id)
+            (twilio/send-message!
+             config/twilio
+             (:text-number config)
+             (format "PING %s" id))))))))
   (stop [component]
     (when-let [stop (:stop component)]
       (stop))
