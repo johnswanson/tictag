@@ -104,7 +104,7 @@
               (map->Server
                {:config config/server})
               [:db])
-     :db (db/->Database (:server-db-file config))
+     :db (db/->Database (:server-db-file config) tagtime)
      :chimer (component/using
               (map->ServerChimer {})
               [:db])}))

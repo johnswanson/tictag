@@ -21,7 +21,7 @@
                                      :primary :key]
                                     [:tags :text]
                                     [:local_time :text]])]))
-(defrecord Database [file]
+(defrecord Database [file tagtime]
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting database")
