@@ -82,7 +82,8 @@
                                                                  (existing-map daystamp))]]
                                           {:id       id
                                            :daystamp daystamp
-                                           :value    (when (not= (int old-value) value)
+                                           :value    (when (or (not old-value)
+                                                               (not= (int old-value) value))
                                                        value)}))
             ;; we delete anything that
             ;; a) has a day that doesn't appear in our new datapoints, or
