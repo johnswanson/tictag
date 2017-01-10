@@ -11,7 +11,9 @@
             [clj-time.coerce :as tc]
             [clj-time.format :as f]
             [clj-time.core :as t]
-            [clj-time.local]))
+            [clj-time.local]
+            [tictag.tagtime :as tagtime]
+            [tictag.utils :as utils]))
 
 (defn play! [sound]
   (future (sh "/usr/bin/play" sound)))
@@ -31,12 +33,13 @@
     (deref call (* 1000 60 5) nil)))
 
 (defn request-tags [prompt]
-  (when-let [response-str (get-one-line prompt [])]
-    (-> response-str
-        (subs 0 (dec (count response-str)))
-        (str/lower-case)
-        (str/split #"[ ,]")
-        (set))))
+  (let [response-str (get-one-line prompt [])]
+    (when (seq response-str)
+      (-> response-str
+          (subs 0 (dec (count response-str)))
+          (str/lower-case)
+          (str/split #"[ ,]")
+          (set)))))
 
 (defn send-tags-to-server [time tags]
   (let [{status :status :as response}
@@ -46,30 +49,26 @@
                         :headers {"Content-Type" "application/edn"}
                         :body (pr-str {:tags tags
                                        :local-time
-                                       (clj-time.local/format-local-time
-                                        (t/to-time-zone time (t/default-time-zone))
-                                        :date-hour-minute-second)})})]
+                                       (utils/local-time time)})})]
     (if (= status 200)
       (play! "/usr/share/sounds/ubuntu/stereo/message-new-instant.ogg")
       (do
         (play! "/usr/share/sounds/ubuntu/stereo/dialog-error.ogg")
         (timbre/errorf "Error response from server: %s" response)))))
 
-(defrecord ClientChimer []
+(defrecord ClientChimer [tagtime]
   component/Lifecycle
   (start [component]
     (timbre/debug "Beginning client chimer")
     (let [chimes (chime-ch
-                  tictag.tagtime/pings
+                  (:pings tagtime)
                   {:ch (a/chan (a/dropping-buffer 1))})]
       (go-loop []
         (when-let [time (<! chimes)]
           (timbre/debug "Pinging client")
           (when-let [tags (request-tags
                            (format "[%s] PING!"
-                                   (clj-time.local/format-local-time
-                                    (t/to-time-zone time (t/default-time-zone))
-                                    :date-hour-minute-second)))]
+                                   (utils/local-time time)))]
             (send-tags-to-server time tags))
           (recur)))
       (assoc component :stop #(a/close! chimes))))
@@ -80,5 +79,4 @@
     (dissoc component :stop)))
 
 (def system
-  (component/system-map
-   :client (->ClientChimer)))
+  {:client (->ClientChimer (tagtime/tagtime (:tagtime-gap config) (:tagtime-seed config)))})

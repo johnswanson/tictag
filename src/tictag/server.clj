@@ -11,10 +11,11 @@
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
             [tictag.twilio :as twilio]
             [tictag.db :as db]
-            [tictag.tagtime]
+            [tictag.tagtime :as tagtime]
             [tictag.config :as config :refer [config]]
             [clojure.string :as str]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [tictag.utils :as utils]))
 
 (def delimiters #"[ ,]")
 
@@ -23,18 +24,12 @@
     {:id id
      :tags (set tags)}))
 
-(defn local-time [long-time]
-  (f/unparse
-   (f/formatters :date-hour-minute-second)
-   (t/to-time-zone (tc/from-long long-time)
-                   (t/default-time-zone))))
-
 (defn handle-sms [db body]
   (let [{:keys [id tags]} (parse-body body)
         long-time (db/pending-timestamp db id)]
     (timbre/debugf "Handling SMS. id: %s, tags: %s, long-time: %s" (pr-str id) (pr-str tags) (pr-str long-time))
     (assert long-time)
-    (db/add-tags db long-time tags (local-time long-time))
+    (db/add-tags db long-time tags (utils/local-time long-time))
     (twilio/response
      (format
       "<Response><Message>Thanks for %s</Message></Response>"
@@ -42,33 +37,40 @@
 
 (def sms (POST "/sms" [Body :as {db :db}] (handle-sms db Body)))
 
-(defn handle-timestamp [db timestamp tags local-time]
+(defn handle-timestamp [db is-ping? timestamp tags local-time]
   (timbre/debugf "Received client: %s %s %s" timestamp tags local-time)
   (let [long-time (Long. timestamp)]
-    (assert (tictag.tagtime/is-ping? long-time))
+    (assert (is-ping? long-time))
     (db/add-tags db long-time tags local-time)
     {:status 200 :body ""}))
 
 (def timestamp
-  (PUT "/time/:timestamp" [timestamp tags local-time :as {db :db}]
-    (handle-timestamp db timestamp tags local-time)))
+  (PUT "/time/:timestamp" [timestamp tags local-time :as {db :db is-ping? :is-ping?}]
+    (handle-timestamp db is-ping? timestamp tags local-time)))
 
 (defn wrap-db [handler db]
   (fn [req]
     (handler (assoc req :db db))))
 
+(defn wrap-is-ping? [handler is-ping?]
+  (fn [req] (handler (assoc req :is-ping? is-ping?))))
+
 (def routes
   (compojure.core/routes
    sms
-   timestamp))
+   timestamp
+   (GET "/healthcheck" [] {:status 200
+                           :headers {"Content-Type" "text/plain"}
+                           :body "healthy!"})))
 
-(defrecord Server [db config]
+(defrecord Server [db tagtime config]
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting server")
     (assoc component :stop (http/run-server
                             (-> routes
                                 (wrap-db db)
+                                (wrap-is-ping? (partial tagtime/is-ping? tagtime))
                                 (wrap-defaults api-defaults)
                                 (wrap-edn-params))
                             config)))
@@ -77,7 +79,7 @@
       (stop))
     (dissoc component :stop)))
 
-(defrecord ServerChimer [db]
+(defrecord ServerChimer [db tagtime]
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting server chimer (for twilio sms)")
@@ -85,7 +87,7 @@
      component
      :stop
      (chime-at
-      tictag.tagtime/pings
+      (:pings tagtime)
       (fn [time]
         (let [long-time (tc/to-long time)
               id        (str (rand-int 1000))]
@@ -101,14 +103,15 @@
     (dissoc component :stop)))
 
 (def system
-  (component/system-map
-   :server (component/using
-            (map->Server
-             {:config config/server})
-            [:db])
-   :db (db/->Database (:server-db-file config))
-   :chimer (component/using
-            (map->ServerChimer {})
-            [:db])))
+  (let [tagtime (tagtime/tagtime (:tagtime-gap config) (:tagtime-seed config))]
+    {:server (component/using
+              (map->Server
+               {:config config/server
+                :tagtime tagtime})
+              [:db])
+     :db (db/->Database (:server-db-file config))
+     :chimer (component/using
+              (map->ServerChimer {:tagtime tagtime})
+              [:db])}))
 
 
