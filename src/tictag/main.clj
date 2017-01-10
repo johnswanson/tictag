@@ -15,9 +15,9 @@
 
 (defn -main [& args]
   (timbre/debugf "Config: %s" (println tictag.config/config))
-  (let [sys (case (first args)
-              "server" server/system
-              "client" client/system)]
+  (let [system (case (first args)
+                 "server" server/system
+                 "client" client/system)]
     (component/start system)
     (do-not-exit!)))
 

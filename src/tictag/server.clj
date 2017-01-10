@@ -12,7 +12,8 @@
             [tictag.tagtime]
             [tictag.config :as config :refer [config]]
             [clojure.string :as str]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [alandipert.enduro :as e]))
 
 (def delimiters #"[ ,]")
 
@@ -21,24 +22,29 @@
     {:id id
      :tags (set tags)}))
 
-(def sms
-  (POST "/sms" [Body :as {db :db}]
-        (let [{:keys [id tags]} (parse-body Body)
-              long-time (get-in db [:pends id])]
-          (assert long-time)
-          (db/add-tags db long-time tags)
-          (twilio/response
-           (format
-            "<Response><Message>Thanks for %s</Message></Response>"
-            id)))))
+(defn handle-sms [db body]
+  (let [{:keys [id tags]} (parse-body body)
+        long-time (get-in @db [:pends id])]
+    (timbre/tracef "Handling SMS. id: %s, tags: %s, long-time: %s" (pr-str id) (pr-str tags) (pr-str long-time))
+    (assert long-time)
+    (db/add-tags db long-time tags)
+    (twilio/response
+     (format
+      "<Response><Message>Thanks for %s</Message></Response>"
+      id))))
+
+(def sms (POST "/sms" [Body :as {db :db}] (handle-sms db Body)))
+
+(defn handle-timestamp [db timestamp tags local-time]
+  (timbre/debugf "Received client: %s %s %s" timestamp tags local-time)
+  (let [long-time (Long. timestamp)]
+    (assert (tictag.tagtime/is-ping? long-time))
+    (db/add-tags db long-time tags local-time)
+    {:status 200 :body ""}))
 
 (def timestamp
-  (PUT "/time/:timestamp" [timestamp tags local-time :as {db :db body :body}]
-       (timbre/debugf "Received client: %s %s %s" timestamp tags local-time)
-       (let [long-time (Long. timestamp)]
-         (assert (tictag.tagtime/is-ping? long-time))
-         (db/add-tags db long-time tags local-time)
-         {:status 200 :body ""})))
+  (PUT "/time/:timestamp" [timestamp tags local-time :as {db :db}]
+    (handle-timestamp db timestamp tags local-time)))
 
 (defn wrap-db [handler db]
   (fn [req]
@@ -77,7 +83,7 @@
         (let [long-time (tc/to-long time)
               id        (str (rand-int 1000))]
           (timbre/debug "CHIME!")
-          (swap! (:db db)
+          (e/swap! (:db db)
                  (fn [db]
                    (-> db
                        (assoc-in [:pends id] long-time)
