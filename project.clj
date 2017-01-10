@@ -13,6 +13,8 @@
                  [org.clojure/data.csv "0.1.3"]
                  [org.clojure/core.async "0.2.395"]
                  [org.clojure/tools.cli "0.3.5"]
+                 [org.clojure/java.jdbc "0.7.0-alpha1"]
+                 [org.xerial/sqlite-jdbc "3.15.1"]
                  [ring/ring-defaults "0.2.1"]
                  [fogus/ring-edn "0.3.0"]
                  [clj-time "0.12.2"]

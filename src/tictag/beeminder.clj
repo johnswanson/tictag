@@ -49,21 +49,8 @@
                    :method :delete
                    :query-params {:auth_token (:auth-token creds)}})))
 
-(defn timestamp [row] (Long. (first row)))
-(defn tags [row] (set (str/split (second row) #" ")))
-(defn local-time [[_ _ lt]] lt)
-
-(defn local-day [local-time] (str/replace (subs local-time 0 10) #"-" ""))
-
-(defn row->map [row]
-  {:local-day  (local-day (local-time row))
-   :timestamp  (timestamp row)
-   :tags       (tags row)
-   :local-time (local-time row)})
-
 (defn days-matching-pred [pred? rows]
   (->> rows
-       (map row->map)
        (filter pred?)
        (map :local-day)
        (frequencies)))

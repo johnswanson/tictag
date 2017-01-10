@@ -6,32 +6,67 @@
             [clojure.java.io :as io]
             [tictag.beeminder :as beeminder]
             [tictag.config :as config :refer [config]]
-            [tictag.tagtime :as tagtime]))
+            [tictag.tagtime :as tagtime]
+            [clojure.java.jdbc :as j]
+            [tictag.utils :as utils]))
 
+(defn table-exists? [db name]
+  (seq
+   (j/query db ["select name from sqlite_master where type='table' and name=?" name])))
+
+(defn create-pings! [db]
+  (j/execute! db
+              [(j/create-table-ddl :pings
+                                   [[:timestamp :integer
+                                     :primary :key]
+                                    [:tags :text]
+                                    [:local_time :text]])]))
 (defrecord Database [file]
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting database")
-    (assoc component :db
-           (atom {:pends {}})))
+    (let [db-spec {:dbtype "sqlite" :dbname file}]
+      (when-not (table-exists? db-spec "pings")
+        (timbre/debug "Pings table does not exist, creating...")
+        (create-pings! db-spec))
+      (assoc component
+             :db db-spec
+             :pends (atom {}))))
   (stop [component]
     (dissoc component :db)))
 
-(defn add-pending! [{:keys [db]} long-time id]
-  (swap! db assoc-in [:pends id] long-time))
+(defn insert-tag! [db long-time tags & [local-time]]
+  (j/execute!
+   db
+   ["insert or replace into pings (\"timestamp\", \"tags\", \"local_time\") VALUES (?, ?, ?)"
+    long-time
+    (str/join " " tags)
+    (or local-time (utils/local-time long-time))]))
 
-(defn pending-timestamp [db id]
-  (get-in @(:db db) [:pends id]))
+(defn add-pending! [{:keys [pends db]} long-time id]
+  (insert-tag! db long-time ["afk"])
+  (swap! pends assoc id long-time))
 
-(defn spit-tags [file long-time tags local-time]
-  (spit file (format "%d,%s,%s\n" long-time (str/join " " tags) local-time) :append true))
+(defn pending-timestamp [{:keys [pends]} id]
+  (get @pends id))
 
-(defn add-tags [{file :file} long-time tags local-time]
-  (spit-tags file long-time tags local-time)
+(defn local-day [local-time] (str/replace (subs local-time 0 10) #"-" ""))
+
+(defn to-ping [{:keys [local_time timestamp tags]}]
+  {:tags (set (str/split tags #" "))
+   :local-time local_time
+   :local-day (local-day local_time)
+   :timestamp timestamp})
+
+(defn get-pings [db]
+  (map to-ping (j/query db ["select * from pings"])))
+
+(defn add-tags [{db :db} long-time tags local-time]
+  (insert-tag! db long-time tags local-time)
   (beeminder/sync! {:auth-token (:beeminder-auth-token config)}
                    (:beeminder-user config)
                    (:beeminder-goals config)
-                   (csv/read-csv (io/reader file))))
+                   (get-pings db)))
 
 
 (defn is-ping? [{tagtime :tagtime} long-time]
