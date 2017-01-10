@@ -15,10 +15,10 @@
        (recur)))))
 
 (defn -main [& args]
-  (timbre/debugf "Config: %s" (pr-str tictag.config/config))
-  (let [system (case (first args)
-                 "server" server/system
-                 "client" client/system)]
+  (let [[system-type remote-url] args
+        system                   (case system-type
+                                   "server" server/system
+                                   "client" (client/system remote-url))]
     (component/start (utils/system-map system))
     (do-not-exit!)))
 

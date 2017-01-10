@@ -16,7 +16,7 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 (defn dev-system []
-  (utils/system-map (dissoc (merge server/system client/system)
+  (utils/system-map (dissoc (merge server/system (client/system (:server-url config)))
                             :chimer)))
 
 (reloaded.repl/set-init! dev-system)

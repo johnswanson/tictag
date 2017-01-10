@@ -3,7 +3,6 @@
             [chime :refer [chime-ch]]
             [clojure.core.async :as a :refer [<! go-loop]]
             [com.stuartsierra.component :as component]
-            [tictag.config :refer [config]]
             [org.httpkit.client :as http]
             [taoensso.timbre :as timbre]
             [clojure.java.shell :refer [sh]]
@@ -13,7 +12,8 @@
             [clj-time.core :as t]
             [clj-time.local]
             [tictag.tagtime :as tagtime]
-            [tictag.utils :as utils]))
+            [tictag.utils :as utils]
+            [clojure.edn :as edn]))
 
 (defn play! [sound]
   (future (sh "/usr/bin/play" sound)))
@@ -41,11 +41,11 @@
           (str/split #"[ ,]")
           (set)))))
 
-(defn send-tags-to-server [time tags]
+(defn send-tags-to-server [server-url time tags]
   (let [{status :status :as response}
         @(http/request {:method :put
                         :timeout 3000
-                        :url (str (:server-url config) "/time/" (tc/to-long time))
+                        :url (str server-url "/time/" (tc/to-long time))
                         :headers {"Content-Type" "application/edn"}
                         :body (pr-str {:tags tags
                                        :local-time
@@ -56,11 +56,19 @@
         (play! "/usr/share/sounds/ubuntu/stereo/dialog-error.ogg")
         (timbre/errorf "Error response from server: %s" response)))))
 
-(defrecord ClientChimer [tagtime]
+(defrecord ClientChimer [server-url]
   component/Lifecycle
   (start [component]
     (timbre/debug "Beginning client chimer")
-    (let [chimes (chime-ch
+    (timbre/debug "Fetching config from remote...")
+    (let [{:keys [tagtime-seed tagtime-gap]} (-> (format "%s/config" server-url)
+                                                 (http/get {:as :text})
+                                                 deref
+                                                 :body
+                                                 edn/read-string)
+          _ (timbre/debugf "Received configuration from remote. Gap: %s, seed: %s" tagtime-gap tagtime-seed)
+          tagtime (tagtime/tagtime tagtime-gap tagtime-seed)
+          chimes (chime-ch
                   (:pings tagtime)
                   {:ch (a/chan (a/dropping-buffer 1))})]
       (go-loop []
@@ -69,7 +77,7 @@
           (when-let [tags (request-tags
                            (format "[%s] PING!"
                                    (utils/local-time time)))]
-            (send-tags-to-server time tags))
+            (send-tags-to-server server-url time tags))
           (recur)))
       (assoc component :stop #(a/close! chimes))))
   (stop [component]
@@ -78,5 +86,5 @@
       (stop-fn))
     (dissoc component :stop)))
 
-(def system
-  {:client (->ClientChimer (tagtime/tagtime (:tagtime-gap config) (:tagtime-seed config)))})
+(defn system [server-url]
+  {:client (->ClientChimer server-url)})

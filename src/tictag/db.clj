@@ -26,9 +26,10 @@
   (start [component]
     (timbre/debug "Starting database")
     (let [db-spec {:dbtype "sqlite" :dbname file}]
-      (when-not (table-exists? db-spec "pings")
-        (timbre/debug "Pings table does not exist, creating...")
-        (create-pings! db-spec))
+      (j/with-db-connection [db db-spec]
+        (when-not (table-exists? db "pings")
+          (timbre/debug "Pings table does not exist, creating...")
+          (create-pings! db)))
       (assoc component
              :db db-spec
              :pends (atom {}))))
@@ -41,7 +42,7 @@
    ["insert or replace into pings (\"timestamp\", \"tags\", \"local_time\") VALUES (?, ?, ?)"
     long-time
     (str/join " " tags)
-    (or local-time (utils/local-time long-time))]))
+    (or local-time (utils/local-time-from-long long-time))]))
 
 (defn add-pending! [{:keys [pends db]} long-time id]
   (insert-tag! db long-time ["afk"])
@@ -62,12 +63,13 @@
   (map to-ping (j/query db ["select * from pings"])))
 
 (defn add-tags [{db :db} long-time tags local-time]
-  (insert-tag! db long-time tags local-time)
-  (beeminder/sync! {:auth-token (:beeminder-auth-token config)}
-                   (:beeminder-user config)
-                   (:beeminder-goals config)
-                   (get-pings db)))
-
+  (let [pings (j/with-db-connection [db-handle db]
+                (insert-tag! db-handle long-time tags local-time)
+                (get-pings db-handle))]
+    (beeminder/sync! {:auth-token (:beeminder-auth-token config)}
+                     (:beeminder-user config)
+                     (:beeminder-goals config)
+                     pings)))
 
 (defn is-ping? [{tagtime :tagtime} long-time]
   (tagtime/is-ping? tagtime long-time))

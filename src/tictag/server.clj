@@ -29,7 +29,7 @@
         long-time (db/pending-timestamp db id)]
     (timbre/debugf "Handling SMS. id: %s, tags: %s, long-time: %s" (pr-str id) (pr-str tags) (pr-str long-time))
     (assert long-time)
-    (db/add-tags db long-time tags (utils/local-time long-time))
+    (db/add-tags db long-time tags (utils/local-time-from-long long-time))
     (twilio/response
      (format
       "<Response><Message>Thanks for %s</Message></Response>"
@@ -56,9 +56,13 @@
   (compojure.core/routes
    sms
    timestamp
-   (GET "/healthcheck" [] {:status 200
+   (GET "/config" [] {:headers {"Content-Type" "application/edn"}
+                      :status 200
+                      :body (pr-str {:tagtime-seed (:tagtime-seed config)
+                                     :tagtime-gap  (:tagtime-gap config)})})
+   (GET "/healthcheck" [] {:status  200
                            :headers {"Content-Type" "text/plain"}
-                           :body "healthy!"})))
+                           :body    "healthy!"})))
 
 (defrecord Server [db config]
   component/Lifecycle
