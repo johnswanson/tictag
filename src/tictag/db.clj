@@ -53,7 +53,7 @@
 (defn local-day [local-time] (str/replace (subs local-time 0 10) #"-" ""))
 
 (defn to-ping [{:keys [local_time timestamp tags]}]
-  {:tags (set (str/split tags #" "))
+  {:tags (set (map keyword (str/split tags #" ")))
    :local-time local_time
    :local-day (local-day local_time)
    :timestamp timestamp})
