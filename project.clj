@@ -19,6 +19,7 @@
                  [fogus/ring-edn "0.3.0"]
                  [amalloy/ring-buffer "1.2.1"]
                  [clj-time "0.12.2"]
+                 [me.raynes/conch "0.8.0"]
                  [jarohen/chime "0.2.0"]
                  [http-kit "2.2.0"]
                  [cheshire "5.6.3"]

@@ -5,7 +5,7 @@
             [com.stuartsierra.component :as component]
             [org.httpkit.client :as http]
             [taoensso.timbre :as timbre]
-            [clojure.java.shell :refer [sh]]
+            [me.raynes.conch :refer [with-programs]]
             [clojure.string :as str]
             [clj-time.coerce :as tc]
             [clj-time.format :as f]
@@ -16,22 +16,27 @@
             [tictag.utils :as utils]
             [clojure.edn :as edn]))
 
-(defn play! [sound]
-  (future (sh "/usr/bin/play" sound)))
+(with-programs [play]
+  (defn play! [sound]
+    (play sound)))
+
 
 (defn get-one-line [prompt tag-list]
   (play! "/usr/share/sounds/ubuntu/stereo/message-new-instant.ogg")
-  (let [call (future (:out (sh "dmenu"
-                               "-i"
-                               "-b"
-                               "-p" prompt
-                               "-fn" "Ubuntu Mono-48"
-                               "-nb" "#f00"
-                               "-nf" "#0f0"
-                               "-sb" "#00f"
-                               "-sf" "#fff"
-                               :in (str/join "\n" tag-list))))]
-    (deref call (* 1000 60 5) nil)))
+  (with-programs [dmenu]
+    (try
+      (dmenu "-i"
+             "-b"
+             "-p" prompt
+             "-fn" "Ubuntu Mono-48"
+             "-nb" "#f00"
+             "-nf" "#0f0"
+             "-sb" "#00f"
+             "-sf" "#fff"
+             {:in (str/join "\n" tag-list)
+              :timeout (* 60 1000)})
+      (catch Exception e
+        nil))))
 
 (defn request-tags [prompt]
   (let [response-str (get-one-line prompt [])]
