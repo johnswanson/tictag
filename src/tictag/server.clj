@@ -11,11 +11,11 @@
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
             [tictag.twilio :as twilio]
             [tictag.db :as db]
-            [tictag.tagtime :as tagtime]
             [tictag.config :as config :refer [config]]
             [clojure.string :as str]
             [clojure.java.io :as io]
-            [tictag.utils :as utils]))
+            [tictag.utils :as utils]
+            [tictag.tagtime :as tagtime]))
 
 (def delimiters #"[ ,]")
 
@@ -37,23 +37,20 @@
 
 (def sms (POST "/sms" [Body :as {db :db}] (handle-sms db Body)))
 
-(defn handle-timestamp [db is-ping? timestamp tags local-time]
+(defn handle-timestamp [db timestamp tags local-time]
   (timbre/debugf "Received client: %s %s %s" timestamp tags local-time)
   (let [long-time (Long. timestamp)]
-    (assert (is-ping? long-time))
+    (assert (db/is-ping? db long-time))
     (db/add-tags db long-time tags local-time)
     {:status 200 :body ""}))
 
 (def timestamp
-  (PUT "/time/:timestamp" [timestamp tags local-time :as {db :db is-ping? :is-ping?}]
-    (handle-timestamp db is-ping? timestamp tags local-time)))
+  (PUT "/time/:timestamp" [timestamp tags local-time :as {db :db}]
+    (handle-timestamp db timestamp tags local-time)))
 
 (defn wrap-db [handler db]
   (fn [req]
     (handler (assoc req :db db))))
-
-(defn wrap-is-ping? [handler is-ping?]
-  (fn [req] (handler (assoc req :is-ping? is-ping?))))
 
 (def routes
   (compojure.core/routes
@@ -63,14 +60,13 @@
                            :headers {"Content-Type" "text/plain"}
                            :body "healthy!"})))
 
-(defrecord Server [db tagtime config]
+(defrecord Server [db config]
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting server")
     (assoc component :stop (http/run-server
                             (-> routes
                                 (wrap-db db)
-                                (wrap-is-ping? (partial tagtime/is-ping? tagtime))
                                 (wrap-defaults api-defaults)
                                 (wrap-edn-params))
                             config)))
@@ -79,7 +75,7 @@
       (stop))
     (dissoc component :stop)))
 
-(defrecord ServerChimer [db tagtime]
+(defrecord ServerChimer [db]
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting server chimer (for twilio sms)")
@@ -87,7 +83,7 @@
      component
      :stop
      (chime-at
-      (:pings tagtime)
+      (db/pings db)
       (fn [time]
         (let [long-time (tc/to-long time)
               id        (str (rand-int 1000))]
@@ -106,12 +102,11 @@
   (let [tagtime (tagtime/tagtime (:tagtime-gap config) (:tagtime-seed config))]
     {:server (component/using
               (map->Server
-               {:config config/server
-                :tagtime tagtime})
+               {:config config/server})
               [:db])
      :db (db/->Database (:server-db-file config))
      :chimer (component/using
-              (map->ServerChimer {:tagtime tagtime})
+              (map->ServerChimer {})
               [:db])}))
 
 

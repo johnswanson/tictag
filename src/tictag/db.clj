@@ -5,7 +5,8 @@
             [clojure.data.csv :as csv]
             [clojure.java.io :as io]
             [tictag.beeminder :as beeminder]
-            [tictag.config :as config :refer [config]]))
+            [tictag.config :as config :refer [config]]
+            [tictag.tagtime :as tagtime]))
 
 (defrecord Database [file]
   component/Lifecycle
@@ -33,3 +34,10 @@
                    (csv/read-csv (io/reader file))))
 
 
+(defn is-ping? [{tagtime :tagtime} long-time]
+  (tagtime/is-ping? tagtime long-time))
+
+(defn pings
+  "An infinite list of pings from tagtime"
+  [{tagtime :tagtime}]
+  (:pings tagtime))
