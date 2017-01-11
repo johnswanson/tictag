@@ -67,13 +67,9 @@
   (map to-ping (j/query db (or query ["select * from pings"]))))
 
 (defn add-tags [{db :db} long-time tags local-time]
-  (let [pings (j/with-db-connection [db-handle db]
-                (insert-tag! db-handle long-time tags local-time)
-                (get-pings db-handle))]
-    (beeminder/sync! {:auth-token (:beeminder-auth-token config)}
-                     (:beeminder-user config)
-                     (:beeminder-goals config)
-                     pings)))
+  (j/with-db-connection [db-handle db]
+    (insert-tag! db-handle long-time tags local-time)
+    (get-pings db-handle)))
 
 (defn is-ping? [{tagtime :tagtime} long-time]
   (tagtime/is-ping? tagtime long-time))
@@ -86,7 +82,7 @@
 (defn update-tags-query [{:keys [tags timestamp]}]
   ["update pings set tags=? where timestamp=?" (str/join " " tags) timestamp])
 
-(defn update-tags! [db pings]
+(defn update-tags! [{db :db} pings]
   (doseq [ping pings]
     (j/execute! db (update-tags-query ping))))
 
@@ -101,5 +97,5 @@
 (defn sleep [ping]
   (assoc ping :tags #{"sleep"}))
 
-(defn make-pings-sleepy! [{db :db} pings]
+(defn make-pings-sleepy! [db pings]
   (update-tags! db (map sleep pings)))

@@ -67,3 +67,8 @@
    :account-token (:twilio-token config)
    :from          (:twilio-number config)})
 
+(def beeminder
+  {:auth-token (:beeminder-auth-token config)
+   :user       (:beeminder-user config)
+   :goals      (:beeminder-goals config)})
+
