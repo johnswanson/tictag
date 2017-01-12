@@ -67,7 +67,7 @@
   component/Lifecycle
   (start [component]
     (timbre/debug "Beginning client chimer")
-    (timbre/debug "Fetching config from remote...")
+    (timbre/debugf "Fetching config from remote [%s]..." server-url)
     (let [shared-secret (tictag.client-config/shared-secret)
           {:keys [tagtime-seed tagtime-gap]} (-> (format "%s/config" server-url)
                                                  (http/get {:as :text})
