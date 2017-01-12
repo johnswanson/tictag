@@ -50,18 +50,19 @@ with Linux at this point.
 4. On the server: edit `~/.tictagrc`. It's a clojure file that will be `eval`ed at config-time. Look in
 [tictag.config](../blob/master/src/tictag/config.clj) for the server configuration options and edit them.
 
-5. On the server: `lein with-profile +server repl`, then `(reset)` to launch the server. (Why run the server in a Repl? This might change
-eventually, but being able to edit and look inside the running program is extremely useful. For example, the `(sleep)` function can be
-run from the server REPL to replace the last contiguous serious of :afk pings with :sleep pings, or the `(sleepy-pings)` function can
+5. On the server: `lein repl`, then `(reloaded.repl/set-init! server-system)`, then `(reset)` to launch the server.
+(Why run the server in a Repl? This might change eventually, but being able to edit and look inside the running
+program is extremely useful. For example, the `(sleep)` function can be run from the server REPL to replace the
+last contiguous serious of :afk pings with :sleep pings, or the `(sleepy-pings)` function can
 be used to check which pings those are, or the `(pings)` function can be used to pull all pings from the database, etc.)
 
 6. *Optional, but highly recommended*: Make sure the server only serves on localhost and use something like nginx as a reverse proxy, *with SSL*.
 There's currently no authentication of client requests other than a silly "shared secret" that the server/client are configured with, sent with
 every request.
 
-7. On the client: `lein run client https://[your-server-url]` (or `lein with-profile +client repl`, then `(reset)`)
+7. On the client: `lein run client https://[your-server-url]` (or `lein repl`, then `(reloaded.repl/set-init! client-system)`, then `(reset)`)
 
 ## Beeminder Integration
 
-Like the original TagTime, **NOTE THAT THIS WILL DELETE ALL YOUR DATA FROM YOUR BEEMINDER GOAL!** Do **not** point TicTag at an existing beeminder
-goal unless you want all your data to go away.
+Like the original TagTime, **NOTE THAT THIS WILL DELETE ALL YOUR DATA FROM YOUR BEEMINDER GOAL!** Do **not** point TicTag
+at an existing beeminder goal unless you want all your data to go away.

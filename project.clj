@@ -3,9 +3,10 @@
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"
             :url  "http://www.eclipse.org/legal/epl-v10.html"}
-  :profiles {:server [:server-secrets :dev {:source-paths ["server-dev"]}]
-             :client [:client-secrets :dev {:source-paths ["client-dev"]}]
-             :dev {:dependencies [[org.clojure/tools.namespace "0.2.11"]
+  :profiles {:server [:server-secrets :dev]
+             :client [:client-secrets :dev]
+             :dev {:source-paths ["dev"]
+                   :dependencies [[org.clojure/tools.namespace "0.2.11"]
                                   [reloaded.repl "0.2.3"]]
                    :plugins [[lein-environ "1.1.0"]]}}
   :main tictag.main
