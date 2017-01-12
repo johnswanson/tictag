@@ -2,6 +2,7 @@
   (:gen-class)
   (:require [tictag.server :as server]
             [tictag.client :as client]
+            [tictag.client-config :as client-config]
             [tictag.utils :as utils]
             [tictag.config]
             [clojure.core.async :as a :refer [<! go-loop]]
@@ -18,7 +19,7 @@
   (let [[system-type remote-url] args
         system                   (case system-type
                                    "server" server/system
-                                   "client" (client/system remote-url))]
+                                   "client" (client/system (client-config/remote-url remote-url)))]
     (component/start (utils/system-map system))
     (do-not-exit!)))
 

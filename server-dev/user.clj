@@ -11,14 +11,13 @@
             [tictag.utils :as utils]
             [tictag.server-api :as api]))
 
-(clojure.tools.namespace.repl/set-refresh-dirs "dev" "src")
+(clojure.tools.namespace.repl/set-refresh-dirs "server-dev" "src")
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
 
 (defn dev-system []
-  (utils/system-map (dissoc (merge server/system (client/system (:server-url config)))
-                            :chimer)))
+  (utils/system-map server/system))
 
 (reloaded.repl/set-init! dev-system)
 
@@ -31,5 +30,4 @@
 (defn pings [& args] (apply (partial api/pings (:db system)) args))
 
 (defn last-ping [& args] (apply (partial api/last-ping (:db system)) args))
-
 

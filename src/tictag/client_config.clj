@@ -9,3 +9,6 @@
   (or (:tictag-shared-secret env)
       (try (slurp (io/file config-file)) (catch Exception e nil))
       "FIXME"))
+
+(defn remote-url [& [url]]
+  (or url (:tictag-server-url env)))
