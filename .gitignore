@@ -14,3 +14,6 @@ pom.xml.asc
 profiles.clj
 .lein-env
 /db/
+figwheel_server.log
+/resources/public/js/
+/resources/public/css/

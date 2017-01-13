@@ -15,7 +15,9 @@
             [clojure.string :as str]
             [clojure.java.io :as io]
             [tictag.utils :as utils]
-            [tictag.tagtime :as tagtime]))
+            [tictag.tagtime :as tagtime]
+            [hiccup.core :refer [html]]
+            [hiccup.page :refer [html5]]))
 
 (def delimiters #"[ ,]")
 
@@ -71,10 +73,25 @@
   (fn [req]
     (handler (assoc req :shared-secret secret))))
 
+(defn index []
+  (html5
+   [:html {:lang "en"}
+    [:head
+     [:meta {:charset "utf-8"}]
+     [:link {:href "http://fonts.googleapis.com/css?family=Roboto:400,300,200"
+             :rel "stylesheet"
+             :type "text/css"}]
+     [:link {:rel "stylesheet" :href "/css/app.css"}]]
+    [:body
+     [:div#app]
+     [:script {:src "/js/compiled/app.js"}]
+     [:script {:src "https://use.fontawesome.com/efa7507d6f.js"}]]]))
+
 (def routes
   (compojure.core/routes
    sms
    timestamp
+   (GET "/" [] (index))
    (GET "/config" [] {:headers {"Content-Type" "application/edn"}
                       :status 200
                       :body (pr-str {:tagtime-seed (:tagtime-seed config)
@@ -91,7 +108,7 @@
                             (-> routes
                                 (wrap-shared-secret shared-secret)
                                 (wrap-db db)
-                                (wrap-defaults api-defaults)
+                                (wrap-defaults (assoc-in api-defaults [:static :resources] "/public"))
                                 (wrap-edn-params))
                             config)))
   (stop [component]
