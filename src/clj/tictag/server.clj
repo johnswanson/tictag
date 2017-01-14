@@ -7,7 +7,9 @@
             [org.httpkit.server :as http]
             [compojure.core :refer [GET PUT POST]]
             [taoensso.timbre :as timbre]
+            [ring.util.response :refer [response]]
             [ring.middleware.edn :refer [wrap-edn-params]]
+            [ring.middleware.transit :refer [wrap-transit-params wrap-transit-response]]
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
             [tictag.twilio :as twilio]
             [tictag.db :as db]
@@ -87,10 +89,15 @@
      [:script {:src "/js/compiled/app.js"}]
      [:script {:src "https://use.fontawesome.com/efa7507d6f.js"}]]]))
 
+(defn pings [{db :db}]
+  (timbre/debugf "Received request!")
+  (response (db/get-pings (:db db))))
+
 (def routes
   (compojure.core/routes
    sms
    timestamp
+   (GET "/pings" [] pings)
    (GET "/" [] (index))
    (GET "/config" [] {:headers {"Content-Type" "application/edn"}
                       :status 200
@@ -106,10 +113,12 @@
     (timbre/debug "Starting server")
     (assoc component :stop (http/run-server
                             (-> routes
+                                (wrap-transit-response {:encoding :json})
                                 (wrap-shared-secret shared-secret)
                                 (wrap-db db)
                                 (wrap-defaults (assoc-in api-defaults [:static :resources] "/public"))
-                                (wrap-edn-params))
+                                (wrap-edn-params)
+                                (wrap-transit-params))
                             config)))
   (stop [component]
     (when-let [stop (:stop component)]
@@ -152,5 +161,6 @@
      :chimer (component/using
               (map->ServerChimer {})
               [:db])}))
+
 
 

@@ -54,17 +54,13 @@
                                           :optimizations :none
                                           :source-map    true}}]}))
 
-(defn cljs-repl-start []
-  (component/start figwheel-component)
-  (ra/cljs-repl))
-
-(clojure.tools.namespace.repl/set-refresh-dirs "dev" "src")
+(clojure.tools.namespace.repl/set-refresh-dirs "dev" "src/clj")
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
 
 (defn server-system []
-  (utils/system-map (assoc server/system :scss-compiler scss-compiler)))
+  (utils/system-map (assoc server/system :scss-compiler scss-compiler :figwheel figwheel-component)))
 
 (defn client-system []
   (utils/system-map (client/system (client-config/remote-url))))
@@ -76,6 +72,8 @@
 (defn beeminder-sync! [& args] (apply (partial api/beeminder-sync-from-db! config/beeminder (:db system)) args))
 (defn pings [& args] (apply (partial api/pings (:db system)) args))
 (defn last-ping [& args] (apply (partial api/last-ping (:db system)) args))
+
+(reloaded.repl/set-init! server-system)
 
 ;; first:
 ;; (reloaded.repl/set-init! server-system)

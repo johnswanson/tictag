@@ -2,9 +2,11 @@
   (:require [goog.events :as events]
             [tictag.views]
             [reagent.core :as reagent]
-            [re-frame.core :refer [dispatch dispatch-sync]])
+            [re-frame.core :refer [dispatch dispatch-sync]]
+            [day8.re-frame.http-fx])
   (:import [goog History]
            [goog.history EventType]))
+
 
 (defn ^:export main
   []

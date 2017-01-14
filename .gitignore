@@ -17,3 +17,4 @@ profiles.clj
 figwheel_server.log
 /resources/public/js/
 /resources/public/css/
+.cljs_rhino_repl
