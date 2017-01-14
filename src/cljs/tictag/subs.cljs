@@ -3,9 +3,12 @@
 
 (defn get-pings [db _]
   (if-let [query (:ping-query db)]
-    (filter (fn [{:keys [tags]}]
-              (tags (keyword query))) (:pings db []))
-    (:pings db [])))
+    (map (fn [{:keys [tags] :as ping}]
+           (if (tags (keyword query))
+             (assoc ping :active? true)
+             (assoc ping :active? false)))
+         (:pings db []))
+    (map #(assoc % :active? true) (:pings db []))))
 
 (reg-sub :pings get-pings)
 
