@@ -8,11 +8,11 @@
             [cljs-time.format :as f]))
 
 (defn datapoint [x y active?]
-  [:circle {:cx x
-            :cy y
-            :r 5
+  [:circle {:cx    x
+            :cy    y
+            :r     3
             :style {:opacity (if active? "0.8" "0.2")}
-            :fill (if active? "purple" "black")}])
+            :fill  (if active? "purple" "black")}])
 
 (defn days-since [d1 d2]
   (Math/round
@@ -64,8 +64,6 @@
             days+secs  (map to-days+secs pings)
             pct-mapper (pct-mapper first-date last-date first-time last-time)
             pcts       (map pct-mapper days+secs)]
-        (doseq [p pcts] (when (:active? p)
-                          (js/console.log (:tags p))))
         (for [{:keys [pct-days pct-secs active?]} pcts]
           ^{:key (str pct-days pct-secs)}
           [datapoint (* width pct-days) (* height pct-secs) active?])))]])

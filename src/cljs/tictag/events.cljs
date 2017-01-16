@@ -13,13 +13,13 @@
 (reg-event-fx
  :fetch-pings
  (fn [{:keys [db]} _]
-   {:db (assoc db :fetching true)
-    :http-xhrio {:method :get
-                 :uri "/pings"
-                 :timeout 8000
+   {:db         (assoc db :fetching true)
+    :http-xhrio {:method          :get
+                 :uri             "/pings"
+                 :timeout         8000
                  :response-format (transit-response-format {})
-                 :on-success [:good-http-result]
-                 :on-failure [:bad-http-result]}}))
+                 :on-success      [:good-http-result]
+                 :on-failure      [:bad-http-result]}}))
 
 (reg-event-db
  :good-http-result

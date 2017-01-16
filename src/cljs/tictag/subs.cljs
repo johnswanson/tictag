@@ -8,7 +8,7 @@
              (assoc ping :active? true)
              (assoc ping :active? false)))
          (:pings db []))
-    (map #(assoc % :active? true) (:pings db []))))
+    (:pings db)))
 
 (reg-sub :pings get-pings)
 
