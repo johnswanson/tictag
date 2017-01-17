@@ -60,7 +60,7 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 (defn server-system []
-  (utils/system-map (assoc server/system :scss-compiler scss-compiler :figwheel figwheel-component)))
+  (utils/system-map (assoc server/system :scss-compiler (scss-compiler) :figwheel figwheel-component)))
 
 (defn client-system []
   (utils/system-map (client/system (client-config/remote-url))))
