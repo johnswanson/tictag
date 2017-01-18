@@ -9,9 +9,10 @@
             [figwheel-sidecar.repl :as r]
             [figwheel-sidecar.system :as fs]
             [figwheel-sidecar.repl-api :as ra]
+            [clojure.tools.nrepl.server :as repl]
             [tictag.config :as config]
             [tictag.server :as server]
-            [tictag.server-api :as api]
+            [tictag.server-api :refer :all]
             [tictag.client :as client]
             [tictag.client-config :as client-config]
             [tictag.utils :as utils]))
@@ -60,24 +61,19 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 (defn server-system []
-  (utils/system-map (assoc server/system :scss-compiler (scss-compiler) :figwheel figwheel-component)))
+  (utils/system-map
+   (assoc server/system
+          :scss-compiler (scss-compiler)
+          :figwheel figwheel-component)))
 
 (defn client-system []
   (utils/system-map (client/system (client-config/remote-url))))
 
-(defn sleepy-pings [& args] (apply (partial api/sleepy-pings (:db system)) args))
-(defn sleep [& args] (apply (partial api/sleep (:db system)) args))
-(defn add-ping! [& args] (apply (partial api/add-ping! (:db system)) args))
-(defn update-ping! [& args] (apply (partial api/update-ping! (:db system)) args))
-(defn beeminder-sync! [& args] (apply (partial api/beeminder-sync-from-db! config/beeminder (:db system)) args))
-(defn pings [& args] (apply (partial api/pings (:db system)) args))
-(defn last-ping [& args] (apply (partial api/last-ping (:db system)) args))
+(defn start-client! []
+  (reloaded.repl/set-init! client-system)
+  (go))
 
-(reloaded.repl/set-init! server-system)
+(defn start-server! []
+  (reloaded.repl/set-init! server-system)
+  (go))
 
-;; first:
-;; (reloaded.repl/set-init! server-system)
-;; or
-;; (reloaded.repl/set-init! client-system)
-
-;; then use (reset) (stop) (start), etc.

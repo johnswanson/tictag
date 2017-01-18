@@ -2,6 +2,7 @@
   (:require [clj-time.coerce :as tc]
             [clj-time.format :as f]
             [clj-time.core :as t]
+            [clojure.tools.nrepl.server :as repl]
             [chime :refer [chime-at]]
             [com.stuartsierra.component :as component]
             [org.httpkit.server :as http]
@@ -121,6 +122,7 @@
                                 (wrap-transit-params))
                             config)))
   (stop [component]
+    (timbre/debug "Stopping server")
     (when-let [stop (:stop component)]
       (stop))
     (dissoc component :stop)))
@@ -148,7 +150,17 @@
   (stop [component]
     (when-let [stop (:stop component)]
       (stop))
+
     (dissoc component :stop)))
+
+(defrecord REPL []
+  component/Lifecycle
+  (start [component]
+    (assoc component :server (repl/start-server :port 7888)))
+  (stop [component]
+    (when-let [server (:server component)]
+      (repl/stop-server server))
+    (dissoc component :server)))
 
 (def system
   (let [tagtime (tagtime/tagtime (:tagtime-gap config) (:tagtime-seed config))]
@@ -157,6 +169,7 @@
                {:config config/server
                 :shared-secret (:tictag-shared-secret config)})
               [:db])
+     :repl-server (->REPL)
      :db (db/->Database (:server-db-file config) tagtime)
      :chimer (component/using
               (map->ServerChimer {})

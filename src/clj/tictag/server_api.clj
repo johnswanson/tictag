@@ -1,33 +1,35 @@
 (ns tictag.server-api
   (:require [tictag.db :as db]
+            [tictag.config :as config]
             [clojure.java.jdbc :as j]
-            [tictag.beeminder :as bm]))
+            [tictag.beeminder :as bm]
+            [reloaded.repl :refer [system]]))
 
-(defn sleep [db-component & [pings]]
-  (db/make-pings-sleepy! db-component (or pings (db/sleepy-pings db-component))))
+(defn sleep [& [pings]]
+  (db/make-pings-sleepy! (:db system) (or pings (db/sleepy-pings (:db system)))))
 
-(defn sleepy-pings [db-component]
-  (db/sleepy-pings db-component))
+(defn sleepy-pings []
+  (db/sleepy-pings (:db system)))
 
-(defn add-ping! [db-component long-time tags local-time]
-  (db/add-tags db-component long-time tags local-time))
+(defn add-ping! [long-time tags local-time]
+  (db/add-tags (:db system) long-time tags local-time))
 
-(defn update-ping! [db-component timestamp tags]
-  (db/update-tags! db-component [{:tags tags :timestamp timestamp}]))
+(defn update-ping! [timestamp tags]
+  (db/update-tags! (:db system) [{:tags tags :timestamp timestamp}]))
 
-(defn beeminder-sync! [bm-config pings]
-  (bm/sync! bm-config pings))
+(defn beeminder-sync! [pings]
+  (bm/sync! config/beeminder pings))
 
-(defn beeminder-sync-from-db! [bm-config {db :db}]
-  (beeminder-sync! bm-config (db/get-pings db)))
+(defn beeminder-sync-from-db! []
+  (beeminder-sync! config/beeminder (db/get-pings (:db (:db system)))))
 
-(defn pings [{db :db}]
-  (db/get-pings db))
+(defn pings []
+  (db/get-pings (:db (:db system))))
 
-(defn add-ping-and-sync! [db-component long-time tags local-time bm-config]
-  (let [pings (add-ping! db-component long-time tags local-time)]
-    (beeminder-sync! bm-config pings)))
+(defn add-ping-and-sync! [long-time tags local-time]
+  (let [pings (add-ping! (:db system) long-time tags local-time)]
+    (beeminder-sync! config/beeminder pings)))
 
-(defn last-ping [{db :db}]
-  (let [pings (db/get-pings db ["select * from pings order by timestamp desc limit 1"])]
+(defn last-ping []
+  (let [pings (db/get-pings (:db (:db system)) ["select * from pings order by timestamp desc limit 1"])]
     (first pings)))

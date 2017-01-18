@@ -9,8 +9,7 @@
                    :dependencies [[org.clojure/tools.namespace "0.2.11"]
                                   [figwheel-sidecar "0.5.8" :scope "test"]
                                   [binaryage/devtools "0.8.2"]
-                                  [com.cemerick/piggieback "0.2.1"]
-                                  [reloaded.repl "0.2.3"]]
+                                  [com.cemerick/piggieback "0.2.1"]]
                    :plugins [[lein-environ "1.1.0"]]}}
   :source-paths ["src/clj"]
   :main tictag.main
@@ -18,9 +17,11 @@
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [org.clojure/clojurescript "1.9.229"]
                  [org.clojure/data.csv "0.1.3"]
+                 [org.clojure/tools.nrepl "0.2.12"]
                  [org.clojure/core.async "0.2.395"]
                  [org.clojure/tools.cli "0.3.5"]
                  [org.clojure/java.jdbc "0.7.0-alpha1"]
+                 [reloaded.repl "0.2.3"]
                  [com.andrewmcveigh/cljs-time "0.5.0-alpha2"]
                  [day8.re-frame/http-fx "0.1.3"]
                  [ring-transit "0.1.6"]
