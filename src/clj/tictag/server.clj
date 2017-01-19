@@ -31,27 +31,32 @@
 
 (defn handle-sms [db body]
   (let [[cmd & args] (str/split (str/lower-case body) #" ")]
-    (case cmd
+    (cond
 
       ;; this is the only command implemented so far...
-      "sleep"
+      (= cmd "sleep")
       (let [pings (db/sleepy-pings db)]
         (db/make-pings-sleepy! db (db/sleepy-pings db))
         (twilio/response (format "<Response><Message>Sleeping pings from %s to %s</Message></Response>"
                                  (:local-time (first pings))
                                  (:local-time (last pings)))))
 
-      ;; default
+
+      ;; lookup by id
+      (db/pending-timestamp db cmd)
       (let [id        cmd
             tags      args
             long-time (db/pending-timestamp db id)]
         (timbre/debugf "Handling SMS. id: %s, tags: %s, long-time: %s" (pr-str id) (pr-str tags) (pr-str long-time))
         (assert long-time)
         (db/add-tags db long-time tags (utils/local-time-from-long long-time))
-        (twilio/response
-         (format
-          "<Response><Message>Thanks for %s</Message></Response>"
-          id))))))
+        (twilio/response "<Response></Response>"))
+
+      ;; maybe command is a long-time itself!
+      (db/is-ping? db (Long. cmd))
+      (let [long-time (Long. cmd)
+            tags      args]
+        (db/add-tags db long-time tags (utils/local-time-from-long long-time))))))
 
 (def sms (POST "/sms" [Body :as {db :db}] (handle-sms db Body)))
 
@@ -145,7 +150,7 @@
             (db/add-pending! db long-time id)
             (twilio/send-message!
              config
-             (format "PING %s" id))))))))
+             (format "PING! id: %s, long-time: %d" id long-time))))))))
   (stop [component]
     (when-let [stop (:stop component)]
       (stop))
