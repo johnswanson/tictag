@@ -55,7 +55,7 @@
        (map :local-day)
        (frequencies)))
 
-(defn sync! [{:keys [auth-token user goals]} rows]
+(defn sync! [{:keys [auth-token user goals]} tagtime-config rows]
   (when (and auth-token user (seq goals))
     (doseq [[goal pred?] goals]
       (let [days (days-matching-pred pred? rows)
@@ -64,7 +64,7 @@
             ;; we save anything that exists in our new datapoints
             to-save             (filter :value
                                         (for [[daystamp value] days
-                                              :let             [hours (* (/ (:gap (:tagtime config)) 60 60) value)
+                                              :let             [hours (* (/ (:gap tagtime-config) 60 60) value)
                                                                 {id :id old-value :value}
                                                                 (first
                                                                  (existing-map daystamp))]]

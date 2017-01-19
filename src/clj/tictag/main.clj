@@ -4,6 +4,7 @@
             [tictag.server-api :as api]
             [tictag.client :as client]
             [tictag.client-config :as client-config]
+            [tictag.config :as server-config]
             [tictag.utils :as utils]
             [clojure.core.async :as a :refer [<! go-loop]]
             [taoensso.timbre :as timbre] 
@@ -20,7 +21,7 @@
 (defn -main [& args]
   (let [[system-type remote-url] args
         system                   (case system-type
-                                   "server" server/system
+                                   "server" (server/system server-config/config)
                                    "client" (client/system client-config/config))]
     (reloaded.repl/set-init! (constantly (utils/system-map system)))
     (reloaded.repl/go)

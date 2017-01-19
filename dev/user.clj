@@ -60,9 +60,9 @@
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
 
-(defn server-system []
+(defn server-system [config]
   (utils/system-map
-   (assoc server/system
+   (assoc (server/system config)
           :scss-compiler (scss-compiler)
           :figwheel figwheel-component)))
 
@@ -74,6 +74,6 @@
   (go))
 
 (defn start-server! []
-  (reloaded.repl/set-init! server-system)
+  (reloaded.repl/set-init! #(server-system config/config))
   (go))
 

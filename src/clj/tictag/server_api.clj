@@ -1,6 +1,6 @@
 (ns tictag.server-api
   (:require [tictag.db :as db]
-            [tictag.config :as config]
+            [tictag.config :refer [config]]
             [clojure.java.jdbc :as j]
             [tictag.beeminder :as bm]
             [reloaded.repl :refer [system]]))
@@ -18,17 +18,17 @@
   (db/update-tags! (:db system) [{:tags tags :timestamp timestamp}]))
 
 (defn beeminder-sync! [pings]
-  (bm/sync! config/beeminder pings))
+  (bm/sync! (:beeminder config) (:tagtime config) pings))
 
 (defn beeminder-sync-from-db! []
-  (beeminder-sync! config/beeminder (db/get-pings (:db (:db system)))))
+  (beeminder-sync! (:beeminder config) (db/get-pings (:db (:db system)))))
 
 (defn pings []
   (db/get-pings (:db (:db system))))
 
 (defn add-ping-and-sync! [long-time tags local-time]
   (let [pings (add-ping! (:db system) long-time tags local-time)]
-    (beeminder-sync! config/beeminder pings)))
+    (beeminder-sync! (:beeminder config) pings)))
 
 (defn last-ping []
   (let [pings (db/get-pings (:db (:db system)) ["select * from pings order by timestamp desc limit 1"])]

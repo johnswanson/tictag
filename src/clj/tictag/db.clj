@@ -4,7 +4,6 @@
             [clojure.string :as str]
             [clojure.data.csv :as csv]
             [clojure.java.io :as io]
-            [tictag.beeminder :as beeminder]
             [tictag.tagtime :as tagtime]
             [clojure.java.jdbc :as j]
             [tictag.utils :as utils]

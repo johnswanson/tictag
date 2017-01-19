@@ -31,7 +31,9 @@
         pings      (map tc/from-long pings-ms)]
     {:pings-unix pings-unix
      :pings-ms   pings-ms
-     :pings      pings}))
+     :pings      pings
+     :gap        gap
+     :seed       seed}))
 
 (defn times-until [{:keys [pings]} now]
   (take-while #(t/after? now %) pings))
