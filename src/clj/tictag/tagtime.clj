@@ -2,7 +2,6 @@
   (:require [clojure.string :as str]
             [clj-time.coerce :as tc]
             [clojure.java.io :as io]
-            [tictag.config :as config]
             [clj-time.core :as t]))
 
 

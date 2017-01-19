@@ -5,7 +5,6 @@
             [clojure.data.csv :as csv]
             [clojure.java.io :as io]
             [tictag.beeminder :as beeminder]
-            [tictag.config :as config :refer [config]]
             [tictag.tagtime :as tagtime]
             [clojure.java.jdbc :as j]
             [tictag.utils :as utils]

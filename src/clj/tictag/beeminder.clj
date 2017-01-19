@@ -4,8 +4,7 @@
             [taoensso.timbre :as timbre]
             [clojure.string :as str]
             [tictag.config :as config :refer [config]]
-            [clojure.data :refer [diff]]
-            [tictag.config :refer [config]]))
+            [clojure.data :refer [diff]]))
 
 (defn goal-url [user goal]
   (format "https://www.beeminder.com/api/v1/users/%s/goals/%s.json" user goal))
@@ -65,7 +64,7 @@
             ;; we save anything that exists in our new datapoints
             to-save             (filter :value
                                         (for [[daystamp value] days
-                                              :let             [hours (* (/ (:tagtime-gap config) 60 60) value)
+                                              :let             [hours (* (/ (:gap (:tagtime config)) 60 60) value)
                                                                 {id :id old-value :value}
                                                                 (first
                                                                  (existing-map daystamp))]]

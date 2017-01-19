@@ -102,20 +102,20 @@
    (GET "/" [] (index))
    (GET "/config" [] {:headers {"Content-Type" "application/edn"}
                       :status 200
-                      :body (pr-str {:tagtime-seed (:tagtime-seed config)
-                                     :tagtime-gap  (:tagtime-gap config)})})
+                      :body (pr-str {:tagtime-seed (:seed (:tagtime config))
+                                     :tagtime-gap  (:gap (:tagtime config))})})
    (GET "/healthcheck" [] {:status  200
                            :headers {"Content-Type" "text/plain"}
                            :body    "healthy!"})))
 
-(defrecord Server [db config shared-secret]
+(defrecord Server [db config]
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting server")
     (assoc component :stop (http/run-server
                             (-> routes
                                 (wrap-transit-response {:encoding :json})
-                                (wrap-shared-secret shared-secret)
+                                (wrap-shared-secret (:shared-secret config))
                                 (wrap-db db)
                                 (wrap-defaults (assoc-in api-defaults [:static :resources] "/public"))
                                 (wrap-edn-params)
@@ -144,8 +144,7 @@
             (timbre/debug "CHIME!")
             (db/add-pending! db long-time id)
             (twilio/send-message!
-             config/twilio
-             (:text-number config)
+             (:twilio config)
              (format "PING %s" id))))))))
   (stop [component]
     (when-let [stop (:stop component)]
@@ -163,14 +162,13 @@
     (dissoc component :server)))
 
 (def system
-  (let [tagtime (tagtime/tagtime (:tagtime-gap config) (:tagtime-seed config))]
+  (let [tagtime (tagtime/tagtime (get-in config [:tagtime :gap]) (get-in config [:tagtime :seed]))]
     {:server (component/using
               (map->Server
-               {:config config/server
-                :shared-secret (:tictag-shared-secret config)})
+               {:config (:tictag-server config)})
               [:db])
      :repl-server (->REPL)
-     :db (db/->Database (:server-db-file config) tagtime)
+     :db (db/->Database (get-in config [:db :file]) tagtime)
      :chimer (component/using
               (map->ServerChimer {})
               [:db])}))
