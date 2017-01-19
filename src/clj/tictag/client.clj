@@ -12,7 +12,6 @@
             [clj-time.core :as t]
             [clj-time.local]
             [tictag.tagtime :as tagtime]
-            [tictag.client-config]
             [tictag.utils :as utils]
             [clojure.edn :as edn]))
 
@@ -63,13 +62,13 @@
         (play! "/usr/share/sounds/ubuntu/stereo/dialog-error.ogg")
         (timbre/errorf "Error response from server: %s" response)))))
 
-(defrecord ClientChimer [server-url]
+(defrecord ClientChimer [config]
   component/Lifecycle
   (start [component]
     (timbre/debug "Beginning client chimer")
-    (timbre/debugf "Fetching config from remote [%s]..." server-url)
-    (let [shared-secret (tictag.client-config/shared-secret)
-          {:keys [tagtime-seed tagtime-gap]} (-> (format "%s/config" server-url)
+    (timbre/debugf "Fetching config from remote [%s]..." (:remote-url config))
+    (let [shared-secret (:shared-secret config)
+          {:keys [tagtime-seed tagtime-gap]} (-> (format "%s/config" (:remote-url config))
                                                  (http/get {:as :text})
                                                  deref
                                                  :body
@@ -85,7 +84,7 @@
           (when-let [tags (request-tags
                            (format "[%s] PING!"
                                    (utils/local-time time)))]
-            (send-tags-to-server server-url shared-secret time tags))
+            (send-tags-to-server (:remote-url config) shared-secret time tags))
           (recur)))
       (assoc component :stop #(a/close! chimes))))
   (stop [component]
@@ -94,5 +93,5 @@
       (stop-fn))
     (dissoc component :stop)))
 
-(defn system [server-url]
-  {:client (->ClientChimer server-url)})
+(defn system [config]
+  {:client (->ClientChimer config)})

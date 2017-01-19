@@ -67,7 +67,7 @@
           :figwheel figwheel-component)))
 
 (defn client-system []
-  (utils/system-map (client/system (client-config/remote-url))))
+  (utils/system-map (client/system client-config/config)))
 
 (defn start-client! []
   (reloaded.repl/set-init! client-system)

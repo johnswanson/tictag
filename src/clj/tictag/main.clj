@@ -21,7 +21,7 @@
   (let [[system-type remote-url] args
         system                   (case system-type
                                    "server" server/system
-                                   "client" (client/system (client-config/remote-url remote-url)))]
+                                   "client" (client/system client-config/config))]
     (reloaded.repl/set-init! (constantly (utils/system-map system)))
     (reloaded.repl/go)
     (do-not-exit!)))
