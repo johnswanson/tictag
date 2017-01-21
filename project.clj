@@ -3,14 +3,12 @@
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"
             :url  "http://www.eclipse.org/legal/epl-v10.html"}
-  :profiles {:server [:server-secrets :dev]
-             :client [:client-secrets :dev]
-             :dev {:source-paths ["dev"]
-                   :dependencies [[org.clojure/tools.namespace "0.2.11"]
-                                  [figwheel-sidecar "0.5.8" :scope "test"]
-                                  [binaryage/devtools "0.8.2"]
-                                  [com.cemerick/piggieback "0.2.1"]]
-                   :plugins [[lein-environ "1.1.0"]]}}
+  :profiles {:dev [:dev-secrets {:source-paths ["dev"]
+                                 :dependencies [[org.clojure/tools.namespace "0.2.11"]
+                                                [figwheel-sidecar "0.5.8" :scope "test"]
+                                                [binaryage/devtools "0.8.2"]
+                                                [com.cemerick/piggieback "0.2.1"]]
+                                 :plugins [[lein-environ "1.1.0"]]}]}
   :source-paths ["src/clj"]
   :main tictag.main
   :repl-options {:init-ns user :nrepl-middleware [cemerick.piggieback/wrap-cljs-repl]}
