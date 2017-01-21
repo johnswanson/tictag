@@ -41,7 +41,6 @@
                                  (:local-time (first pings))
                                  (:local-time (last pings)))))
 
-
       ;; lookup by id
       (db/pending-timestamp db cmd)
       (let [id        cmd
@@ -56,7 +55,18 @@
       (db/is-ping? db (Long. cmd))
       (let [long-time (Long. cmd)
             tags      args]
-        (db/add-tags db long-time tags (utils/local-time-from-long long-time))))))
+        (db/add-tags db long-time tags (utils/local-time-from-long long-time)))
+
+      :else
+      (let [tags      args
+            last-ping (db/get-pings (:db db) ["select * from pings order by timestamp desc limit 1"])]
+        (db/update-tags! db [(assoc last-ping :tags args)])
+        (twilio/response
+         (format
+          "<Response><Message>Updated ping with timestamp %s, old pings: %s, new pings: %s</Message></Response>"
+          (:timestamp last-ping)
+          (pr-str (:tags last-pings))
+          (pr-str (set args))))))))
 
 (def sms
   (POST "/sms" [Body :as {db :db :as req}]
