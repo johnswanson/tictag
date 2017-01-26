@@ -65,7 +65,7 @@
          (format
           "<Response><Message>Updated ping with timestamp %s, old pings: %s, new pings: %s</Message></Response>"
           (:timestamp last-ping)
-          (pr-str (:tags last-pings))
+          (pr-str (:tags last-ping))
           (pr-str (set args))))))))
 
 (def sms
