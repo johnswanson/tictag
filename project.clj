@@ -14,8 +14,9 @@
                                        :optimizations :none
                                        :source-map    true}}]}
   :plugins [[lein-cljsbuild "1.1.5"]]
-  :hooks [leiningen.cljsbuild]
-  :profiles {:dev [:dev-secrets {:source-paths ["dev"]
+  :test-paths ["test/clj"]
+  :profiles {:uberjar {:hooks [leiningen.cljsbuild]}
+             :dev [:dev-secrets {:source-paths ["dev" "test/clj"]
                                  :dependencies [[org.clojure/tools.namespace "0.2.11"]
                                                 [figwheel-sidecar "0.5.8" :scope "test"]
                                                 [binaryage/devtools "0.8.2"]

@@ -24,49 +24,61 @@
 
 (def delimiters #"[ ,]")
 
+(defn str-number? [s]
+  (try (Long. s) (catch Exception e nil)))
+
 (defn parse-body [body]
   (let [[id & tags] (str/split (str/lower-case body) delimiters)]
     {:id id
      :tags tags}))
 
+(defn parse-sms-body [body]
+  (let [[cmd? & args :as all-args] (str/split (str/lower-case body) #" ")]
+    (if (str-number? cmd?)
+      (if (> (count cmd?) 3)
+        {:command :tag-ping-by-long-time
+         :args {:tags args
+                :long-time (Long. cmd?)}}
+        {:command :tag-ping-by-id
+         :args {:tags args
+                :id cmd?}})
+
+      (if (and (= cmd? "sleep") (= (count args) 0))
+        {:command :sleep
+         :args {}}
+        {:command :tag-last-ping
+         :args {:tags all-args}})))) 
+
+(defn sleep [db _]
+  (let [pings (db/sleepy-pings db)]
+    (db/make-pings-sleepy! db (db/sleepy-pings db))
+    (twilio/response
+     (format
+      "<Response><Message>Sleeping pings from %s to %s</Message></Response>"
+      (:local-time (last pings))
+      (:local-time (first pings))))))
+
+(defn tag-ping-by-long-time [db {:keys [long-time tags]}]
+  (assert long-time)
+  (db/add-tags db long-time tags (utils/local-time-from-long long-time)))
+
+(defn tag-ping-by-id [db {:keys [id tags]}]
+  (let [long-time (db/pending-timestamp db id)]
+    (tag-ping-by-long-time db long-time tags)))
+
+(defn tag-last-ping [db {:keys [tags]}]
+  (let [[last-ping] (db/get-pings
+                     (:db db)
+                     ["select * from pings order by timestamp desc limit 1"])]
+    (db/update-tags! db [(assoc last-ping :tags tags)])))
+
 (defn handle-sms [db body]
-  (let [[cmd & args :as all-args] (str/split (str/lower-case body) #" ")]
-    (cond
-
-      ;; this is the only command implemented so far...
-      (= cmd "sleep")
-      (let [pings (db/sleepy-pings db)]
-        (db/make-pings-sleepy! db (db/sleepy-pings db))
-        (twilio/response (format "<Response><Message>Sleeping pings from %s to %s</Message></Response>"
-                                 (:local-time (first pings))
-                                 (:local-time (last pings)))))
-
-      ;; lookup by id
-      (db/pending-timestamp db cmd)
-      (let [id        cmd
-            tags      args
-            long-time (db/pending-timestamp db id)]
-        (timbre/debugf "Handling SMS. id: %s, tags: %s, long-time: %s" (pr-str id) (pr-str tags) (pr-str long-time))
-        (assert long-time)
-        (db/add-tags db long-time tags (utils/local-time-from-long long-time))
-        (twilio/response "<Response></Response>"))
-
-      ;; maybe command is a long-time itself!
-      (try (db/is-ping? db (Long. cmd)) (catch Exception e nil))
-      (let [long-time (Long. cmd)
-            tags      args]
-        (db/add-tags db long-time tags (utils/local-time-from-long long-time)))
-
-      :else
-      (let [tags        all-args
-            [last-ping] (db/get-pings (:db db) ["select * from pings order by timestamp desc limit 1"])]
-        (db/update-tags! db [(assoc last-ping :tags args)])
-        (twilio/response
-         (format
-          "<Response><Message>Updated ping with timestamp %s, old pings: %s, new pings: %s</Message></Response>"
-          (:timestamp last-ping)
-          (pr-str (:tags last-ping))
-          (pr-str (set args))))))))
+  (let [{:keys [command args]} (parse-sms-body body)]
+    (case command
+      :sleep                 (sleep db args)
+      :tag-ping-by-id        (tag-ping-by-id db args)
+      :tag-ping-by-long-time (tag-ping-by-long-time db args)
+      :tag-last-ping         (tag-last-ping db args))))
 
 (def sms (POST "/sms" [Body :as {db :db}] (handle-sms db Body)))
 
