@@ -17,15 +17,15 @@
             [tictag.client-config :as client-config]
             [tictag.utils :as utils]))
 
-(defrecord Figwheel [config]
+(defrecord Figwheel []
   component/Lifecycle
   (start [component]
-    (assoc component :figwheel (ra/start-figwheel! config)))
+    (assoc component :figwheel (ra/start-figwheel!)))
   (stop [component]
     (dissoc component :figwheel)))
 
-(defn figwheel [config]
-  (->Figwheel config))
+(defn figwheel []
+  (->Figwheel))
 
 (defn scss-compiler
   []
@@ -43,17 +43,7 @@
 
 ;; We keep this separate from the overall system in order to start it with CIDER.
 (def figwheel-component
-  (figwheel {:figwheel-options {:css-dirs  ["resources/public/css"]}
-             :build-ids        ["dev"]
-             :all-builds [{:id           "dev"
-                           :figwheel     {:websocket-host "localhost"}
-                           :source-paths ["src/cljs"]
-                           :compiler     {:main          'tictag.dev
-                                          :asset-path    "/js/compiled"
-                                          :output-to     "resources/public/js/compiled/app.js"
-                                          :output-dir    "resources/public/js/compiled"
-                                          :optimizations :none
-                                          :source-map    true}}]}))
+  (figwheel))
 
 (clojure.tools.namespace.repl/set-refresh-dirs "dev" "src/clj")
 

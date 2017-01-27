@@ -3,6 +3,18 @@
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"
             :url  "http://www.eclipse.org/legal/epl-v10.html"}
+  :figwheel {:css-dirs ["resources/public/css"]}
+  :cljsbuild {:builds [{:id           "dev"
+                        :figwheel     true
+                        :source-paths ["src/cljs"]
+                        :compiler     {:main          "tictag.dev"
+                                       :asset-path    "/js/compiled"
+                                       :output-to     "resources/public/js/compiled/app.js"
+                                       :output-dir    "resources/public/js/compiled"
+                                       :optimizations :none
+                                       :source-map    true}}]}
+  :plugins [[lein-cljsbuild "1.1.5"]]
+  :hooks [leiningen.cljsbuild]
   :profiles {:dev [:dev-secrets {:source-paths ["dev"]
                                  :dependencies [[org.clojure/tools.namespace "0.2.11"]
                                                 [figwheel-sidecar "0.5.8" :scope "test"]
