@@ -135,16 +135,18 @@
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting server")
-    (assoc component :stop (http/run-server
-                            (-> (routes tagtime)
-                                (wrap-twilio twilio)
-                                (wrap-transit-response {:encoding :json})
-                                (wrap-shared-secret (:shared-secret config))
-                                (wrap-db db)
-                                (wrap-defaults (assoc-in api-defaults [:static :resources] "/public"))
-                                (wrap-edn-params)
-                                (wrap-transit-params))
-                            config)))
+    (let [stop (http/run-server
+                (-> (routes tagtime)
+                    (wrap-twilio twilio)
+                    (wrap-transit-response {:encoding :json})
+                    (wrap-shared-secret (:shared-secret config))
+                    (wrap-db db)
+                    (wrap-defaults (assoc-in api-defaults [:static :resources] "/public"))
+                    (wrap-edn-params)
+                    (wrap-transit-params))
+                config)]
+      (timbre/debug "Server created")
+      (assoc component :stop stop)))
   (stop [component]
     (timbre/debug "Stopping server")
     (when-let [stop (:stop component)]

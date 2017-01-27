@@ -1,0 +1,8 @@
+#!/bin/bash
+set -xeuo pipefail
+
+lein clean
+lein uberjar
+scp ./run ./target/uberjar/standalone.jar $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/
+ssh $DEPLOY_USER@$DEPLOY_HOST systemctl --user restart tictag.service
+

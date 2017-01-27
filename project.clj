@@ -12,6 +12,8 @@
   :source-paths ["src/clj"]
   :main tictag.main
   :repl-options {:init-ns user :nrepl-middleware [cemerick.piggieback/wrap-cljs-repl]}
+  :target-path "target/%s"
+  :uberjar-name "standalone.jar"
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [org.clojure/data.codec "0.1.0"]
                  [org.clojure/clojurescript "1.9.229"]
