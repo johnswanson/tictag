@@ -32,4 +32,4 @@
         (sha1-hmac-bytes (:account-token twilio))
         (b64/encode)
         (String. "UTF-8"))
-       (get-in req [:headers "X-Twilio-Signature"]))))
+       (get-in req [:headers "X-TWILIO-SIGNATURE"]))))
