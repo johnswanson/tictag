@@ -30,7 +30,7 @@
      :tags tags}))
 
 (defn handle-sms [db body]
-  (let [[cmd & args] (str/split (str/lower-case body) #" ")]
+  (let [[cmd & args :as all-args] (str/split (str/lower-case body) #" ")]
     (cond
 
       ;; this is the only command implemented so far...
@@ -58,7 +58,7 @@
         (db/add-tags db long-time tags (utils/local-time-from-long long-time)))
 
       :else
-      (let [tags        args
+      (let [tags        all-args
             [last-ping] (db/get-pings (:db db) ["select * from pings order by timestamp desc limit 1"])]
         (db/update-tags! db [(assoc last-ping :tags args)])
         (twilio/response
