@@ -52,14 +52,14 @@
         (twilio/response "<Response></Response>"))
 
       ;; maybe command is a long-time itself!
-      (db/is-ping? db (Long. cmd))
+      (try (db/is-ping? db (Long. cmd)) (catch Exception e nil))
       (let [long-time (Long. cmd)
             tags      args]
         (db/add-tags db long-time tags (utils/local-time-from-long long-time)))
 
       :else
-      (let [tags      args
-            last-ping (db/get-pings (:db db) ["select * from pings order by timestamp desc limit 1"])]
+      (let [tags        args
+            [last-ping] (db/get-pings (:db db) ["select * from pings order by timestamp desc limit 1"])]
         (db/update-tags! db [(assoc last-ping :tags args)])
         (twilio/response
          (format
