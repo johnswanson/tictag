@@ -15,7 +15,6 @@
   :target-path "target/%s"
   :uberjar-name "standalone.jar"
   :dependencies [[org.clojure/clojure "1.8.0"]
-                 [org.clojure/data.codec "0.1.0"]
                  [org.clojure/clojurescript "1.9.229"]
                  [org.clojure/data.csv "0.1.3"]
                  [org.clojure/tools.nrepl "0.2.12"]
@@ -32,7 +31,6 @@
                  [re-frame "0.9.1"]
                  [hiccup "1.0.5"]
                  [ring/ring-defaults "0.2.1"]
-                 [pandect "0.6.1"]
                  [fogus/ring-edn "0.3.0"]
                  [amalloy/ring-buffer "1.2.1"]
                  [clj-time "0.12.2"]

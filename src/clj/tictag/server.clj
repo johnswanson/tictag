@@ -68,11 +68,7 @@
           (pr-str (:tags last-ping))
           (pr-str (set args))))))))
 
-(def sms
-  (POST "/sms" [Body :as {db :db :as req}]
-    (if (twilio/valid-sig? (:twilio req) req)
-      (handle-sms db Body)
-      {:body "unauthorized sms" :status 401})))
+(def sms (POST "/sms" [Body :as {db :db}] (handle-sms db Body)))
 
 (defn handle-timestamp [db timestamp tags local-time]
   (timbre/debugf "Received client: %s %s %s" timestamp tags local-time)
@@ -127,17 +123,12 @@
                            :headers {"Content-Type" "text/plain"}
                            :body    "healthy!"})))
 
-(defn wrap-twilio [handler twilio]
-  (fn [req]
-    (handler (assoc req :twilio twilio))))
-
-(defrecord Server [db config tagtime twilio]
+(defrecord Server [db config tagtime]
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting server")
     (let [stop (http/run-server
                 (-> (routes tagtime)
-                    (wrap-twilio twilio)
                     (wrap-transit-response {:encoding :json})
                     (wrap-shared-secret (:shared-secret config))
                     (wrap-db db)
@@ -153,7 +144,7 @@
       (stop))
     (dissoc component :stop)))
 
-(defrecord ServerChimer [db twilio]
+(defrecord ServerChimer [db config]
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting server chimer (for twilio sms)")
@@ -170,11 +161,12 @@
             (timbre/debug "CHIME!")
             (db/add-pending! db long-time id)
             (twilio/send-message!
-             twilio
+             config
              (format "PING! id: %s, long-time: %d" id long-time))))))))
   (stop [component]
     (when-let [stop (:stop component)]
       (stop))
+
     (dissoc component :stop)))
 
 (defrecord REPL []
@@ -187,20 +179,19 @@
     (dissoc component :server)))
 
 (defn system [config]
-  (timbre/debug "CALLING SERVER SYSTEM")
   {:server (component/using
             (map->Server
              {:config (:tictag-server config)})
-            [:db :tagtime :twilio])
-   :twilio (:twilio config)
+            [:db :tagtime])
    :tagtime (tagtime/tagtime (get-in config [:tagtime :gap]) (get-in config [:tagtime :seed]))
    :repl-server (->REPL)
    :db (component/using
         (db/map->Database {:file (get-in config [:db :file])})
         [:tagtime])
    :chimer (component/using
-            (map->ServerChimer {})
-            [:db :twilio])})
+            (map->ServerChimer
+             {:config (:twilio config)})
+            [:db])})
 
 
 

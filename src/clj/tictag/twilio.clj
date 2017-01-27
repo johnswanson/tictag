@@ -1,10 +1,5 @@
 (ns tictag.twilio
-  (:require [org.httpkit.client :as http]
-            [ring.util.request :refer [request-url]]
-            [clojure.string :as str]
-            [pandect.algo.sha1 :refer [sha1-hmac-bytes]]
-            [clojure.data.codec.base64 :as b64]
-            [taoensso.timbre :as timbre]))
+  (:require [org.httpkit.client :as http]))
 
 (def base-url "https://api.twilio.com/2010-04-01/Accounts")
 (defn sms-url
@@ -23,13 +18,3 @@
   {:status 200
    :headers {"Content-Type" "text/xml"}
    :body twiml})
-
-
-(defn valid-sig? [twilio req]
-  (let [url    (request-url req)
-        param-str (str/join (map name (flatten (sort (:params req)))))]
-    (= (-> (str url param-str)
-        (sha1-hmac-bytes (:account-token twilio))
-        (b64/encode)
-        (String. "UTF-8"))
-       (get-in req [:headers "X-TWILIO-SIGNATURE"]))))
