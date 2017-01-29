@@ -3,7 +3,6 @@
             [cheshire.core :as cheshire]
             [taoensso.timbre :as timbre]
             [clojure.string :as str]
-            [tictag.config :as config :refer [config]]
             [clojure.data :refer [diff]]))
 
 (defn goal-url [user goal]

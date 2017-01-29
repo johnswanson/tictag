@@ -1,14 +1,10 @@
 (ns tictag.main
   (:gen-class)
-  (:require [tictag.server :as server]
-            [tictag.server-api :as api]
+  (:require [tictag.system]
             [tictag.config :refer [config]]
-            [tictag.utils :as utils]
             [clojure.core.async :as a :refer [<! go-loop]]
-            [taoensso.timbre :as timbre] 
             [com.stuartsierra.component :as component]
-            [reloaded.repl :refer [system]]
-            [tictag.server-api :refer :all]))
+            [reloaded.repl :refer [system]]))
 
 (defn do-not-exit! []
   (a/<!!
@@ -16,10 +12,10 @@
      (let [_ (<! (a/timeout 100000))]
        (recur)))))
 
-(def server-system (server/system config))
+(def server-system (tictag.system/system config))
 
 (defn -main [& _]
-  (reloaded.repl/set-init! (constantly (utils/system-map server-system)))
+  (reloaded.repl/set-init! (constantly server-system))
   (reloaded.repl/go)
   (do-not-exit!))
 

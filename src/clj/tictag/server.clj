@@ -1,9 +1,6 @@
 (ns tictag.server
-  (:require [clj-time.coerce :as tc]
-            [clj-time.format :as f]
+  (:require [clj-time.format :as f]
             [clj-time.core :as t]
-            [clojure.tools.nrepl.server :as repl]
-            [chime :refer [chime-at]]
             [com.stuartsierra.component :as component]
             [org.httpkit.server :as http]
             [compojure.core :refer [GET PUT POST]]
@@ -14,11 +11,9 @@
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
             [tictag.twilio :as twilio]
             [tictag.db :as db]
-            [tictag.config :as config :refer [config]]
             [clojure.string :as str]
             [clojure.java.io :as io]
             [tictag.utils :as utils]
-            [tictagapi.core :as tagtime]
             [hiccup.core :refer [html]]
             [hiccup.page :refer [html5]]))
 
@@ -47,7 +42,7 @@
         {:command :sleep
          :args {}}
         {:command :tag-last-ping
-         :args {:tags all-args}})))) 
+         :args {:tags all-args}}))))
 
 (defn sleep [db _]
   (let [pings (db/sleepy-pings db)]
@@ -155,55 +150,4 @@
     (when-let [stop (:stop component)]
       (stop))
     (dissoc component :stop)))
-
-(defrecord ServerChimer [db config]
-  component/Lifecycle
-  (start [component]
-    (timbre/debug "Starting server chimer (for twilio sms)")
-    (let [state (atom (cycle (shuffle (range 1000))))
-          next! (fn [] (swap! state next) (str (first @state)))]
-      (assoc
-       component
-       :stop
-       (chime-at
-        (db/pings db)
-        (fn [time]
-          (let [long-time (tc/to-long time)
-                id        (next!)]
-            (timbre/debug "CHIME!")
-            (db/add-pending! db long-time id)
-            (twilio/send-message!
-             config
-             (format "PING! id: %s, long-time: %d" id long-time))))))))
-  (stop [component]
-    (when-let [stop (:stop component)]
-      (stop))
-
-    (dissoc component :stop)))
-
-(defrecord REPL []
-  component/Lifecycle
-  (start [component]
-    (assoc component :server (repl/start-server :port 7888)))
-  (stop [component]
-    (when-let [server (:server component)]
-      (repl/stop-server server))
-    (dissoc component :server)))
-
-(defn system [config]
-  {:server (component/using
-            (map->Server
-             {:config (:tictag-server config)})
-            [:db :tagtime])
-   :tagtime (tagtime/tagtime (get-in config [:tagtime :gap]) (get-in config [:tagtime :seed]))
-   :repl-server (->REPL)
-   :db (component/using
-        (db/map->Database {:file (get-in config [:db :file])})
-        [:tagtime])
-   :chimer (component/using
-            (map->ServerChimer
-             {:config (:twilio config)})
-            [:db])})
-
-
 
