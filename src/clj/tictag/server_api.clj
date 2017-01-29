@@ -21,7 +21,7 @@
   (bm/sync! (:beeminder config) (:tagtime config) pings))
 
 (defn beeminder-sync-from-db! []
-  (beeminder-sync! (:beeminder config) (db/get-pings (:db (:db system)))))
+  (beeminder-sync! (db/get-pings (:db (:db system)))))
 
 (defn pings []
   (db/get-pings (:db (:db system))))
