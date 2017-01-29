@@ -19,7 +19,6 @@
              :dev [:dev-secrets {:source-paths ["dev" "test/clj"]
                                  :dependencies [[org.clojure/tools.namespace "0.2.11"]
                                                 [figwheel-sidecar "0.5.8" :scope "test"]
-                                                [binaryage/devtools "0.8.2"]
                                                 [com.cemerick/piggieback "0.2.1"]]
                                  :plugins [[lein-environ "1.1.0"]]}]}
   :source-paths ["src/clj"]
@@ -36,6 +35,7 @@
                  [org.clojure/java.jdbc "0.7.0-alpha1"]
                  [org.clojars.jds02006/tictagapi "0.1.0-SNAPSHOT"]
                  [reloaded.repl "0.2.3"]
+                 [binaryage/devtools "0.8.2"]
                  [com.andrewmcveigh/cljs-time "0.5.0-alpha2"]
                  [day8.re-frame/http-fx "0.1.3"]
                  [ring-transit "0.1.6"]
