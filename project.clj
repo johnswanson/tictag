@@ -34,7 +34,7 @@
                  [org.clojure/core.async "0.2.395"]
                  [org.clojure/tools.cli "0.3.5"]
                  [org.clojure/java.jdbc "0.7.0-alpha1"]
-                 [tictagapi "0.1.0-SNAPSHOT"]
+                 [org.clojars.jds02006/tictagapi "0.1.0-SNAPSHOT"]
                  [reloaded.repl "0.2.3"]
                  [com.andrewmcveigh/cljs-time "0.5.0-alpha2"]
                  [day8.re-frame/http-fx "0.1.3"]
