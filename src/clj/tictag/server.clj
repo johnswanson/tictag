@@ -18,7 +18,7 @@
             [clojure.string :as str]
             [clojure.java.io :as io]
             [tictag.utils :as utils]
-            [tictag.tagtime :as tagtime]
+            [tictagapi.core :as tagtime]
             [hiccup.core :refer [html]]
             [hiccup.page :refer [html5]]))
 

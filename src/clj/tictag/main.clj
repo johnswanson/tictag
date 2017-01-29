@@ -2,9 +2,7 @@
   (:gen-class)
   (:require [tictag.server :as server]
             [tictag.server-api :as api]
-            [tictag.client :as client]
-            [tictag.client-config :as client-config]
-            [tictag.config :as server-config]
+            [tictag.config :refer [config]]
             [tictag.utils :as utils]
             [clojure.core.async :as a :refer [<! go-loop]]
             [taoensso.timbre :as timbre] 
@@ -18,12 +16,10 @@
      (let [_ (<! (a/timeout 100000))]
        (recur)))))
 
-(defn -main [& args]
-  (let [[system-type remote-url] args
-        system                   (case system-type
-                                   "server" (server/system server-config/config)
-                                   "client" (client/system client-config/config))]
-    (reloaded.repl/set-init! (constantly (utils/system-map system)))
-    (reloaded.repl/go)
-    (do-not-exit!)))
+(def server-system (server/system config))
+
+(defn -main [& _]
+  (reloaded.repl/set-init! (constantly (utils/system-map server-system)))
+  (reloaded.repl/go)
+  (do-not-exit!))
 

@@ -9,13 +9,19 @@
             [figwheel-sidecar.repl :as r]
             [figwheel-sidecar.system :as fs]
             [figwheel-sidecar.repl-api :as ra]
-            [clojure.tools.nrepl.server :as repl]
             [tictag.config :as config]
             [tictag.server :as server]
             [tictag.server-api :refer :all]
-            [tictag.client :as client]
-            [tictag.client-config :as client-config]
-            [tictag.utils :as utils]))
+            [tictag.utils :as utils]
+            [clojure.test :refer :all]
+            [tictag.server-test :as server-test]))
+
+(defrecord Tester []
+  component/Lifecycle
+  (start [component]
+    (assoc component :tests (run-all-tests #"tictag.+")))
+  (stop [component]
+    (dissoc component :tests)))
 
 (defrecord Figwheel []
   component/Lifecycle
@@ -45,25 +51,19 @@
 (def figwheel-component
   (figwheel))
 
-(clojure.tools.namespace.repl/set-refresh-dirs "dev" "src/clj")
+(clojure.tools.namespace.repl/set-refresh-dirs "dev" "src/clj" "test/clj")
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
+
+(def test-component (->Tester))
 
 (defn server-system [config]
   (utils/system-map
    (assoc (server/system config)
           :scss-compiler (scss-compiler)
-          :figwheel figwheel-component)))
+          :testing test-component)))
 
-(defn client-system []
-  (utils/system-map (client/system client-config/config)))
 
-(defn start-client! []
-  (reloaded.repl/set-init! client-system)
-  (go))
-
-(defn start-server! []
-  (reloaded.repl/set-init! #(server-system config/config))
-  (go))
+(reloaded.repl/set-init! #(server-system config/config))
 

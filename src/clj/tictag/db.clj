@@ -4,7 +4,7 @@
             [clojure.string :as str]
             [clojure.data.csv :as csv]
             [clojure.java.io :as io]
-            [tictag.tagtime :as tagtime]
+            [tictagapi.core :as tagtime]
             [clojure.java.jdbc :as j]
             [tictag.utils :as utils]
             [amalloy.ring-buffer :refer [ring-buffer]]))
