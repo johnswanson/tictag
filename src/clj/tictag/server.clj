@@ -57,9 +57,9 @@
   (assert long-time)
   (db/add-tags db long-time tags (utils/local-time-from-long long-time)))
 
-(defn tag-ping-by-id [db {:keys [id tags]}]
+(defn tag-ping-by-id [db {:keys [id] :as args}]
   (let [long-time (db/pending-timestamp db id)]
-    (tag-ping-by-long-time db long-time tags)))
+    (tag-ping-by-long-time db (assoc args :long-time long-time))))
 
 (defn tag-last-ping [db {:keys [tags]}]
   (let [[last-ping] (db/get-pings
