@@ -79,7 +79,7 @@
 (defn sleepy-pings
   "Return the most recent contiguous set of pings marked :afk in the database"
   [{db :db}]
-  (->> ["select * from pings order by timestamp desc limit 100"]
+  (->> ["select * from pings order by ts desc limit 100"]
        (get-pings db)
        (drop-while (comp not :afk :tags))
        (take-while (comp :afk :tags))))
