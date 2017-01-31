@@ -19,7 +19,7 @@
              (get-in config [:tagtime :seed]))
    :repl-server (repl/->REPL)
    :db (component/using
-        (db/map->Database {:file (get-in config [:db :file])})
+        (db/map->Database {:db-spec (:db config)})
         [:tagtime])
    :chimer (component/using
             (server-chimer/map->ServerChimer

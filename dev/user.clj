@@ -9,7 +9,9 @@
             [tictag.system]
             [tictag.utils :as utils]
             [clojure.test :refer :all]
-            [tictag.server-test :as server-test]))
+            [tictag.server-test :as server-test]
+            [tictag.ragtime :as ragtime]
+            [ragtime.repl :refer [migrate rollback]]))
 
 (clojure.tools.namespace.repl/set-refresh-dirs "dev" "src/clj" "test/clj")
 

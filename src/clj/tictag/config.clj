@@ -13,7 +13,11 @@
   {:tictag-server {:shared-secret (env :tictag-shared-secret)
                    :host          (env :tictag-host "127.0.0.1")
                    :port          (or (some-> env :tictag-port Integer.) 8080)}
-   :db            {:file (env :db-file (format "%s/.tictag.log" home-dir))}
+   :db            {:dbtype   "postgresql"
+                   :dbname   (env :pg-database)
+                   :host     (env :pg-host "127.0.0.1")
+                   :user     (env :pg-user)
+                   :password (env :pg-password)}
    :twilio        {:account-sid   (env :twilio-account-sid)
                    :account-token (env :twilio-account-token)
                    :from          (env :twilio-from)

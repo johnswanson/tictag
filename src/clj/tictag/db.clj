@@ -9,36 +9,28 @@
             [tictag.utils :as utils]
             [amalloy.ring-buffer :refer [ring-buffer]]))
 
-(defn table-exists? [db name]
-  (seq
-   (j/query db ["select name from sqlite_master where type='table' and name=?" name])))
-
-(defn create-pings! [db]
-  (j/execute! db
-              [(j/create-table-ddl :pings
-                                   [[:timestamp :integer
-                                     :primary :key]
-                                    [:tags :text]
-                                    [:local_time :text]])]))
-(defrecord Database [file tagtime]
+(defrecord Database [db-spec tagtime]
   component/Lifecycle
   (start [component]
-    (timbre/debug "Starting database")
-    (let [db-spec {:dbtype "sqlite" :dbname file}]
-      (j/with-db-connection [db db-spec]
-        (when-not (table-exists? db "pings")
-          (timbre/debug "Pings table does not exist, creating...")
-          (create-pings! db)))
-      (assoc component
-             :db db-spec
-             :pends (atom (ring-buffer 16)))))
+    (timbre/debugf "Starting database, config: %s" (pr-str db-spec))
+    (assoc component
+           :db db-spec
+           :pends (atom (ring-buffer 16))))
   (stop [component]
     (dissoc component :db)))
 
 (defn insert-tag! [db long-time tags & [local-time]]
   (j/execute!
    db
-   ["insert or replace into pings (\"timestamp\", \"tags\", \"local_time\") VALUES (?, ?, ?)"
+   [(str/join " "
+              ["INSERT INTO pings"
+               "(\"ts\", \"tags\", \"local_time\")"
+               "VALUES (?, ?, ?)"
+               "ON CONFLICT (ts)"
+               "DO UPDATE"
+               "SET"
+               "tags=EXCLUDED.tags,"
+               "local_time=EXCLUDED.local_time"])
     long-time
     (str/join " " tags)
     (or local-time (utils/local-time-from-long long-time))]))
@@ -55,11 +47,11 @@
 
 (defn local-day [local-time] (str/replace (subs local-time 0 10) #"-" ""))
 
-(defn to-ping [{:keys [local_time timestamp tags]}]
+(defn to-ping [{:keys [local_time ts tags]}]
   {:tags (set (map keyword (str/split tags #" ")))
    :local-time local_time
    :local-day (local-day local_time)
-   :timestamp timestamp})
+   :timestamp ts})
 
 (defn get-pings [db & [query]]
   (map to-ping (j/query db (or query ["select * from pings"]))))
@@ -78,7 +70,7 @@
   (:pings tagtime))
 
 (defn update-tags-query [{:keys [tags timestamp]}]
-  ["update pings set tags=? where timestamp=?" (str/join " " tags) timestamp])
+  ["update pings set tags=? where ts=?" (str/join " " tags) timestamp])
 
 (defn update-tags! [{db :db} pings]
   (doseq [ping pings]
