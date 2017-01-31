@@ -17,7 +17,8 @@
    :twilio        {:account-sid   (env :twilio-account-sid)
                    :account-token (env :twilio-account-token)
                    :from          (env :twilio-from)
-                   :to            (env :twilio-to)}
+                   :to            (env :twilio-to)
+                   :disable?      (env :twilio-disable)}
    :beeminder     {:auth-token (env :beeminder-auth-token)
                    :user       (env :beeminder-user)
                    :goals      goals}

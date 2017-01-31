@@ -6,13 +6,14 @@
   [account-sid]
   (str base-url "/" account-sid "/Messages"))
 
-(defn send-message! [{:keys [account-sid account-token from to]} body]
-  (http/request {:url         (sms-url account-sid)
-                 :method      :post
-                 :form-params {"To"   to
-                               "From" from
-                               "Body" body}
-                 :basic-auth  [account-sid account-token]}))
+(defn send-message! [{:keys [account-sid account-token from to disable?]} body]
+  (when-not disable?
+    (http/request {:url         (sms-url account-sid)
+                   :method      :post
+                   :form-params {"To"   to
+                                 "From" from
+                                 "Body" body}
+                   :basic-auth  [account-sid account-token]})))
 
 (defn response [twiml]
   {:status 200
