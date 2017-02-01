@@ -54,8 +54,8 @@
        (map :local-day)
        (frequencies)))
 
-(defn sync! [{:keys [auth-token user goals]} tagtime-config rows]
-  (when (and auth-token user (seq goals))
+(defn sync! [{:keys [auth-token user goals disable?]} tagtime-config rows]
+  (when (and (not disable?) auth-token user (seq goals))
     (doseq [[goal pred?] goals]
       (let [days (days-matching-pred pred? rows)
             existing-datapoints (datapoints auth-token user goal)

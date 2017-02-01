@@ -25,7 +25,8 @@
                    :disable?      (env :twilio-disable)}
    :beeminder     {:auth-token (env :beeminder-auth-token)
                    :user       (env :beeminder-user)
-                   :goals      goals}
+                   :goals      goals
+                   :disable?   (env :beeminder-disable)}
    :tagtime       {:seed (or (some-> env :tagtime-seed Integer.) 666)
                    :gap  (or (some-> env :tagtime-gap Integer.) (* 60 45))}
 
