@@ -6,17 +6,21 @@
             [tictag.server-chimer :as server-chimer]
             [tictag.db :as db]
             [tictag.repl :as repl]
-            [tictag.figwheel :as figwheel]))
+            [tictag.figwheel :as figwheel]
+            [tictag.beeminder :as beeminder]))
 
 (defn system [config]
   (component/system-map
    :server (component/using
             (server/map->Server
              {:config (:tictag-server config)})
-            [:db :tagtime])
+            [:db :tagtime :beeminder])
    :tagtime (tagtime/tagtime
              (get-in config [:tagtime :gap])
              (get-in config [:tagtime :seed]))
+   :beeminder (component/using
+               (beeminder/beeminder (:beeminder config))
+               [:tagtime])
    :repl-server (repl/->REPL)
    :db (component/using
         (db/map->Database {:db-spec (:db config)})

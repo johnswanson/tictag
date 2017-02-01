@@ -54,7 +54,7 @@
        (map :local-day)
        (frequencies)))
 
-(defn sync! [{:keys [auth-token user goals disable?]} tagtime-config rows]
+(defn sync! [{{:keys [auth-token user goals disable?]} :config tagtime-config :tagtime} rows]
   (when (and (not disable?) auth-token user (seq goals))
     (doseq [[goal pred?] goals]
       (let [days (days-matching-pred pred? rows)
@@ -89,3 +89,6 @@
                          (-> @resp :opts :url)
                          (-> @resp :opts :method)
                          (:status @resp)))))))
+
+(defn beeminder [config]
+  {:config config})

@@ -11,6 +11,7 @@
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
             [tictag.twilio :as twilio]
             [tictag.db :as db]
+            [tictag.beeminder :as beeminder]
             [clojure.string :as str]
             [clojure.java.io :as io]
             [tictag.utils :as utils]
@@ -64,7 +65,7 @@
 (defn tag-last-ping [db {:keys [tags]}]
   (let [[last-ping] (db/get-pings
                      (:db db)
-                     ["select * from pings order by timestamp desc limit 1"])]
+                     ["select * from pings order by ts desc limit 1"])]
     (db/update-tags! db [(assoc last-ping :tags tags)])))
 
 (defn handle-sms [db body]
@@ -75,24 +76,31 @@
       :tag-ping-by-long-time (tag-ping-by-long-time db args)
       :tag-last-ping         (tag-last-ping db args))))
 
-(def sms (POST "/sms" [Body :as {db :db}] (handle-sms db Body)))
+(def sms (POST "/sms" [Body :as {db :db beeminder :beeminder}]
+           (do (handle-sms db Body)
+               (beeminder/sync! beeminder (db/get-pings (:db db))))))
 
-(defn handle-timestamp [db timestamp tags local-time]
+(defn handle-timestamp [db beeminder timestamp tags local-time]
   (timbre/debugf "Received client: %s %s %s" timestamp tags local-time)
   (let [long-time (Long. timestamp)]
     (assert (db/is-ping? db long-time))
     (db/add-tags db long-time tags local-time)
+    (beeminder/sync! beeminder (db/get-pings (:db db)))
     {:status 200 :body ""}))
 
 (def timestamp
-  (PUT "/time/:timestamp" [secret timestamp tags local-time :as {db :db shared-secret :shared-secret}]
+  (PUT "/time/:timestamp" [secret timestamp tags local-time :as {db :db shared-secret :shared-secret beeminder :beeminder}]
     (if (= secret shared-secret)
-      (handle-timestamp db timestamp tags local-time)
+      (handle-timestamp db beeminder timestamp tags local-time)
       {:status 401 :body "unauthorized"})))
 
 (defn wrap-db [handler db]
   (fn [req]
     (handler (assoc req :db db))))
+
+(defn wrap-beeminder [handler beeminder]
+  (fn [req]
+    (handler (assoc req :beeminder beeminder))))
 
 (defn wrap-shared-secret [handler secret]
   (fn [req]
@@ -130,7 +138,7 @@
                            :headers {"Content-Type" "text/plain"}
                            :body    "healthy!"})))
 
-(defrecord Server [db config tagtime]
+(defrecord Server [db config tagtime beeminder]
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting server")
@@ -139,6 +147,7 @@
                     (wrap-transit-response {:encoding :json})
                     (wrap-shared-secret (:shared-secret config))
                     (wrap-db db)
+                    (wrap-beeminder beeminder)
                     (wrap-defaults (assoc-in api-defaults [:static :resources] "/public"))
                     (wrap-edn-params)
                     (wrap-transit-params))
