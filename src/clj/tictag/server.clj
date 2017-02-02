@@ -18,18 +18,14 @@
             [hiccup.core :refer [html]]
             [hiccup.page :refer [html5]]))
 
-(def delimiters #"[ ,]")
-
 (defn str-number? [s]
   (try (Long. s) (catch Exception e nil)))
 
-(defn parse-body [body]
-  (let [[id & tags] (str/split (str/lower-case body) delimiters)]
-    {:id id
-     :tags tags}))
-
 (defn parse-sms-body [body]
-  (let [[cmd? & args :as all-args] (str/split (str/lower-case body) #" ")]
+  (let [[cmd? & args :as all-args] (-> body
+                                       (str/lower-case)
+                                       (str/trim)
+                                       (str/split #" "))]
     (if (str-number? cmd?)
       (if (> (count cmd?) 3)
         {:command :tag-ping-by-long-time
