@@ -54,7 +54,7 @@
    :timestamp ts})
 
 (defn get-pings [db & [query]]
-  (map to-ping (j/query db (or query ["select * from pings"]))))
+  (map to-ping (j/query db (or query ["select * from pings order by ts"]))))
 
 (defn add-tags [{db :db} long-time tags local-time]
   (j/with-db-connection [db-handle db]
