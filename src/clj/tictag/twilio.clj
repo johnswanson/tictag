@@ -29,12 +29,6 @@
 (defn valid-sig? [{:keys [account-token]} {:keys [headers params] :as req}]
   (let [url    (request-url req)
         param-str (str/join (map name (flatten (sort (:params req)))))]
-    (timbre/debugf "valid signature? %s is %s ?"
-                   (-> (str url param-str)
-                       (sha1-hmac-bytes account-token)
-                       (b64/encode)
-                       (String. "UTF-8"))
-                   (get headers "x-twilio-signature"))
     (= (-> (str url param-str)
            (sha1-hmac-bytes account-token)
            (b64/encode)

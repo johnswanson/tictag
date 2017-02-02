@@ -70,6 +70,7 @@
 
 (defn handle-sms [db body]
   (let [{:keys [command args]} (parse-sms-body body)]
+    (timbre/debugf "Received SMS: %s, parsed as: %s %s" body command args)
     (case command
       :sleep                 (sleep db args)
       :tag-ping-by-id        (tag-ping-by-id db args)
@@ -80,7 +81,9 @@
            (if (twilio/valid-sig? twilio req)
              (do (handle-sms db Body)
                  (beeminder/sync! beeminder (db/get-pings (:db db))))
-             {:status 401 :body "unauthorized"})))
+             (do
+               (timbre/warnf "INVALID SIGNATURE FOR TWILIO MESSAGE: %s" Body)
+               {:status 401 :body "unauthorized"}))))
 
 (defn handle-timestamp [db beeminder timestamp tags local-time]
   (timbre/debugf "Received client: %s %s %s" timestamp tags local-time)
@@ -94,7 +97,9 @@
   (PUT "/time/:timestamp" [secret timestamp tags local-time :as {db :db shared-secret :shared-secret beeminder :beeminder}]
     (if (= secret shared-secret)
       (handle-timestamp db beeminder timestamp tags local-time)
-      {:status 401 :body "unauthorized"})))
+      (do
+        (timbre/warn "UNAUTHORIZED TIMESTAMP RECEIVED")
+        {:status 401 :body "unauthorized"}))))
 
 (defn wrap-db [handler db]
   (fn [req]
