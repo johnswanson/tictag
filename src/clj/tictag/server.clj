@@ -77,14 +77,6 @@
       :tag-ping-by-long-time (tag-ping-by-long-time db args)
       :tag-last-ping         (tag-last-ping db args))))
 
-(def sms (POST "/sms" [Body :as {:keys [twilio beeminder db] :as req}]
-           (if (twilio/valid-sig? twilio req)
-             (do (handle-sms db Body)
-                 (beeminder/sync! beeminder (db/get-pings (:db db))))
-             (do
-               (timbre/warnf "INVALID SIGNATURE FOR TWILIO MESSAGE: %s" Body)
-               {:status 401 :body "unauthorized"}))))
-
 (defn handle-timestamp [db beeminder timestamp tags local-time]
   (timbre/debugf "Received client: %s %s %s" timestamp tags local-time)
   (let [long-time (Long. timestamp)]
@@ -92,30 +84,6 @@
     (db/add-tags db long-time tags local-time)
     (beeminder/sync! beeminder (db/get-pings (:db db)))
     {:status 200 :body ""}))
-
-(def timestamp
-  (PUT "/time/:timestamp" [secret timestamp tags local-time :as {db :db shared-secret :shared-secret beeminder :beeminder}]
-    (if (= secret shared-secret)
-      (handle-timestamp db beeminder timestamp tags local-time)
-      (do
-        (timbre/warn "UNAUTHORIZED TIMESTAMP RECEIVED")
-        {:status 401 :body "unauthorized"}))))
-
-(defn wrap-db [handler db]
-  (fn [req]
-    (handler (assoc req :db db))))
-
-(defn wrap-twilio [handler twilio]
-  (fn [req]
-    (handler (assoc req :twilio twilio))))
-
-(defn wrap-beeminder [handler beeminder]
-  (fn [req]
-    (handler (assoc req :beeminder beeminder))))
-
-(defn wrap-shared-secret [handler secret]
-  (fn [req]
-    (handler (assoc req :shared-secret secret))))
 
 (defn index []
   (html5
@@ -131,35 +99,53 @@
      [:script {:src "/js/compiled/app.js"}]
      [:script {:src "https://use.fontawesome.com/efa7507d6f.js"}]]]))
 
-(defn pings [{db :db}]
+(defn pings [db]
   (timbre/debugf "Received request!")
   (response (db/get-pings (:db db))))
 
-(defn routes [tagtime]
+(defn wrap-authenticate [handler f]
+  (fn [req]
+    (timbre/debugf "Authenticating! (f req) is : %s" (f req))
+    (if (f req)
+      (handler req)
+      {:status 401 :body "unauthorized"})))
+
+(defn sms [db beeminder req]
+  (handle-sms db (get-in req [:params :Body]))
+  (beeminder/sync! beeminder (db/get-pings (:db db))))
+
+(defn timestamp [db beeminder {:keys [params]}]
+  (handle-timestamp db beeminder (:timestamp params) (:tags params) (:local-time params)))
+
+(defn valid-shared-secret? [shared-secret {:keys [params]}]
+  (= shared-secret (:secret params)))
+
+(defn routes [db beeminder twilio tagtime shared-secret]
   (compojure.core/routes
-   sms
-   timestamp
-   (GET "/pings" [] pings)
-   (GET "/" [] (index))
-   (GET "/config" [] {:headers {"Content-Type" "application/edn"}
-                      :status 200
-                      :body (pr-str {:tagtime-seed (:seed tagtime)
-                                     :tagtime-gap  (:gap tagtime)})})
-   (GET "/healthcheck" [] {:status  200
-                           :headers {"Content-Type" "text/plain"}
-                           :body    "healthy!"})))
+   (POST "/sms" _ (wrap-authenticate
+                   (partial sms db beeminder)
+                   (partial twilio/valid-sig? twilio)))
+   (PUT "/time/:timestamp" _
+     (wrap-authenticate
+      (partial handle-timestamp db beeminder)
+      (partial valid-shared-secret? shared-secret)))
+   (GET "/pings" _ (pings db))
+   (GET "/" _ (index))
+   (GET "/config" _ {:headers {"Content-Type" "application/edn"}
+                     :status 200
+                     :body (pr-str {:tagtime-seed (:seed tagtime)
+                                    :tagtime-gap  (:gap tagtime)})})
+   (GET "/healthcheck" _ {:status  200
+                          :headers {"Content-Type" "text/plain"}
+                          :body    "healthy!"})))
 
 (defrecord Server [db config tagtime beeminder twilio]
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting server")
     (let [stop (http/run-server
-                (-> (routes tagtime)
+                (-> (routes db beeminder twilio tagtime (:shared-secret config))
                     (wrap-transit-response {:encoding :json})
-                    (wrap-shared-secret (:shared-secret config))
-                    (wrap-db db)
-                    (wrap-beeminder beeminder)
-                    (wrap-twilio twilio)
                     (wrap-defaults (assoc-in api-defaults [:static :resources] "/public"))
                     (wrap-edn-params)
                     (wrap-transit-params))
