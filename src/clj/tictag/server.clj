@@ -108,7 +108,8 @@
 
 (defn sms [db beeminder req]
   (handle-sms db (get-in req [:params :Body]))
-  (beeminder/sync! beeminder (db/get-pings (:db db))))
+  (beeminder/sync! beeminder (db/get-pings (:db db)))
+  (twilio/response "<Response></Response>"))
 
 (defn timestamp [db beeminder {:keys [params]}]
   (handle-timestamp db beeminder (:timestamp params) (:tags params) (:local-time params)))
