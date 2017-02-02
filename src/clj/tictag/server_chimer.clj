@@ -7,7 +7,7 @@
             [taoensso.timbre :as timbre]
             [tictag.twilio :as twilio]))
 
-(defrecord ServerChimer [db config]
+(defrecord ServerChimer [db twilio]
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting server chimer (for twilio sms)")
@@ -24,7 +24,7 @@
             (timbre/debug "CHIME!")
             (db/add-pending! db long-time id)
             (twilio/send-message!
-             config
+             twilio
              (format "PING! id: %s, long-time: %d" id long-time))))))))
   (stop [component]
     (when-let [stop (:stop component)]

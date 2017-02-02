@@ -76,9 +76,11 @@
       :tag-ping-by-long-time (tag-ping-by-long-time db args)
       :tag-last-ping         (tag-last-ping db args))))
 
-(def sms (POST "/sms" [Body :as {db :db beeminder :beeminder}]
-           (do (handle-sms db Body)
-               (beeminder/sync! beeminder (db/get-pings (:db db))))))
+(def sms (POST "/sms" [Body :as {:keys [twilio beeminder db] :as req}]
+           (if (twilio/valid-sig? twilio req)
+             (do (handle-sms db Body)
+                 (beeminder/sync! beeminder (db/get-pings (:db db))))
+             {:status 401 :body "unauthorized"})))
 
 (defn handle-timestamp [db beeminder timestamp tags local-time]
   (timbre/debugf "Received client: %s %s %s" timestamp tags local-time)
@@ -97,6 +99,10 @@
 (defn wrap-db [handler db]
   (fn [req]
     (handler (assoc req :db db))))
+
+(defn wrap-twilio [handler twilio]
+  (fn [req]
+    (handler (assoc req :twilio twilio))))
 
 (defn wrap-beeminder [handler beeminder]
   (fn [req]
@@ -138,7 +144,7 @@
                            :headers {"Content-Type" "text/plain"}
                            :body    "healthy!"})))
 
-(defrecord Server [db config tagtime beeminder]
+(defrecord Server [db config tagtime beeminder twilio]
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting server")
@@ -148,6 +154,7 @@
                     (wrap-shared-secret (:shared-secret config))
                     (wrap-db db)
                     (wrap-beeminder beeminder)
+                    (wrap-twilio twilio)
                     (wrap-defaults (assoc-in api-defaults [:static :resources] "/public"))
                     (wrap-edn-params)
                     (wrap-transit-params))

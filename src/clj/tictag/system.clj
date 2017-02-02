@@ -14,7 +14,7 @@
    :server (component/using
             (server/map->Server
              {:config (:tictag-server config)})
-            [:db :tagtime :beeminder])
+            [:db :tagtime :beeminder :twilio])
    :tagtime (tagtime/tagtime
              (get-in config [:tagtime :gap])
              (get-in config [:tagtime :seed]))
@@ -26,9 +26,10 @@
         (db/map->Database {:db-spec (:db config)})
         [:tagtime])
    :chimer (component/using
-            (server-chimer/map->ServerChimer
-             {:config (:twilio config)})
-            [:db])
+            (server-chimer/map->ServerChimer {})
+            [:db :twilio])
+
+   :twilio (:twilio config)
 
    :tester (tester/->Tester (:run-tests? config))
 
