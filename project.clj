@@ -35,6 +35,7 @@
                  [org.clojure/java.jdbc "0.7.0-alpha1"]
                  [org.clojars.jds02006/tictagapi "0.1.0-SNAPSHOT"]
                  [org.clojure/data.codec "0.1.0"]
+                 [juxt/dirwatch "0.2.3"]
                  [pandect "0.6.1"]
                  [figwheel-sidecar "0.5.8" :scope "test"]
                  [reloaded.repl "0.2.3"]

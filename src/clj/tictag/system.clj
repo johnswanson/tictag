@@ -7,7 +7,8 @@
             [tictag.db :as db]
             [tictag.repl :as repl]
             [tictag.figwheel :as figwheel]
-            [tictag.beeminder :as beeminder]))
+            [tictag.beeminder :as beeminder]
+            [tictag.scss :as scss]))
 
 (defn system [config]
   (component/system-map
@@ -30,6 +31,10 @@
             [:db :twilio])
 
    :twilio (:twilio config)
+
+   :scss (scss/->SCSSBuilder (:run-scss? config)
+                             "resources/scss/app.scss"
+                             "resources/public/css/app.css")
 
    :tester (tester/->Tester (:run-tests? config))
 
