@@ -124,7 +124,7 @@
                    (partial twilio/valid-sig? twilio)))
    (PUT "/time/:timestamp" _
      (wrap-authenticate
-      (partial handle-timestamp db beeminder)
+      (partial timestamp db beeminder)
       (partial valid-shared-secret? shared-secret)))
    (GET "/pings" _ (pings db))
    (GET "/" _ (index))
