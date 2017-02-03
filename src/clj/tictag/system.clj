@@ -33,6 +33,6 @@
 
    :tester (tester/->Tester (:run-tests? config))
 
-   :figwhel (figwheel/->Figwheel (:run-figwheel? config))))
+   :figwheel (figwheel/->Figwheel (:run-figwheel? config))))
 
 
