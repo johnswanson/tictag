@@ -1,5 +1,7 @@
 # tictag
 
+[![CircleCI](https://circleci.com/gh/johnswanson/tictag.svg?style=svg)](https://circleci.com/gh/johnswanson/tictag)
+
 Stochastic time tracking, stolen liberally from TagTime, with a centralized component to:
 
 - merge responses from multiple clients
