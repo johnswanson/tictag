@@ -7,66 +7,74 @@
             [cljs-time.core :as t]
             [cljs-time.format :as f]))
 
-(defn datapoint [x y active?]
-  [:circle {:cx    x
-            :cy    y
-            :r     3
-            :style {:opacity (if active? "0.8" "0.2")}
-            :fill  (if active? "purple" "black")}])
+(defn value-pixel-mapper [domain range]
+  (let [max-domain  (apply max domain)
+        min-domain  (apply min domain)
+        domain-diff (- max-domain min-domain)
+
+        max-range  (apply max range)
+        min-range  (apply min range)
+        range-diff (- max-range min-range)]
+    {:pixel-fn (fn [x]
+                 (+ min-range (* range-diff (/ (- x min-domain) domain-diff))))
+     :value-fn (fn [p]
+                 (+ min-domain (* domain-diff (/ p range-diff))))}))
 
 (defn days-since [d1 d2]
   (Math/round
    (/ (- d2 d1)
       (* 24 60 60 1000))))
 
-(defn day-range [dates]
-  (let [earliest (t/earliest dates)
-        latest   (t/latest dates)]
-    [(days-since (t/epoch) (t/earliest dates))
-     (days-since (t/epoch) (t/latest dates))]))
+(defn days-since-epoch [date]
+  (days-since (t/epoch) date))
 
-(defn time-range [& args] [0 (* 60 60 24)])
+(defn datapoint [{:keys [xpixel ypixel old-local-time local-time] :as d} active?]
+  [:circle {:on-mouse-over #(js/console.log old-local-time local-time)
+            :cx    xpixel
+            :cy    ypixel
+            :r     3
+            :style {:opacity (if active? "0.8" "0.2")}
+            :fill  (if active? "purple" "black")}])
+
 
 (defn seconds-since-midnight [date]
   (when date
     (/ (- date (t/at-midnight date))
        (* 1000))))
 
-(defn pct-mapper [first-date last-date first-time last-time]
-  (let [date-diff (- last-date first-date)
-        secs-diff (- last-time first-time)]
-    (fn [{:keys [days-since-epoch secs-since-night] :as ping}]
-      (-> ping
-          (assoc
-           :pct-days (/ (- days-since-epoch first-date) date-diff))
-          (assoc
-           :pct-secs (/ (- secs-since-night first-time) secs-diff))))))
-
-(defn to-days+secs [ping]
-  (let [datetime (:local-time ping)]
-    (-> ping
-        (assoc
-         :days-since-epoch
-         (days-since (t/epoch) datetime))
-        (assoc
-         :secs-since-night
-         (seconds-since-midnight datetime)))))
-
 (defn graph [width height pings]
-  [:svg {:style {:width (str width "px") :height (str height "px")}}
-   [:g {:style {:stroke "black" :stroke-width 1}}
-    [:line {:x1 0 :x2 0 :y1 0 :y2 height}]
-    [:line {:x1 0 :x2 width :y1 height :y2 height}]]
-   [:g
-    (when (seq pings)
-      (let [[first-date last-date] (day-range (map :local-time pings))
-            [first-time last-time] (time-range (map :local-time pings))
-            days+secs  (map to-days+secs pings)
-            pct-mapper (pct-mapper first-date last-date first-time last-time)
-            pcts       (map pct-mapper days+secs)]
-        (for [{:keys [pct-days pct-secs active?]} pcts]
-          ^{:key (str pct-days pct-secs)}
-          [datapoint (* width pct-days) (* height pct-secs) active?])))]])
+  [:div
+   (when (seq pings)
+     (let [data              (map (fn [{:keys [local-time tags old-local-time]}]
+                                    {:tags           tags
+                                     :local-time     local-time
+                                     :old-local-time old-local-time
+                                     :x              (days-since-epoch local-time)
+                                     :y              (seconds-since-midnight local-time)})
+                                  pings)
+           xs                (map :x data)
+           ys                (map :y data)
+           x-range           [0 width]
+           y-range           [0 height]
+           x-domain          [(apply min xs) (apply max xs)]
+           y-domain          [0 (* 24 60 60)]
+           {x-fn  :pixel-fn
+            x-inv :value-fn} (value-pixel-mapper x-domain x-range)
+
+           {y-fn  :pixel-fn
+            y-inv :value-fn} (value-pixel-mapper y-domain y-range)
+           data              (map #(assoc %
+                                          :xpixel (x-fn (:x %))
+                                          :ypixel (y-fn (:y %)))
+                                  data)]
+       [:svg {:style {:width (str width "px") :height (str height "px")}}
+        [:g {:style {:stroke "black" :stroke-width 1}}
+         [:line {:x1 0 :x2 0 :y1 0 :y2 height}]
+         [:line {:x1 0 :x2 width :y1 height :y2 height}]]
+        [:g
+         (for [d data]
+           ^{:key (str (:local-time d))}
+           [datapoint d true])]]))])
 
 (defn app
   []

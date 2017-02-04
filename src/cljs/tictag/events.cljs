@@ -8,7 +8,9 @@
 (def formatter (f/formatters :date-hour-minute-second))
 
 (defn parse-date [ping]
-  (update ping :local-time #(f/parse formatter %)))
+  (assoc ping
+         :local-time (f/parse formatter (:local-time ping))
+         :old-local-time (:local-time ping)))
 
 (reg-event-fx
  :fetch-pings
