@@ -1,6 +1,3 @@
-test:
-  override:
-    - echo "i am a bad, bad man"
 deployment:
   production:
     branch: master
