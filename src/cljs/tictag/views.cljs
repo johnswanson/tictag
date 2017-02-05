@@ -45,12 +45,10 @@
 (defn graph [width height pings]
   [:div
    (when (seq pings)
-     (let [data              (map (fn [{:keys [local-time tags old-local-time]}]
-                                    {:tags           tags
-                                     :local-time     local-time
-                                     :old-local-time old-local-time
-                                     :x              (days-since-epoch local-time)
-                                     :y              (seconds-since-midnight local-time)})
+     (let [data              (map #(let [local-time (:local-time %)]
+                                     (assoc %
+                                            :x (days-since-epoch local-time)
+                                            :y (seconds-since-midnight local-time)))
                                   pings)
            xs                (map :x data)
            ys                (map :y data)
@@ -74,7 +72,7 @@
         [:g
          (for [d data]
            ^{:key (str (:local-time d))}
-           [datapoint d true])]]))])
+           [datapoint d (:active? d)])]]))])
 
 (defn app
   []
