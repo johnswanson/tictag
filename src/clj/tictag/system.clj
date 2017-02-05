@@ -6,7 +6,6 @@
             [tictag.server-chimer :as server-chimer]
             [tictag.db :as db]
             [tictag.repl :as repl]
-            [tictag.figwheel :as figwheel]
             [tictag.beeminder :as beeminder]
             [tictag.scss :as scss]))
 
@@ -36,8 +35,6 @@
                              "resources/scss/app.scss"
                              "resources/public/css/app.css")
 
-   :tester (tester/->Tester (:run-tests? config))
-
-   :figwheel (figwheel/->Figwheel (:run-figwheel? config))))
+   :tester (tester/->Tester (:run-tests? config))))
 
 
