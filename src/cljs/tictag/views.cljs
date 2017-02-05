@@ -28,8 +28,8 @@
 (defn days-since-epoch [date]
   (days-since (t/epoch) date))
 
-(defn datapoint [{:keys [xpixel ypixel old-local-time local-time] :as d} active?]
-  [:circle {:on-mouse-over #(js/console.log old-local-time local-time)
+(defn datapoint [{:keys [xpixel ypixel str-local-time local-time] :as d} active?]
+  [:circle {:on-mouse-over #(js/console.log str-local-time local-time)
             :cx    xpixel
             :cy    ypixel
             :r     3
@@ -45,10 +45,11 @@
 (defn graph [width height pings]
   [:div
    (when (seq pings)
-     (let [data              (map #(let [local-time (:local-time %)]
+     (let [data              (map #(let [local-time (:local-time %)
+                                         str-local-time (:str-local-time %)]
                                      (assoc %
                                             :x (days-since-epoch local-time)
-                                            :y (seconds-since-midnight local-time)))
+                                            :y (seconds-since-midnight str-local-time)))
                                   pings)
            xs                (map :x data)
            ys                (map :y data)
