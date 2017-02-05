@@ -8,7 +8,7 @@
 (defn local-time [time]
   (clj-time.local/format-local-time
    (t/to-time-zone time (t/default-time-zone))
-   :date-hour-minute-second))
+   :date-time))
 
 (defn local-time-from-long [long-time]
   (local-time (tc/from-long long-time)))

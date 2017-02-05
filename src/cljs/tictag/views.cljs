@@ -52,8 +52,8 @@
                                   pings)
            xs                (map :x data)
            ys                (map :y data)
-           x-range           [0 width]
-           y-range           [0 height]
+           x-range           [0 (- width 10)]
+           y-range           [50 (- height 10)]
            x-domain          [(apply min xs) (apply max xs)]
            y-domain          [0 (* 24 60 60)]
            {x-fn  :pixel-fn

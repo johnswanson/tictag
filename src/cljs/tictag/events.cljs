@@ -2,15 +2,7 @@
   (:require [cljs.tools.reader.edn :as edn]
             [re-frame.core :refer [reg-event-fx reg-event-db]]
             [taoensso.timbre :as timbre]
-            [ajax.core :refer [transit-response-format]]
-            [cljs-time.format :as f]))
-
-(def formatter (f/formatters :date-hour-minute-second))
-
-(defn parse-date [ping]
-  (assoc ping
-         :local-time (f/parse formatter (:local-time ping))
-         :old-local-time (:local-time ping)))
+            [ajax.core :refer [transit-response-format]]))
 
 (reg-event-fx
  :fetch-pings
@@ -26,7 +18,7 @@
 (reg-event-db
  :good-http-result
  (fn [db [_ result]]
-   (assoc db :pings (map parse-date result))))
+   (assoc db :pings result)))
 
 (reg-event-db
  :bad-http-result
