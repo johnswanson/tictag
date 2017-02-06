@@ -4,8 +4,10 @@
             [clojure.string :as str]
             [tictag.events]
             [tictag.subs]
+            [tictag.dates :refer [days-since-epoch seconds-since-midnight]]
             [cljs-time.core :as t]
-            [cljs-time.format :as f]))
+            [cljs-time.format :as f])
+  (:import [goog.date.Interval]))
 
 (defn value-pixel-mapper [domain range]
   (let [max-domain  (apply max domain)
@@ -20,14 +22,6 @@
      :value-fn (fn [p]
                  (+ min-domain (* domain-diff (/ p range-diff))))}))
 
-(defn days-since [d1 d2]
-  (Math/round
-   (/ (- d2 d1)
-      (* 24 60 60 1000))))
-
-(defn days-since-epoch [date]
-  (days-since (t/epoch) date))
-
 (defn datapoint [{:keys [xpixel ypixel str-local-time local-time] :as d} active?]
   [:circle {:on-mouse-over #(js/console.log str-local-time local-time)
             :cx    xpixel
@@ -36,11 +30,6 @@
             :style {:opacity (if active? "0.8" "0.2")}
             :fill  (if active? "purple" "black")}])
 
-
-(defn seconds-since-midnight [date]
-  (when date
-    (/ (- date (t/at-midnight date))
-       (* 1000))))
 
 (defn graph [width height pings]
   [:div
