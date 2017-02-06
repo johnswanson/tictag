@@ -36,12 +36,14 @@
 
 (defn app
   []
-  (let [pings (subscribe [:pings])]
+  (let [meeting-query-per-day (subscribe [:meeting-query-per-day])]
     (fn []
-      [:div "Hello you"
-       [:span {:on-click #(dispatch [:fetch-pings])} "Click Me"]
+      [:div
+       [:span {:on-click #(dispatch [:fetch-pings])
+               :style {:cursor :pointer}} "Click Me"]
        [:input {:type :text
                 :on-change #(dispatch [:update-ping-query (.. % -target -value)])}]
-       [matrix-plot]])))
+       [matrix-plot]
+       [:div @meeting-query-per-day " minutes per day"]])))
 
 

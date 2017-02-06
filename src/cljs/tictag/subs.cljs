@@ -127,4 +127,39 @@
           (assoc p :x d :y s))
         days seconds pings)))
 
+(reg-sub
+ :count-meeting-query
+ (fn [_ _]
+   [(subscribe [:query-fn])
+    (subscribe [:pings])])
+ (fn [[query-fn pings] _]
+   (count (filter query-fn pings))))
 
+(reg-sub
+ :minutes-meeting-query
+ (fn [_ _]
+   (subscribe [:count-meeting-query]))
+ (fn [count _]
+   (* count 45)))
+
+(reg-sub
+ :total-time
+ (fn [_ _]
+   (subscribe [:pings]))
+ (fn [pings _]
+   (* (count pings) 45)))
+
+(reg-sub
+ :total-time-in-days
+ (fn [_ _]
+   (subscribe [:pings]))
+ (fn [pings _]
+   (/ (* (count pings) 45) 60 24)))
+
+(reg-sub
+ :meeting-query-per-day
+ (fn [_ _]
+   [(subscribe [:minutes-meeting-query])
+    (subscribe [:total-time-in-days])])
+ (fn [[minutes days] _]
+   (/ minutes days)))
