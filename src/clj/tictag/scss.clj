@@ -19,11 +19,12 @@
   component/Lifecycle
   (start [component]
     (timbre/debugf "Starting SCSS builder? %s" run?)
-    (when run?
+    (if run?
       (assoc component
              :watcher
              (juxt.dirwatch/watch-dir (compile-scss in out)
-                                      (io/file "resources/scss")))))
+                                      (io/file "resources/scss")))
+      component))
   (stop [component]
     (when-let [watcher (:watcher component)]
       (juxt.dirwatch/close-watcher watcher))
