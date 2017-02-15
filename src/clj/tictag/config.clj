@@ -27,11 +27,15 @@
                    :user       (env :beeminder-user)
                    :goals      goals
                    :disable?   (env :beeminder-disable)}
+   :google        {:client-id     (env :google-client-id)
+                   :client-secret (env :google-client-secret)
+                   :refresh-token (env :google-refresh-token)
+                   :calendar-id   (env :google-calendar-id)}
    :tagtime       {:seed (or (some-> env :tagtime-seed Integer.) 666)
                    :gap  (or (some-> env :tagtime-gap Integer.) (* 60 45))}
 
-   :run-scss?     (env :tictag-run-scss)
-   :run-tests?    (env :tictag-run-tests)})
+   :run-scss?  (env :tictag-run-scss)
+   :run-tests? (env :tictag-run-tests)})
 
 
 (def beeminder (:beeminder config))

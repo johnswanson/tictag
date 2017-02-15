@@ -7,7 +7,8 @@
             [tictag.db :as db]
             [tictag.repl :as repl]
             [tictag.beeminder :as beeminder]
-            [tictag.scss :as scss]))
+            [tictag.scss :as scss]
+            [tictag.google :as google]))
 
 (defn system [config]
   (component/system-map
@@ -30,6 +31,9 @@
             [:db :twilio])
 
    :twilio (:twilio config)
+
+   :calendar (google/event-inserter
+              (:google config))
 
    :scss (scss/->SCSSBuilder (:run-scss? config)
                              "resources/scss/app.scss"

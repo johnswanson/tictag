@@ -4,6 +4,7 @@
             [reloaded.repl :refer [system init start stop go reset]]
             [com.stuartsierra.component :as component]
             [tictag.config :as config]
+            [tictag.google :as google]
             [tictag.server :as server]
             [tictag.server-api :refer :all]
             [tictag.system]
@@ -19,4 +20,6 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 (reloaded.repl/set-init! #(tictag.system/system config/config))
+
+(def google (:google config/config))
 
