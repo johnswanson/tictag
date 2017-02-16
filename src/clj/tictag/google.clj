@@ -6,7 +6,8 @@
             [oauth.io :refer [request]]
             [clojure.string :as str]
             [clj-time.core :as t]
-            [clj-time.local :as l]
+            [clj-time.coerce :as coerce]
+            [clj-time.format :as f]
             [slingshot.slingshot :refer [try+]]))
 
 (def redirect-uri "urn:ietf:wg:oauth:2.0:oob")
@@ -33,19 +34,22 @@
 
 (defn ping-event
   [ping-time tags]
-  {:start   {:dateTime (l/format-local-time ping-time :date-time)}
-   :end     {:dateTime (l/format-local-time (t/plus ping-time (t/seconds 1)) :date-time)}
-   :summary (format "Tags: %s" (str/join "," tags))})
+  (let [t         (coerce/from-long ping-time)
+        t+1       (t/plus t (t/seconds 1))
+        formatter (:date-time f/formatters)]
+    {:start   {:dateTime (f/unparse formatter t)}
+     :end     {:dateTime (f/unparse formatter t+1)}
+     :summary (format "Tags: %s" (str/join "," tags))}))
 
 (defn wrap-insert-event [handler calendar-id]
-  (fn [{:keys [ping-time tags] :as req}]
+  (fn [{:keys [timestamp tags] :as req}]
     (handler
      (assoc
       req
       :url (format "https://www.googleapis.com/calendar/v3/calendars/%s/events" calendar-id)
       :method :post
       :content-type :json
-      :form-params (ping-event ping-time tags)))))
+      :form-params (ping-event timestamp tags)))))
 
 (defn event-inserter [{:keys [calendar-id] :as config}]
   (wrap-insert-event (client config) calendar-id))

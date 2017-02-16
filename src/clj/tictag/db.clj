@@ -19,7 +19,7 @@
   (stop [component]
     (dissoc component :db)))
 
-(defn insert-tag! [db long-time tags & [local-time]]
+(defn insert-tag! [db long-time tags local-time]
   (j/execute!
    db
    [(str/join " "
@@ -33,13 +33,13 @@
                "local_time=EXCLUDED.local_time"])
     long-time
     (str/join " " tags)
-    (or local-time (utils/local-time-from-long long-time))]))
+    local-time]))
 
 (defn add-pend! [rb id long-time]
   (into rb [[id long-time]]))
 
 (defn add-pending! [{:keys [pends db]} long-time id]
-  (insert-tag! db long-time ["afk"])
+  (insert-tag! db long-time ["afk"] (utils/local-time-from-long long-time))
   (swap! pends add-pend! id long-time))
 
 (defn pending-timestamp [{:keys [pends]} id]
@@ -56,11 +56,6 @@
 (defn get-pings [db & [query]]
   (map to-ping (j/query db (or query ["select * from pings order by ts"]))))
 
-(defn add-tags [{db :db} long-time tags local-time]
-  (j/with-db-connection [db-handle db]
-    (insert-tag! db-handle long-time tags local-time)
-    (get-pings db-handle)))
-
 (defn is-ping? [{tagtime :tagtime} long-time]
   (tagtime/is-ping? tagtime long-time))
 
@@ -69,8 +64,15 @@
   [{tagtime :tagtime}]
   (:pings tagtime))
 
-(defn update-tags-query [{:keys [tags timestamp]}]
-  ["update pings set tags=? where ts=?" (str/join " " tags) timestamp])
+(defn update-tags-query [{:keys [tags timestamp local-time]}]
+  (if local-time
+    ["update pings set tags=? and local_time=? where ts=?"
+     (str/join " " tags)
+     local-time
+     timestamp]
+    ["update pings set tags=? where ts=?"
+     (str/join " " tags)
+     timestamp]))
 
 (defn update-tags! [{db :db} pings]
   (doseq [ping pings]

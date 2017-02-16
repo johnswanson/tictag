@@ -18,6 +18,21 @@
             [hiccup.core :refer [html]]
             [hiccup.page :refer [html5]]))
 
+(defn update-ping
+  [{:keys [db calendar beeminder]} {:as ping :keys [timestamp]}]
+  (timbre/debugf "Updating ping: %s" (pr-str ping))
+  (db/update-tags! db ping)
+  (beeminder/sync! beeminder (db/get-pings (:db db)))
+  (calendar ping))
+
+(defn update-pings
+  [{:keys [db calendar beeminder]} pings]
+  (timbre/debugf "Updating pings: %s" (pr-str pings))
+  (doseq [{:as ping :keys [timestamp]} pings]
+    (db/update-tags! db ping)
+    (future (calendar ping)))
+  (beeminder/sync! beeminder (db/get-pings (:db db))))
+
 (defn str-number? [s]
   (try (Long. s) (catch Exception e nil)))
 
@@ -41,45 +56,39 @@
         {:command :tag-last-ping
          :args {:tags all-args}}))))
 
-(defn sleep [db _]
-  (let [pings (db/sleepy-pings db)]
-    (db/make-pings-sleepy! db (db/sleepy-pings db))
-    (twilio/response
-     (format
-      "<Response><Message>Sleeping pings from %s to %s</Message></Response>"
-      (:local-time (last pings))
-      (:local-time (first pings))))))
+(defn sleep [component _]
+  (let [pings (db/sleepy-pings (:db component))]
+    (update-pings component (map #(assoc % :tags #{"sleep"}) pings))))
 
-(defn tag-ping-by-long-time [db {:keys [long-time tags]}]
+(defn tag-ping-by-long-time [component {:keys [long-time tags]}]
   (assert long-time)
-  (db/add-tags db long-time tags (utils/local-time-from-long long-time)))
+  (update-ping component {:timestamp  long-time
+                          :tags       tags}))
 
-(defn tag-ping-by-id [db {:keys [id] :as args}]
-  (let [long-time (db/pending-timestamp db id)]
-    (tag-ping-by-long-time db (assoc args :long-time long-time))))
+(defn tag-ping-by-id [component {:keys [id] :as args}]
+  (let [long-time (db/pending-timestamp (:db component) id)]
+    (tag-ping-by-long-time component (assoc args :long-time long-time))))
 
-(defn tag-last-ping [db {:keys [tags]}]
+(defn tag-last-ping [component {:keys [tags]}]
   (let [[last-ping] (db/get-pings
-                     (:db db)
+                     (:db (:db component))
                      ["select * from pings order by ts desc limit 1"])]
-    (db/update-tags! db [(assoc last-ping :tags tags)])))
+    (update-ping component (assoc last-ping :tags tags))))
 
-(defn handle-sms [db body]
+(defn handle-sms [component body]
   (let [{:keys [command args]} (parse-sms-body body)]
     (timbre/debugf "Received SMS: %s, parsed as: %s %s" body command args)
     (case command
-      :sleep                 (sleep db args)
-      :tag-ping-by-id        (tag-ping-by-id db args)
-      :tag-ping-by-long-time (tag-ping-by-long-time db args)
-      :tag-last-ping         (tag-last-ping db args))))
+      :sleep                 (sleep component args)
+      :tag-ping-by-id        (tag-ping-by-id component args)
+      :tag-ping-by-long-time (tag-ping-by-long-time component args)
+      :tag-last-ping         (tag-last-ping component args))))
 
-(defn handle-timestamp [db beeminder timestamp tags local-time]
-  (timbre/debugf "Received client: %s %s %s" timestamp tags local-time)
-  (let [long-time (Long. timestamp)]
-    (assert (db/is-ping? db long-time))
-    (db/add-tags db long-time tags local-time)
-    (beeminder/sync! beeminder (db/get-pings (:db db)))
-    {:status 200 :body ""}))
+(defn handle-timestamp [component params]
+  (timbre/debugf "Received client: %s" (pr-str params))
+  (let [ping (update params :timestamp str-number?)]
+    (assert (db/is-ping? (:db component) (:timestamp ping)))
+    (update-ping component ping)))
 
 (defn index []
   (html5
@@ -95,7 +104,7 @@
      [:script {:src "/js/compiled/app.js"}]
      [:script {:src "https://use.fontawesome.com/efa7507d6f.js"}]]]))
 
-(defn pings [db]
+(defn pings [{:keys [db]}]
   (timbre/debugf "Received request!")
   (response (db/get-pings (:db db))))
 
@@ -106,32 +115,39 @@
       (handler req)
       {:status 401 :body "unauthorized"})))
 
-(defn sms [db beeminder req]
-  (handle-sms db (get-in req [:params :Body]))
-  (beeminder/sync! beeminder (db/get-pings (:db db)))
+(defn sms [component req]
+  (handle-sms component (get-in req [:params :Body]))
   (twilio/response "<Response></Response>"))
 
-(defn timestamp [db beeminder {:keys [params]}]
-  (handle-timestamp db beeminder (:timestamp params) (:tags params) (:local-time params)))
+(defn timestamp [component {:keys [params]}]
+  (handle-timestamp component params)
+  {:status 200 :body ""})
 
 (defn valid-shared-secret? [shared-secret {:keys [params]}]
   (= shared-secret (:secret params)))
 
-(defn routes [db beeminder twilio tagtime shared-secret]
+(defn verify-valid-sig [{:keys [twilio]} req]
+  (twilio/valid-sig? twilio req))
+
+(defn verify-valid-secret [{:keys [config]} {:keys [params]}]
+  (= (:shared-secret config)
+     (:secret params)))
+
+(defn routes [component]
   (compojure.core/routes
    (POST "/sms" _ (wrap-authenticate
-                   (partial sms db beeminder)
-                   (partial twilio/valid-sig? twilio)))
+                   (partial sms component)
+                   (partial verify-valid-sig component)))
    (PUT "/time/:timestamp" _
      (wrap-authenticate
-      (partial timestamp db beeminder)
-      (partial valid-shared-secret? shared-secret)))
-   (GET "/pings" _ (pings db))
+      (partial timestamp component)
+      (partial verify-valid-secret component)))
+   (GET "/pings" _ (pings component))
    (GET "/" _ (index))
    (GET "/config" _ {:headers {"Content-Type" "application/edn"}
                      :status 200
-                     :body (pr-str {:tagtime-seed (:seed tagtime)
-                                    :tagtime-gap  (:gap tagtime)})})
+                     :body (pr-str {:tagtime-seed (:seed (:tagtime component))
+                                    :tagtime-gap  (:gap (:tagtime component))})})
    (GET "/healthcheck" _ {:status  200
                           :headers {"Content-Type" "text/plain"}
                           :body    "healthy!"})))
@@ -141,7 +157,7 @@
   (start [component]
     (timbre/debug "Starting server")
     (let [stop (http/run-server
-                (-> (routes db beeminder twilio tagtime (:shared-secret config))
+                (-> (routes component)
                     (wrap-transit-response {:encoding :json})
                     (wrap-defaults (assoc-in api-defaults [:static :resources] "/public"))
                     (wrap-edn-params)
