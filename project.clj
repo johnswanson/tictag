@@ -40,6 +40,7 @@
                  [oauth-clj "0.1.15"]
                  [pandect "0.6.1"]
                  [figwheel-sidecar "0.5.9" :scope "test"]
+                 [honeysql "0.8.2"]
                  [reloaded.repl "0.2.3"]
                  [binaryage/devtools "0.9.0"]
                  [com.andrewmcveigh/cljs-time "0.5.0-alpha2"]

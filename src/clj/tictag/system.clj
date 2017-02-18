@@ -32,8 +32,9 @@
 
    :twilio (:twilio config)
 
-   :calendar (google/event-inserter
-              (:google config))
+   :calendar (component/using
+              (google/map->EventInserter {:config (:google config)})
+              [:db])
 
    :scss (scss/->SCSSBuilder (:run-scss? config)
                              "resources/scss/app.scss"

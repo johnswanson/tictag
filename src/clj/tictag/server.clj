@@ -16,14 +16,16 @@
             [clojure.java.io :as io]
             [tictag.utils :as utils]
             [hiccup.core :refer [html]]
-            [hiccup.page :refer [html5]]))
+            [hiccup.page :refer [html5]]
+            [tictag.google :as google]))
 
 (defn update-ping
   [{:keys [db calendar beeminder]} {:as ping :keys [timestamp]}]
   (timbre/debugf "Updating ping: %s" (pr-str ping))
-  (db/update-tags! db ping)
   (beeminder/sync! beeminder (db/get-pings (:db db)))
-  (calendar ping))
+  (let [{:keys [id] :as result} (google/insert-event! calendar ping)]
+    (timbre/debugf "Saved ping to google calendar, id: %s" id)
+    (db/update-tags! db [(assoc ping :calendar-event-id id)])))
 
 (defn update-pings
   [{:keys [db calendar beeminder]} pings]

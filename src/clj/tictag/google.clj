@@ -8,7 +8,8 @@
             [clj-time.core :as t]
             [clj-time.coerce :as coerce]
             [clj-time.format :as f]
-            [slingshot.slingshot :refer [try+]]))
+            [slingshot.slingshot :refer [try+]]
+            [com.stuartsierra.component :as component]))
 
 (def redirect-uri "urn:ietf:wg:oauth:2.0:oob")
 
@@ -21,16 +22,18 @@
   [{:keys [client-id]}]
   (oauth-authorization-url client-id redirect-uri :scope (str/join " " (vals scopes))))
 
-(defn client
-  [{:keys [client-id client-secret refresh-token]}]
-  (oauth-client
-   (:access-token
+(defn token! [{:keys [client-id client-secret refresh-token]}]
+  (:access-token
     (request {:method :post
               :url *oauth-access-token-url*
               :form-params {"client_id" client-id
                             "client_secret" client-secret
                             "refresh_token" refresh-token
-                            "grant_type" "refresh_token"}}))))
+                            "grant_type" "refresh_token"}})))
+
+(defn client
+  [config]
+  (oauth-client (token! config)))
 
 (defn ping-event
   [ping-time tags]
@@ -41,17 +44,33 @@
      :end     {:dateTime (f/unparse formatter t+1)}
      :summary (format "Tags: %s" (str/join "," tags))}))
 
-(defn wrap-insert-event [handler calendar-id]
-  (fn [{:keys [timestamp tags] :as req}]
-    (handler
-     (assoc
-      req
-      :url (format "https://www.googleapis.com/calendar/v3/calendars/%s/events" calendar-id)
-      :method :post
-      :content-type :json
-      :form-params (ping-event timestamp tags)))))
+(defrecord EventInserter [db config]
+  component/Lifecycle
+  (start [component]
+    component)
+  (stop [component]
+    component))
 
-(defn event-inserter [{:keys [calendar-id] :as config}]
-  (wrap-insert-event (client config) calendar-id))
+(defn update-event-url [calendar-id event-id]
+  (format "https://www.googleapis.com/calendar/v3/calendars/%s/events/%s"
+          calendar-id
+          event-id))
 
+(defn create-event-url [calendar-id]
+  (format "https://www.googleapis.com/calendar/v3/calendars/%s/events"
+          calendar-id))
+
+(defn insert-event! [inserter {:keys [timestamp tags calendar-event-id]}]
+  (let [new-client  (client (:config inserter))
+        calendar-id (:calendar-id (:config inserter))
+        base-req
+        (if-let [id calendar-event-id]
+          {:url    (update-event-url calendar-id id)
+           :method :put}
+          {:url    (create-event-url calendar-id)
+           :method :post})]
+    (new-client
+     (assoc base-req
+            :content-type :json
+            :form-params (ping-event timestamp tags)))))
 

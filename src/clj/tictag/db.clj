@@ -7,7 +7,9 @@
             [tictagapi.core :as tagtime]
             [clojure.java.jdbc :as j]
             [tictag.utils :as utils]
-            [amalloy.ring-buffer :refer [ring-buffer]]))
+            [amalloy.ring-buffer :refer [ring-buffer]]
+            [honeysql.core :as s]
+            [honeysql.helpers :as sql]))
 
 (defrecord Database [db-spec tagtime]
   component/Lifecycle
@@ -47,11 +49,12 @@
 
 (defn local-day [local-time] (str/replace (subs local-time 0 10) #"-" ""))
 
-(defn to-ping [{:keys [local_time ts tags]}]
+(defn to-ping [{:keys [local_time ts tags calendar_event_id]}]
   {:tags (set (map keyword (str/split tags #" ")))
    :local-time local_time
    :local-day (local-day local_time)
-   :timestamp ts})
+   :timestamp ts
+   :calendar-event-id calendar_event_id})
 
 (defn get-pings [db & [query]]
   (map to-ping (j/query db (or query ["select * from pings order by ts"]))))
@@ -64,15 +67,20 @@
   [{tagtime :tagtime}]
   (:pings tagtime))
 
-(defn update-tags-query [{:keys [tags timestamp local-time]}]
-  (if local-time
-    ["update pings set tags=? and local_time=? where ts=?"
-     (str/join " " tags)
-     local-time
-     timestamp]
-    ["update pings set tags=? where ts=?"
-     (str/join " " tags)
-     timestamp]))
+(defn to-db-ping [{:keys [tags timestamp local-time calendar-event-id]}]
+  (let [ping {:tags              (str/join " " tags)
+              :ts                timestamp
+              :calendar_event_id calendar-event-id}]
+    (if local-time
+      (assoc ping :local_time local-time)
+      ping)))
+
+(defn update-tags-query [ping]
+  (let [ping (to-db-ping ping)]
+    (-> (sql/update :pings)
+        (sql/sset (select-keys ping [:tags :local_time :calendar_event_id]))
+        (sql/where [:= :ts (:ts ping)])
+        s/format)))
 
 (defn update-tags! [{db :db} pings]
   (doseq [ping pings]
