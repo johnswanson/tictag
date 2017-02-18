@@ -42,7 +42,7 @@
         formatter (:date-time f/formatters)]
     {:start   {:dateTime (f/unparse formatter t)}
      :end     {:dateTime (f/unparse formatter t+1)}
-     :summary (format "Tags: %s" (str/join "," tags))}))
+     :summary (format "%s" (str/join "," tags))}))
 
 (defrecord EventInserter [db config]
   component/Lifecycle
