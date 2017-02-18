@@ -22,17 +22,17 @@
 (defn update-ping
   [{:keys [db calendar beeminder]} {:as ping :keys [timestamp]}]
   (timbre/debugf "Updating ping: %s" (pr-str ping))
-  (beeminder/sync! beeminder (db/get-pings (:db db)))
   (let [{:keys [id] :as result} (google/insert-event! calendar ping)]
     (timbre/debugf "Saved ping to google calendar, id: %s" id)
-    (db/update-tags! db [(assoc ping :calendar-event-id id)])))
+    (db/update-tags! db [(assoc ping :calendar-event-id id)]))
+  (beeminder/sync! beeminder (db/get-pings (:db db))))
 
 (defn update-pings
   [{:keys [db calendar beeminder]} pings]
   (timbre/debugf "Updating pings: %s" (pr-str pings))
   (doseq [{:as ping :keys [timestamp]} pings]
-    (db/update-tags! db ping)
-    (future (calendar ping)))
+    (let [{:keys [id]} (google/insert-event! calendar ping)]
+      (db/update-tags! db [(assoc ping :calendar-event-id id)])))
   (beeminder/sync! beeminder (db/get-pings (:db db))))
 
 (defn str-number? [s]
