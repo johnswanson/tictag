@@ -30,7 +30,8 @@
    :google        {:client-id     (env :google-client-id)
                    :client-secret (env :google-client-secret)
                    :refresh-token (env :google-refresh-token)
-                   :calendar-id   (env :google-calendar-id)}
+                   :calendar-id   (env :google-calendar-id)
+                   :disable?      (env :google-disable)}
    :slack         {:token    (env :slack-token)
                    :username (env :slack-username)}
    :tagtime       {:seed (or (some-> env :tagtime-seed Integer.) 666)

@@ -61,16 +61,17 @@
           calendar-id))
 
 (defn insert-event! [inserter {:keys [timestamp tags calendar-event-id]}]
-  (let [new-client  (client (:config inserter))
-        calendar-id (:calendar-id (:config inserter))
-        base-req
-        (if-let [id calendar-event-id]
-          {:url    (update-event-url calendar-id id)
-           :method :put}
-          {:url    (create-event-url calendar-id)
-           :method :post})]
-    (new-client
-     (assoc base-req
-            :content-type :json
-            :form-params (ping-event timestamp tags)))))
+  (when-not (:disable? (:config inserter))
+    (let [new-client  (client (:config inserter))
+          calendar-id (:calendar-id (:config inserter))
+          base-req
+          (if-let [id calendar-event-id]
+            {:url    (update-event-url calendar-id id)
+             :method :put}
+            {:url    (create-event-url calendar-id)
+             :method :post})]
+      (new-client
+       (assoc base-req
+              :content-type :json
+              :form-params (ping-event timestamp tags))))))
 
