@@ -42,6 +42,7 @@
                  [figwheel-sidecar "0.5.9" :scope "test"]
                  [honeysql "0.8.2"]
                  [reloaded.repl "0.2.3"]
+                 [slack-rtm "0.1.3"]
                  [binaryage/devtools "0.9.0"]
                  [com.andrewmcveigh/cljs-time "0.5.0-alpha2"]
                  [day8.re-frame/http-fx "0.1.3"]

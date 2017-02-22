@@ -8,7 +8,8 @@
             [tictag.repl :as repl]
             [tictag.beeminder :as beeminder]
             [tictag.scss :as scss]
-            [tictag.google :as google]))
+            [tictag.google :as google]
+            [tictag.slack :as slack]))
 
 (defn system [config]
   (component/system-map
@@ -28,7 +29,7 @@
         [:tagtime])
    :chimer (component/using
             (server-chimer/map->ServerChimer {})
-            [:db :twilio])
+            [:db :twilio :slack])
 
    :twilio (:twilio config)
 
@@ -39,6 +40,10 @@
    :scss (scss/->SCSSBuilder (:run-scss? config)
                              "resources/scss/app.scss"
                              "resources/public/css/app.css")
+
+   :slack (component/using
+           (slack/map->Slack {:config (:slack config)})
+           [:db :tagtime :beeminder :twilio :calendar])
 
    :tester (tester/->Tester (:run-tests? config))))
 
