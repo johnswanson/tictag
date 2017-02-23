@@ -1,6 +1,7 @@
 (ns tictag.subs
   (:require [re-frame.core :refer [reg-sub subscribe]]
             [cljs-time.format :as f]
+            [cljs-time.core :as t]
             [tictag.dates :refer [seconds-since-midnight days-since-epoch]]))
 
 (def formatter (f/formatters :date-time))
@@ -136,11 +137,40 @@
    (count (filter query-fn pings))))
 
 (reg-sub
+ :minutes-for-tag
+ (fn [[_ tag] _]
+   (subscribe [:tag-count tag]))
+ (fn [count _]
+   (* count 45)))
+
+(reg-sub
  :minutes-meeting-query
  (fn [_ _]
    (subscribe [:count-meeting-query]))
  (fn [count _]
    (* count 45)))
+
+(reg-sub
+ :minutes-per-day-for-tag
+ (fn [[_ tag] _]
+   [(subscribe [:minutes-for-tag tag])
+    (subscribe [:total-time-in-days])])
+ (fn [[minutes days] _]
+   (/ minutes days)))
+
+(reg-sub
+ :minutes-per-day-for-tag-as-interval
+ (fn [[_ tag] _]
+   (subscribe [:minutes-per-day-for-tag tag]))
+ (fn [minutes _]
+   (t/minutes minutes)))
+
+(reg-sub
+ :time-per-day-for-tag
+ (fn [[_ tag] _]
+   (subscribe [:minutes-per-day-for-tag-as-interval tag]))
+ (fn [interval _]
+   (f/unparse-duration interval)))
 
 (reg-sub
  :total-time
@@ -163,3 +193,47 @@
     (subscribe [:total-time-in-days])])
  (fn [[minutes days] _]
    (/ minutes days)))
+
+(reg-sub
+ :tag-counts
+ (fn [_ _]
+   (subscribe [:pings]))
+ (fn [pings _]
+   (->> pings
+        (map :tags)
+        (map frequencies)
+        (apply merge-with +))))
+
+(reg-sub
+ :tag-count
+ (fn [_ _]
+   (subscribe [:tag-counts]))
+ (fn [tag-counts [_ tag]]
+   (get tag-counts tag 0)))
+
+(reg-sub
+ :total-ping-count
+ (fn [_ _]
+   (subscribe [:pings]))
+ (fn [pings _]
+   (count pings)))
+
+(reg-sub
+ :tag-%
+ (fn [[_ tag] _]
+   [(subscribe [:tag-count tag])
+    (subscribe [:total-ping-count])])
+ (fn [[tag-count total] _]
+   (* 100 (/ tag-count total))))
+
+(reg-sub
+ :sorted-tag-counts
+ (fn [_ _]
+   (subscribe [:tag-counts]))
+ (fn [tag-counts _]
+   (keys
+    (into (sorted-map-by (fn [key1 key2]
+                           (compare [(get tag-counts key2) key2]
+                                    [(get tag-counts key1) key1])))
+          tag-counts))))
+
