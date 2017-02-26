@@ -44,7 +44,7 @@
                  [reloaded.repl "0.2.3"]
                  [slack-rtm "0.1.3"]
                  [binaryage/devtools "0.9.0"]
-                 [com.andrewmcveigh/cljs-time "0.5.0-alpha2"]
+                 [org.clojars.jds02006/cljs-time "0.5.0-SNAPSHOT"]
                  [day8.re-frame/http-fx "0.1.3"]
                  [slingshot "0.12.2"]
                  [ring-transit "0.1.6"]
