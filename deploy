@@ -1,8 +1,32 @@
 #!/bin/bash
 set -euf pipefail
 
-lein clean
-lein uberjar
-scp ./target/uberjar/standalone.jar $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/
-ssh $DEPLOY_USER@$DEPLOY_HOST systemctl --user restart tictag.service
+IMAGE=johnswansonorg/tictag:$CIRCLE_SHA1
 
+docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
+docker build -t $IMAGE .
+docker push $IMAGE
+
+ssh $DEPLOY_USER@$DEPLOY_HOST docker pull $IMAGE
+
+ssh $DEPLOY_USER@$DEPLOY_HOST docker kill tictag || echo "ok"
+ssh $DEPLOY_USER@$DEPLOY_HOST docker rm tictag || echo "ok"
+ssh $DEPLOY_USER@$DEPLOY_HOST docker run \
+    --net=host \
+    --name=tictag \
+    -e BEEMINDER_USER=$BEEMINDER_USER \
+    -e BEEMINDER_AUTH_TOKEN=$BEEMINDER_AUTH_TOKEN \
+    -e GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID \
+    -e GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET \
+    -e GOOGLE_CALENDAR_ID=$GOOGLE_CALENDAR_ID   \
+    -e GOOGLE_REFRESH_TOKEN=$GOOGLE_REFRESH_TOKEN \
+    -e SLACK_TOKEN=$SLACK_TOKEN \
+    -e SLACK_USERNAME=$SLACK_USERNAME \
+    -e PG_USER=$PG_USER \
+    -e PG_PASSWORD=$PG_PASSWORD \
+    -e PG_DATABASE=$PG_DATABASE \
+    -e TICTAG_PORT=$TICTAG_PORT \
+    -e TICTAG_SHARED_SECRET=$TICTAG_SHARED_SECRET \
+    --restart always \
+    --detach \
+    $IMAGE
