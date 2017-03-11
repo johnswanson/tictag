@@ -6,10 +6,12 @@
             [compojure.core :refer [GET PUT POST]]
             [taoensso.timbre :as timbre]
             [ring.util.response :refer [response]]
+            [ring.middleware.json :refer [wrap-json-params]]
             [ring.middleware.edn :refer [wrap-edn-params]]
             [ring.middleware.transit :refer [wrap-transit-params wrap-transit-response]]
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
             [tictag.twilio :as twilio]
+            [tictag.slack :as slack]
             [tictag.db :as db]
             [tictag.cli :refer [parse-body str-number? handle-command]]
             [clojure.string :as str]
@@ -65,11 +67,18 @@
   (= (:shared-secret config)
      (:secret params)))
 
+(defn slack [{:keys [slack]} {:keys [params]}]
+  (when (slack/valid-event? slack params)
+    (slack/handle-message slack (:event params)))
+  {:status 200 :body ""})
+
+
 (defn routes [component]
   (compojure.core/routes
    (POST "/sms" _ (wrap-authenticate
                    (partial sms component)
                    (partial verify-valid-sig component)))
+   (POST "/slack" _ (partial slack component))
    (PUT "/time/:timestamp" _
      (wrap-authenticate
       (partial timestamp component)
@@ -84,7 +93,7 @@
                           :headers {"Content-Type" "text/plain"}
                           :body    "healthy!"})))
 
-(defrecord Server [db config tagtime beeminder twilio]
+(defrecord Server [db config tagtime beeminder twilio slack]
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting server")
@@ -93,6 +102,7 @@
                     (wrap-transit-response {:encoding :json})
                     (wrap-defaults (assoc-in api-defaults [:static :resources] "/public"))
                     (wrap-edn-params)
+                    (wrap-json-params)
                     (wrap-transit-params))
                 config)]
       (timbre/debug "Server created")

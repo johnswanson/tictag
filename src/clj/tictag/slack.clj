@@ -23,19 +23,25 @@
                   :channel dm-channel-id
                   :text    body})))
 
+(defn valid-event? [{:keys [config dm-channel-id user]}
+                    {:as   outer-event
+                     :keys [event]}]
+  (and
+   (= (:verification-token config) (:token outer-event))
+   (= dm-channel-id (:channel event))
+   (= (:id user) (:user event))))
+
 (defn handle-message [component message]
-  (when (and (= (:dm-channel-id component) (:channel message))
-             (= (:id (:user component)) (:user message)))
-    (handle-command component (:text message))
-    (send-message! component (->> component
-                                  (:db)
-                                  (:db)
-                                  (db/get-pings)
-                                  (reverse)
-                                  (map pr-str)
-                                  (map #(format "```%s```" %))
-                                  (take 5)
-                                  (str/join "\n")))))
+  (handle-command component (:text message))
+  (send-message! component (->> component
+                                (:db)
+                                (:db)
+                                (db/get-pings)
+                                (reverse)
+                                (map pr-str)
+                                (map #(format "```%s```" %))
+                                (take 5)
+                                (str/join "\n"))))
 
 (defrecord Slack [config db]
   component/Lifecycle

@@ -48,6 +48,7 @@
                  [day8.re-frame/http-fx "0.1.3"]
                  [slingshot "0.12.2"]
                  [ring-transit "0.1.6"]
+                 [ring/ring-json "0.4.0"]
                  [cljs-ajax "0.5.8"]
                  [day8.re-frame/async-flow-fx "0.0.6"]
                  [org.postgresql/postgresql "9.4.1212"]

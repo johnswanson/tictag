@@ -16,7 +16,7 @@
    :server (component/using
             (server/map->Server
              {:config (:tictag-server config)})
-            [:db :tagtime :beeminder :twilio :calendar])
+            [:db :tagtime :beeminder :twilio :calendar :slack])
    :tagtime (tagtime/tagtime
              (get-in config [:tagtime :gap])
              (get-in config [:tagtime :seed]))

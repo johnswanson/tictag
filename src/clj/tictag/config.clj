@@ -32,8 +32,9 @@
                    :refresh-token (env :google-refresh-token)
                    :calendar-id   (env :google-calendar-id)
                    :disable?      (env :google-disable)}
-   :slack         {:token    (env :slack-token)
-                   :username (env :slack-username)}
+   :slack         {:token              (env :slack-token)
+                   :username           (env :slack-username)
+                   :verification-token (env :slack-verification-token)}
    :tagtime       {:seed (or (some-> env :tagtime-seed Integer.) 666)
                    :gap  (or (some-> env :tagtime-gap Integer.) (* 60 45))}
 
