@@ -1,13 +1,21 @@
 (ns tictag.config
-  (:require [environ.core :refer [env]]))
+  (:require [environ.core :refer [env]]
+            [clojure.string :as str]))
 
-(def home-dir (System/getProperty "user.home"))
+;; goal format
+;; "work,personal:testing" => 2 goals
+;; tagged 'work'? goal is [user]/work
+;; tagged 'personal'? goal is [user]/testing
 
-(def beeminder-goal-file (env :beeminder-goal-file (format "%s/.tictag.goals" home-dir)))
-
-(def goals
-  (try (load-file beeminder-goal-file)
-       (catch Exception _ {})))
+(defn get-goals [goal-str]
+  (when goal-str
+    (into
+     {}
+     (for [goal (str/split goal-str #",")]
+       (let [[tag beeminder-goal] (str/split goal #":")]
+         (if beeminder-goal
+           [(keyword tag) beeminder-goal]
+           [(keyword tag) tag]))))))
 
 (def config
   {:tictag-server {:shared-secret (env :tictag-shared-secret)
@@ -25,7 +33,7 @@
                    :disable?      (env :twilio-disable)}
    :beeminder     {:auth-token (env :beeminder-auth-token)
                    :user       (env :beeminder-user)
-                   :goals      goals
+                   :goals      (get-goals (env :beeminder-goals))
                    :disable?   (env :beeminder-disable)}
    :google        {:client-id     (env :google-client-id)
                    :client-secret (env :google-client-secret)

@@ -48,16 +48,16 @@
                    :method :delete
                    :query-params {:auth_token auth-token}})))
 
-(defn days-matching-pred [pred? rows]
+(defn days-matching-tag [tag rows]
   (->> rows
-       (filter pred?)
+       (filter #(tag (:tags %)))
        (map :local-day)
        (frequencies)))
 
 (defn sync! [{{:keys [auth-token user goals disable?]} :config tagtime-config :tagtime} rows]
   (when (and (not disable?) auth-token user (seq goals))
-    (doseq [[goal pred?] goals]
-      (let [days (days-matching-pred pred? rows)
+    (doseq [[goal tag] goals]
+      (let [days                (days-matching-tag tag rows)
             existing-datapoints (datapoints auth-token user goal)
             existing-map        (group-by :daystamp existing-datapoints)
             ;; we save anything that exists in our new datapoints
