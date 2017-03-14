@@ -56,7 +56,7 @@
 
 (defn sync! [{{:keys [auth-token user goals disable?]} :config tagtime-config :tagtime} rows]
   (when (and (not disable?) auth-token user (seq goals))
-    (doseq [[goal tag] goals]
+    (doseq [[tag goal] goals]
       (let [days                (days-matching-tag tag rows)
             existing-datapoints (datapoints auth-token user goal)
             existing-map        (group-by :daystamp existing-datapoints)
