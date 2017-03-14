@@ -1,5 +1,6 @@
 (ns tictag.system
   (:require [com.stuartsierra.component :as component]
+            [tictag.re-frame :as re-frame]
             [tictagapi.core :as tagtime]
             [tictag.tester :as tester]
             [tictag.server :as server]
@@ -13,10 +14,14 @@
 
 (defn system [config]
   (component/system-map
+   :re-frame (component/using
+              (re-frame/map->Reframe
+               {:shared-secret (:shared-secret config)})
+              [:db :beeminder :tagtime :twilio :calendar :slack])
    :server (component/using
             (server/map->Server
              {:config (:tictag-server config)})
-            [:db :tagtime :beeminder :twilio :calendar :slack])
+            [:re-frame :db :tagtime])
    :tagtime (tagtime/tagtime
              (get-in config [:tagtime :gap])
              (get-in config [:tagtime :seed]))

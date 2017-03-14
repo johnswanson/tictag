@@ -54,7 +54,7 @@
                  [org.postgresql/postgresql "9.4.1212"]
                  [org.xerial/sqlite-jdbc "3.16.1"]
                  [ragtime "0.6.3"]
-                 [re-frame "0.9.1"]
+                 [re-frame "0.9.2"]
                  [hiccup "1.0.5"]
                  [ring/ring-defaults "0.2.2"]
                  [fogus/ring-edn "0.3.0"]

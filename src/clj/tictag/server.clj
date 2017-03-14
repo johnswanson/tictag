@@ -1,5 +1,6 @@
 (ns tictag.server
-  (:require [clj-time.format :as f]
+  (:require [re-frame.core :refer [dispatch]]
+            [clj-time.format :as f]
             [clj-time.core :as t]
             [com.stuartsierra.component :as component]
             [org.httpkit.server :as http]
@@ -10,19 +11,11 @@
             [ring.middleware.edn :refer [wrap-edn-params]]
             [ring.middleware.transit :refer [wrap-transit-params wrap-transit-response]]
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
-            [tictag.twilio :as twilio]
-            [tictag.slack :as slack]
             [tictag.db :as db]
             [tictag.cli :refer [parse-body str-number? handle-command]]
             [clojure.string :as str]
             [hiccup.core :refer [html]]
             [hiccup.page :refer [html5]]))
-
-(defn handle-timestamp [component params]
-  (timbre/debugf "Received client: %s" (pr-str params))
-  (let [ping (update params :timestamp str-number?)]
-    (assert (db/is-ping? (:db component) (:timestamp ping)))
-    (tictag.cli/update-ping component ping)))
 
 (defn index []
   (html5
@@ -39,50 +32,20 @@
      [:script {:src "https://use.fontawesome.com/efa7507d6f.js"}]]]))
 
 (defn pings [{:keys [db]}]
-  (timbre/debugf "Received request!")
   (response (db/get-pings (:db db))))
 
-(defn wrap-authenticate [handler f]
-  (fn [req]
-    (timbre/debugf "Authenticating! (f req) is : %s" (f req))
-    (if (f req)
-      (handler req)
-      {:status 401 :body "unauthorized"})))
-
-(defn sms [component req]
-  (handle-command component (get-in req [:params :Body]))
-  (twilio/response "<Response></Response>"))
-
-(defn timestamp [component {:keys [params]}]
-  (handle-timestamp component params)
+(defn slack [{:keys [params]}]
+  (dispatch [:receive-slack-callback params])
   {:status 200 :body ""})
 
-(defn valid-shared-secret? [shared-secret {:keys [params]}]
-  (= shared-secret (:secret params)))
-
-(defn verify-valid-sig [{:keys [twilio]} req]
-  (twilio/valid-sig? twilio req))
-
-(defn verify-valid-secret [{:keys [config]} {:keys [params]}]
-  (= (:shared-secret config)
-     (:secret params)))
-
-(defn slack [{:keys [slack]} {:keys [params]}]
-  (when (slack/valid-event? slack params)
-    (slack/handle-message slack (:event params)))
+(defn timestamp [{:keys [params]}]
+  (dispatch [:receive-timestamp-req params])
   {:status 200 :body ""})
-
 
 (defn routes [component]
   (compojure.core/routes
-   (POST "/sms" _ (wrap-authenticate
-                   (partial sms component)
-                   (partial verify-valid-sig component)))
-   (POST "/slack" _ (partial slack component))
-   (PUT "/time/:timestamp" _
-     (wrap-authenticate
-      (partial timestamp component)
-      (partial verify-valid-secret component)))
+   (POST "/slack" _ slack)
+   (PUT "/time/:timestamp" _ timestamp)
    (GET "/pings" _ (pings component))
    (GET "/" _ (index))
    (GET "/config" _ {:headers {"Content-Type" "application/edn"}
@@ -93,7 +56,7 @@
                           :headers {"Content-Type" "text/plain"}
                           :body    "healthy!"})))
 
-(defrecord Server [db config tagtime beeminder twilio slack]
+(defrecord Server [db config tagtime]
   component/Lifecycle
   (start [component]
     (timbre/debug "Starting server")

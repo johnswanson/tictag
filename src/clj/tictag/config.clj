@@ -18,9 +18,8 @@
            [(keyword tag) tag]))))))
 
 (def config
-  {:tictag-server {:shared-secret (env :tictag-shared-secret)
-                   :host          (env :tictag-host "127.0.0.1")
-                   :port          (or (some-> env :tictag-port Integer.) 8080)}
+  {:tictag-server {:host (env :tictag-host "127.0.0.1")
+                   :port (or (some-> env :tictag-port Integer.) 8080)}
    :db            {:dbtype   "postgresql"
                    :dbname   (env :pg-database)
                    :host     (env :pg-host "127.0.0.1")
@@ -43,6 +42,7 @@
    :slack         {:token              (env :slack-token)
                    :username           (env :slack-username)
                    :verification-token (env :slack-verification-token)}
+   :shared-secret (env :tictag-shared-secret)
    :tagtime       {:seed (or (some-> env :tagtime-seed Integer.) 666)
                    :gap  (or (some-> env :tagtime-gap Integer.) (* 60 45))}
 
