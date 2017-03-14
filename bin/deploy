@@ -26,6 +26,7 @@ ssh $DEPLOY_USER@$DEPLOY_HOST docker run \
     -e PG_DATABASE=$PG_DATABASE \
     -e TICTAG_PORT=$TICTAG_PORT \
     -e TICTAG_SHARED_SECRET=$TICTAG_SHARED_SECRET \
+    -e TZ="America/Los_Angeles" \
     --restart always \
     --detach \
     $IMAGE
