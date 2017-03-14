@@ -1,0 +1,4 @@
+#!/bin/bash
+set -euf pipefail
+
+docker build -t $IMAGE .
