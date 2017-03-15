@@ -30,27 +30,38 @@
 
 (defn make-pings-sleepy [cofx _]
   {:pings (map #(assoc % :tags #{:sleep}) (:sleepy-pings cofx))
-   :slack ["SLEEPING SOME MOFUCKIN PINGS"]})
-
-(defn ping-by-id-cofx [db]
-  (fn [cofx]
-    (assoc cofx :ping-by-id #(db/pending-timestamp db %))))
+   :slack ["sleeping pings: %s to %s"
+           (:local-time (last (:sleepy-pings cofx)))
+           (:local-time (first (:sleepy-pings cofx)))]})
 
 (defn tag-ping-by-id [cofx [_ {:keys [tags id]}]]
-  (let [old-ping ((:ping-by-id cofx) id)
+  (let [old-ping ((:by-id cofx) id)
         new-ping (assoc old-ping :tags tags)]
     {:pings [new-ping]
      :slack [(report-changed-ping old-ping new-ping)]}))
 
 (defn tag-ping-by-long-time [cofx [_ {:keys [tags long-time]}]]
-  {:pings [{:timestamp long-time :tags tags}]
-   :slack [(report-changed-ping {} {:timestamp long-time :tags tags})]})
+  (let [old-ping ((:by-long-time cofx) long-time)
+        new-ping (assoc old-ping :tags tags)]
+    {:pings [new-ping]
+     :slack [(report-changed-ping old-ping new-ping)]}))
 
 (defn tag-last-ping [cofx [_ {:keys [tags]}]]
   (let [old-ping (:last-ping cofx)
         new-ping (assoc old-ping :tags tags)]
     {:pings [new-ping]
      :slack [(report-changed-ping old-ping new-ping)]}))
+
+(defn ping-by-id-cofx [db]
+  (fn [cofx]
+    (assoc cofx :by-id (fn [id] (db/ping-from-id db id)))))
+
+(defn ping-by-long-time-cofx [db]
+  (fn [cofx]
+    (assoc
+     cofx
+     :by-long-time
+     (fn [long-time] (db/ping-from-long-time db long-time)))))
 
 (defn last-ping-cofx [db]
   (fn [cofx]
@@ -75,7 +86,8 @@
             (partial slack/valid-event? slack))))
 
   (reg-cofx :sleepy-pings (sleepy-pings-cofx db))
-  (reg-cofx :ping-by-id (ping-by-id-cofx db))
+  (reg-cofx :by-id (ping-by-id-cofx db))
+  (reg-cofx :by-long-time (ping-by-long-time-cofx db))
   (reg-cofx :last-ping (last-ping-cofx db))
 
   (reg-event-fx
@@ -106,11 +118,12 @@
 
   (reg-event-fx
    :tag-ping-by-id
-   [(inject-cofx :ping-by-id)]
+   [(inject-cofx :by-id)]
    tag-ping-by-id)
 
   (reg-event-fx
    :tag-ping-by-long-time
+   [(inject-cofx :by-long-time)]
    tag-ping-by-long-time)
 
   (reg-event-fx

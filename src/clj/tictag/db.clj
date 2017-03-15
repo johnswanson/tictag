@@ -59,6 +59,19 @@
 (defn get-pings [db & [query]]
   (map to-ping (j/query db (or query ["select * from pings order by ts"]))))
 
+(defn ping-from-id [db id]
+  (let [timestamp (pending-timestamp db id)]
+    (first
+     (get-pings
+      (:db db)
+      ["select * from pings where ts=? limit 1" timestamp]))))
+
+(defn ping-from-long-time [db long-time]
+  (first
+   (get-pings
+    (:db db)
+    ["select * from pings where ts=? limit 1" long-time])))
+
 (defn is-ping? [{tagtime :tagtime} long-time]
   (tagtime/is-ping? tagtime long-time))
 
