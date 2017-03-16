@@ -29,7 +29,7 @@
     {:dispatch [command args]}))
 
 (defn make-pings-sleepy [cofx _]
-  {:pings (map #(assoc % :tags #{:sleep}) (:sleepy-pings cofx))
+  {:pings (map #(assoc % :tags #{"sleep"}) (:sleepy-pings cofx))
    :slack ["sleeping pings: %s to %s"
            (:local-time (last (:sleepy-pings cofx)))
            (:local-time (first (:sleepy-pings cofx)))]})

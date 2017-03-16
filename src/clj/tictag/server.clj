@@ -22,7 +22,7 @@
    [:html {:lang "en"}
     [:head
      [:meta {:charset "utf-8"}]
-     [:link {:href "http://fonts.googleapis.com/css?family=Roboto:400,300,200"
+     [:link {:href "https://fonts.googleapis.com/css?family=Roboto:400,300,200"
              :rel "stylesheet"
              :type "text/css"}]
      [:link {:rel "stylesheet" :href "/css/app.css"}]]
