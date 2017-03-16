@@ -13,15 +13,22 @@
                                        :output-to     "resources/public/js/compiled/app.js"
                                        :output-dir    "resources/public/js/compiled"
                                        :optimizations :none
-                                       :source-map    true}}]}
+                                       :source-map    true}}
+                       {:id           "prod"
+                        :figwheel     false
+                        :source-paths ["src/cljs"]
+                        :compiler     {:main          "tictag.prod"
+                                       :asset-path    "/js/compiled"
+                                       :output-to     "resources/public/js/compiled/app.js"
+                                       :optimizations :advanced}}]}
   :plugins [[lein-cljsbuild "1.1.5"]]
   :test-paths ["test/clj"]
   :profiles {:uberjar {:hooks [leiningen.cljsbuild]
-                       :aot :all}
-             :dev [:dev-secrets {:source-paths ["dev" "test/clj"]
-                                 :dependencies [[org.clojure/tools.namespace "0.2.11"]
-                                                [com.cemerick/piggieback "0.2.1"]]
-                                 :plugins [[lein-environ "1.1.0"]]}]}
+                       :aot   :all}
+             :dev     [:dev-secrets {:source-paths ["dev" "test/clj"]
+                                     :dependencies [[org.clojure/tools.namespace "0.2.11"]
+                                                    [com.cemerick/piggieback "0.2.1"]]
+                                     :plugins      [[lein-environ "1.1.0"]]}]}
   :source-paths ["src/clj"]
   :main tictag.main
   :repl-options {:init-ns user :nrepl-middleware [cemerick.piggieback/wrap-cljs-repl]}
