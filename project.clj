@@ -80,4 +80,5 @@
                  [environ "1.1.0"]
                  [clojure-csv/clojure-csv "2.0.2"]
                  [buddy "1.3.0"]
-                 [buddy/buddy-hashers "1.2.0"]])
+                 [buddy/buddy-hashers "1.2.0"]
+                 [hikari-cp "1.7.5"]])

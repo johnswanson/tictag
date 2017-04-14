@@ -13,7 +13,15 @@
             [honeysql-postgres.format :refer :all]
             [honeysql-postgres.helpers :refer :all]
             [tictag.crypto :as crypto]
-            [buddy.hashers :refer [check]]))
+            [buddy.hashers :refer [check]]
+            [hikari-cp.core :refer [make-datasource]]))
+
+(defn datasource-options [{:keys [dbtype dbname host user password]}]
+  {:pool-name   "db-pool"
+   :adapter     dbtype
+   :username    user
+   :password    password
+   :server-name host})
 
 (def hashp #(buddy.hashers/derive % {:algorithm :bcrypt+blake2b-512}))
 
@@ -22,7 +30,8 @@
   (start [component]
     (timbre/debugf "Starting database, config: %s" (pr-str db-spec))
     (assoc component
-           :db db-spec
+           :db {:datasource (make-datasource (datasource-options db-spec))
+                :crypto-key (:crypto-key db-spec)}
            :pends (atom (ring-buffer 16))))
   (stop [component]
     (dissoc component :db)))
