@@ -34,7 +34,8 @@
                 :crypto-key (:crypto-key db-spec)}
            :pends (atom (ring-buffer 16))))
   (stop [component]
-    (hikari/close-datasource (get-in component [:db :datasource]))
+    (when-let [ds (get-in component [:db :datasource])]
+      (hikari/close-datasource ds))
     (dissoc component :db)))
 
 (defn add-pend! [rb id long-time]
@@ -135,34 +136,50 @@
 (defn make-pings-sleepy! [db pings]
   (update-tags! db (map sleep pings)))
 
-(defn write-beeminder [db user username token]
-  (let [{:keys [encrypted iv]} (crypto/encrypt token (:crypto-key db))]
-    (j/execute!
-     (:db db)
-     [(str/join " "
-                ["INSERT INTO beeminder"
-                 "(user_id, username, encrypted_token, encryption_iv)"
-                 "VALUES"
-                 "(?, ?, ?, ?)"])
-      (:id user)
-      username
-      encrypted
-      iv])))
+(defn beeminder-record [crypto-key user username token enabled?]
+  (let [{:keys [encrypted iv]} (crypto/encrypt token crypto-key)]
+    {:user_id         (:id user)
+     :username        username
+     :encrypted_token encrypted
+     :encryption_iv   iv
+     :is_enabled      enabled?}))
 
-(defn write-slack [db user username token channel-id]
+(defn write-beeminder-sql [crypto-key user username token enabled?]
+  (-> (insert-into :beeminder)
+      (values [(beeminder-record crypto-key user username token enabled?)])))
+
+(defn write-beeminder [db user username token enabled?]
   (let [{:keys [encrypted iv]} (crypto/encrypt token (:crypto-key db))]
     (j/execute!
      (:db db)
-     [(str/join " "
-                ["INSERT INTO slack"
-                 "(user_id, username, encrypted_bot_access_token, encryption_iv, channel_id)"
-                 "VALUES"
-                 "(?, ?, ?, ?, ?)"])
-      (:id user)
-      username
-      encrypted
-      iv
-      channel-id])))
+     (sql/format (write-beeminder-sql (:crypto-key db) user username token enabled?)))))
+
+(defn slack-record [crypto-key user username token channel-id slack-user-id]
+  (let [{:keys [encrypted iv]} (crypto/encrypt token crypto-key)]
+    {:user_id                    (:id user)
+     :username                   username
+     :encrypted_bot_access_token encrypted
+     :encryption_iv              iv
+     :channel_id                 channel-id
+     :slack_user_id              slack-user-id}))
+
+(defn write-slack-sql [crypto-key user username token channel-id slack-user-id]
+  (-> (insert-into :slack)
+      (values [(slack-record crypto-key user username token channel-id slack-user-id)])))
+
+
+(defn write-slack [db user username token channel-id slack-user-id]
+  (let [{:keys [encrypted iv]} (crypto/encrypt token (:crypto-key db))]
+    (j/execute!
+     (:db db)
+     (sql/format
+      (write-slack-sql
+       (:crypto-key db)
+       user
+       username
+       token
+       channel-id
+       slack-user-id)))))
 
 (defn beeminder-from-db
   [db {:as user :keys [beeminder_username
