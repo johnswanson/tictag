@@ -18,7 +18,7 @@
             [tictag.beeminder :as beeminder]
             [tictag.slack :as slack]))
 
-(defn index []
+(def index
   (html5
    [:html {:lang "en"}
     [:head
@@ -117,19 +117,28 @@
                                     (dissoc :username :password))]))))
   {:status 200 :body ""})
 
+(defn health-check [component]
+  (fn [request]
+    (let [db (:db component)]
+      (if (db/test-query! db)
+        {:status  200
+         :headers {"Content-Type" "text/plain"}
+         :body    "healthy!"}
+        {:status 500
+         :headers {"Content-Type" "text/plain"}
+         :body "ERROR - NO DB CONNECTION"}))))
+
 (defn routes [component]
   (compojure.core/routes
    (POST "/slack" _ (partial slack component))
    (PUT "/time/:timestamp" _ (partial timestamp component))
    (GET "/pings" _ (partial pings component))
-   (GET "/" _ (index))
+   (GET "/" _ index)
    (GET "/config" _ {:headers {"Content-Type" "application/edn"}
                      :status 200
                      :body (pr-str {:tagtime-seed (:seed (:tagtime component))
                                     :tagtime-gap  (:gap (:tagtime component))})})
-   (GET "/healthcheck" _ {:status  200
-                          :headers {"Content-Type" "text/plain"}
-                          :body    "healthy!"})))
+   (GET "/healthcheck" _ (health-check component))))
 
 (defrecord Server [db config tagtime]
   component/Lifecycle
