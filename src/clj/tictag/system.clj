@@ -20,7 +20,7 @@
    :repl-server (repl/->REPL)
    :db (component/using
         (db/map->Database {:db-spec    (:db config)
-                           :crypto-key (:crypto-key (:db config))})
+                           :crypto-key (:crypto-key config)})
         [:tagtime])
 
    :chimer (component/using
