@@ -48,6 +48,7 @@
                  [pandect "0.6.1"]
                  [figwheel-sidecar "0.5.9" :scope "test"]
                  [honeysql "0.8.2"]
+                 [nilenso/honeysql-postgres "0.2.2"]
                  [reloaded.repl "0.2.3"]
                  [slack-rtm "0.1.3"]
                  [binaryage/devtools "0.9.0"]
@@ -77,4 +78,6 @@
                  [compojure "1.5.2"]
                  [com.taoensso/timbre "4.8.0"]
                  [environ "1.1.0"]
-                 [clojure-csv/clojure-csv "2.0.2"]])
+                 [clojure-csv/clojure-csv "2.0.2"]
+                 [buddy "1.3.0"]
+                 [buddy/buddy-hashers "1.2.0"]])

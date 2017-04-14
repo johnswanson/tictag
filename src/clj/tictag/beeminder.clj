@@ -3,7 +3,27 @@
             [cheshire.core :as cheshire]
             [taoensso.timbre :as timbre]
             [clojure.string :as str]
-            [clojure.data :refer [diff]]))
+            [clojure.data :refer [diff]]
+            [tictag.db :as db]))
+
+(defmacro functionize [macro]
+  `(fn [& args#] (eval (cons '~macro args#))))
+
+(def and* (functionize and))
+
+(def or* (functionize or))
+
+(defmulti match? (fn [a _] (class a)))
+
+(defmethod match? clojure.lang.Keyword
+  [a b]
+  (b a))
+
+(defmethod match? clojure.lang.PersistentVector
+  [[pred & args] b]
+  (case pred
+    :and (apply and* (for [a args] (match? a b)))
+    :or  (apply or* (for [a args] (match? a b)))))
 
 (defn goal-url [user goal]
   (format "https://www.beeminder.com/api/v1/users/%s/goals/%s.json" user goal))
@@ -48,47 +68,54 @@
                    :method :delete
                    :query-params {:auth_token auth-token}})))
 
-(defn days-matching-tag [tag rows]
+(defn days-matching-tag [tags rows]
+  (timbre/tracef "Matching tags %s, rows %s" tags rows)
   (->> rows
-       (filter #(tag (:tags %)))
+       (filter #(match? tags (:tags %)))
        (map :local-day)
        (frequencies)))
 
-(defn sync! [{{:keys [auth-token user goals disable?]} :config tagtime-config :tagtime} rows]
-  (when (and (not disable?) auth-token user (seq goals))
-    (doseq [[tag goal] goals]
-      (let [days                (days-matching-tag tag rows)
-            existing-datapoints (datapoints auth-token user goal)
-            existing-map        (group-by :daystamp existing-datapoints)
-            ;; we save anything that exists in our new datapoints
-            to-save             (filter :value
-                                        (for [[daystamp value] days
-                                              :let             [hours (* (/ (:gap tagtime-config) 60 60) value)
-                                                                {id :id old-value :value}
-                                                                (first
-                                                                 (existing-map daystamp))]]
-                                          {:id       id
-                                           :daystamp daystamp
-                                           :value    (when (or (not old-value)
-                                                               (not= (float old-value) (float hours)))
-                                                       (float hours))}))
-            ;; we delete anything that
-            ;; a) has a day that doesn't appear in our new datapoints, or
-            ;; b) is a second datapoint for a day that appears in our new datapoints
-            to-delete           (concat
-                                 (remove (fn [{:keys [daystamp]}]
-                                           (days daystamp))
-                                         existing-datapoints)
-                                 (flatten
-                                  (remove nil?
-                                          (map rest (vals existing-map)))))
-            save-futures        (doall (map #(save-datapoint! auth-token user goal %) to-save))
-            delete-futures      (doall (map #(delete-datapoint! auth-token user goal %) to-delete))]
-        (doseq [resp (concat save-futures delete-futures)]
-          (timbre/debugf "result %s %s: %s"
-                         (-> @resp :opts :url)
-                         (-> @resp :opts :method)
-                         (:status @resp)))))))
+(defn sync! [db user]
+  (timbre/debugf "Beginning beeminder sync: %s" (:enabled? (:beeminder user)))
+  (when (:enabled? (:beeminder user))
+    (when-let [goals (seq (db/get-goals db (:beeminder user)))]
+      (timbre/tracef "goals are %s, getting rows" goals)
+      (let [rows (db/get-pings-by-user (:db db) user)]
+        (timbre/tracef "Rows: %s" rows)
+        (doseq [{:keys [tags goal]} goals]
+          (timbre/debugf "Syncing goal: %s with tags %s" goal tags)
+          (let [{:keys [username token]} (:beeminder user)
+                days                     (days-matching-tag tags rows)
+                existing-datapoints      (datapoints
+                                          (get-in
+                                           user
+                                           [:beeminder :token])
+                                          username
+                                          goal)
+                existing-map             (group-by :daystamp existing-datapoints)
+                to-save                  (filter :value
+                                                 (for [[daystamp value] days
+                                                       :let             [hours (* (/ (:gap (:tagtime db)) 60 60) value)
+                                                                         {id :id old-value :value}
+                                                                         (first
+                                                                          (existing-map daystamp))]]
+                                                   {:id       id
+                                                    :daystamp daystamp
+                                                    :value    (when (or (not old-value)
+                                                                        (not= (float old-value) (float hours)))
+                                                                (float hours))}))
+                to-delete                (concat
+                                          (remove (fn [{:keys [daystamp]}]
+                                                    (days daystamp))
+                                                  existing-datapoints)
+                                          (flatten
+                                           (remove nil?
+                                                   (map rest (vals existing-map)))))
+                save-futures             (doall (map #(save-datapoint! token username goal %) to-save))
+                delete-futures           (doall (map #(delete-datapoint! token username goal %) to-delete))]
+            (doseq [resp (concat save-futures delete-futures)]
+              (timbre/debugf "result %s %s: %s"
+                             (-> @resp :opts :url)
+                             (-> @resp :opts :method)
+                             (:status @resp)))))))))
 
-(defn beeminder [config]
-  {:config config})

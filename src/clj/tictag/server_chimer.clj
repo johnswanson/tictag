@@ -5,13 +5,11 @@
             [chime :refer [chime-at]]
             [clj-time.coerce :as tc]
             [taoensso.timbre :as timbre]
-            [tictag.twilio :as twilio]
             [tictag.slack :as slack]))
 
-(defrecord ServerChimer [db twilio slack]
+(defrecord ServerChimer [db slack]
   component/Lifecycle
   (start [component]
-    (timbre/debug "Starting server chimer (for twilio sms)")
     (let [state (atom (cycle (shuffle (range 1000))))
           next! (fn [] (swap! state next) (str (first @state)))]
       (assoc
@@ -24,10 +22,8 @@
                 id        (next!)]
             (timbre/debug "CHIME!")
             (db/add-pending! db long-time id)
-            (slack/send-message! slack (format "PING! id: %s, long-time: %d" id long-time))
-            (twilio/send-message!
-             twilio
-             (format "PING! id: %s, long-time: %d" id long-time))))))))
+            (doseq [slack-user (map :slack (db/get-all-users db))]
+              (slack/send-message! slack-user (format "PING! id: %s, long-time: %d" id long-time)))))))))
   (stop [component]
     (when-let [stop (:stop component)]
       (stop))

@@ -2,14 +2,20 @@
   (:require [com.stuartsierra.component :as component]
             [taoensso.timbre :as timbre]
             [clojure.string :as str]
+            [clojure.edn :as edn]
             [clojure.data.csv :as csv]
             [clojure.java.io :as io]
             [tictagapi.core :as tagtime]
             [clojure.java.jdbc :as j]
-            [tictag.utils :as utils]
             [amalloy.ring-buffer :refer [ring-buffer]]
-            [honeysql.core :as s]
-            [honeysql.helpers :as sql]))
+            [honeysql.core :as sql]
+            [honeysql.helpers :refer :all]
+            [honeysql-postgres.format :refer :all]
+            [honeysql-postgres.helpers :refer :all]
+            [tictag.crypto :as crypto]
+            [buddy.hashers :refer [check]]))
+
+(def hashp #(buddy.hashers/derive % {:algorithm :bcrypt+blake2b-512}))
 
 (defrecord Database [db-spec tagtime]
   component/Lifecycle
@@ -21,27 +27,16 @@
   (stop [component]
     (dissoc component :db)))
 
-(defn insert-tag! [db long-time tags local-time]
-  (j/execute!
-   db
-   [(str/join " "
-              ["INSERT INTO pings"
-               "(\"ts\", \"tags\", \"local_time\")"
-               "VALUES (?, ?, ?)"
-               "ON CONFLICT (ts)"
-               "DO UPDATE"
-               "SET"
-               "tags=EXCLUDED.tags,"
-               "local_time=EXCLUDED.local_time"])
-    long-time
-    (str/join " " tags)
-    local-time]))
-
 (defn add-pend! [rb id long-time]
   (into rb [[id long-time]]))
 
-(defn add-pending! [{:keys [pends db]} long-time id]
-  (insert-tag! db long-time ["afk"] (utils/local-time-from-long long-time))
+(defn add-afk-pings! [db ts]
+  (j/execute!
+   (:db db)
+   ["INSERT INTO pings (ts, tags, local_time, user_id) SELECT ?, 'afk', timezone(tz, to_timestamp(? / 1000)), id FROM users" ts ts]))
+
+(defn add-pending! [{:keys [pends] :as db} long-time id]
+  (add-afk-pings! db long-time)
   (swap! pends add-pend! id long-time))
 
 (defn pending-timestamp [{:keys [pends]} id]
@@ -49,28 +44,46 @@
 
 (defn local-day [local-time] (str/replace (subs local-time 0 10) #"-" ""))
 
-(defn to-ping [{:keys [local_time ts tags calendar_event_id]}]
-  {:tags (set (map keyword (str/split tags #" ")))
-   :local-time local_time
-   :local-day (local-day local_time)
-   :timestamp ts
+(defn to-ping [{:keys [local_time ts tags calendar_event_id user_id]}]
+  {:tags              (set (map keyword (str/split tags #" ")))
+   :user-id           user_id
+   :local-time        local_time
+   :local-day         (local-day local_time)
+   :timestamp         ts
    :calendar-event-id calendar_event_id})
 
-(defn get-pings [db & [query]]
-  (map to-ping (j/query db (or query ["select * from pings order by ts"]))))
+(defn get-pings [db query]
+  (map to-ping (j/query db query)))
 
-(defn ping-from-id [db id]
+(defn get-pings-by-user [db user]
+  (get-pings db (-> (select :*)
+                    (from :pings)
+                    (where [:= :pings.user_id (:id user)])
+                    sql/format)))
+
+(defn ping-from-id [db user id]
   (let [timestamp (pending-timestamp db id)]
     (first
      (get-pings
       (:db db)
-      ["select * from pings where ts=? limit 1" timestamp]))))
+      ["select * from pings where ts=? and user_id=? limit 1"
+       timestamp
+       (:id user)]))))
 
-(defn ping-from-long-time [db long-time]
+(defn last-ping [db user]
   (first
    (get-pings
     (:db db)
-    ["select * from pings where ts=? limit 1" long-time])))
+    ["select * from pings where user_id=? order by ts desc limit 1"
+     (:id user)])))
+
+(defn ping-from-long-time [db user long-time]
+  (first
+   (get-pings
+    (:db db)
+    ["select * from pings where ts=? and user_id? limit 1"
+     long-time
+     (:id user)])))
 
 (defn is-ping? [{tagtime :tagtime} long-time]
   (tagtime/is-ping? tagtime long-time))
@@ -80,29 +93,28 @@
   [{tagtime :tagtime}]
   (:pings tagtime))
 
-(defn to-db-ping [{:keys [tags timestamp local-time calendar-event-id]}]
-  (let [ping {:tags              (str/join " " tags)
+(defn to-db-ping [{:keys [user-id tags timestamp local-time calendar-event-id]}]
+  (let [ping {:user_id           user-id
+              :tags              (str/join " " tags)
               :ts                timestamp
               :calendar_event_id calendar-event-id}]
     (if local-time
       (assoc ping :local_time local-time)
       ping)))
 
-(defn update-tags-query [ping]
-  (let [ping (to-db-ping ping)]
-    (-> (sql/update :pings)
-        (sql/sset (select-keys ping [:tags :local_time :calendar_event_id]))
-        (sql/where [:= :ts (:ts ping)])
-        s/format)))
-
 (defn update-tags! [{db :db} pings]
-  (doseq [ping pings]
-    (j/execute! db (update-tags-query ping))))
+  (timbre/debugf "Updating pings: %s" (pr-str pings))
+  (j/execute! db
+              (-> (insert-into :pings)
+                  (values (map to-db-ping pings))
+                  (upsert (-> (on-conflict :ts :user_id)
+                              (do-update-set :tags :local_time)))
+                  sql/format)))
 
 (defn sleepy-pings
   "Return the most recent contiguous set of pings marked :afk in the database"
-  [{db :db}]
-  (->> ["select * from pings order by ts desc limit 100"]
+  [{db :db} user]
+  (->> ["select * from pings where user_id = ? order by ts desc limit 100" (:id user)]
        (get-pings db)
        (drop-while (comp not :afk :tags))
        (take-while (comp :afk :tags))))
@@ -112,3 +124,122 @@
 
 (defn make-pings-sleepy! [db pings]
   (update-tags! db (map sleep pings)))
+
+(defn write-beeminder [db user username token]
+  (let [{:keys [encrypted iv]} (crypto/encrypt token (:crypto-key db))]
+    (j/execute!
+     (:db db)
+     [(str/join " "
+                ["INSERT INTO beeminder"
+                 "(user_id, username, encrypted_token, encryption_iv)"
+                 "VALUES"
+                 "(?, ?, ?, ?)"])
+      (:id user)
+      username
+      encrypted
+      iv])))
+
+(defn write-slack [db user username token channel-id]
+  (let [{:keys [encrypted iv]} (crypto/encrypt token (:crypto-key db))]
+    (j/execute!
+     (:db db)
+     [(str/join " "
+                ["INSERT INTO slack"
+                 "(user_id, username, encrypted_bot_access_token, encryption_iv, channel_id)"
+                 "VALUES"
+                 "(?, ?, ?, ?, ?)"])
+      (:id user)
+      username
+      encrypted
+      iv
+      channel-id])))
+
+(defn beeminder-from-db
+  [db {:as user :keys [beeminder_username
+                       beeminder_encrypted_token
+                       beeminder_encryption_iv
+                       beeminder_is_enabled
+                       beeminder_id]}]
+  (when user
+    {:id       beeminder_id
+     :username beeminder_username
+     :enabled? beeminder_is_enabled
+     :token    (crypto/decrypt
+                beeminder_encrypted_token
+                (:crypto-key db)
+                beeminder_encryption_iv)}))
+
+(defn slack-from-db [db {:as user :keys [slack_username slack_encrypted_bot_access_token slack_encryption_iv slack_channel_id]}]
+  (when user
+    {:username         slack_username
+     :channel-id       slack_channel_id
+     :bot-access-token (crypto/decrypt
+                        slack_encrypted_bot_access_token
+                        (:crypto-key db)
+                        slack_encryption_iv)}))
+
+(defn to-user [db user]
+  (when user
+    (-> user
+        (assoc :slack (slack-from-db db user))
+        (assoc :beeminder (beeminder-from-db db user)))))
+
+(def user-query
+  (-> (select :users.*
+
+              [:slack.encrypted_bot_access_token :slack_encrypted_bot_access_token]
+              [:slack.encryption_iv :slack_encryption_iv]
+              [:slack.slack_user_id :slack_user_id]
+              [:slack.username :slack_username]
+              [:slack.channel_id :slack_channel_id]
+
+              [:beeminder.id :beeminder_id]
+              [:beeminder.user_id :beeminder_user_id]
+              [:beeminder.username :beeminder_username]
+              [:beeminder.encrypted_token :beeminder_encrypted_token]
+              [:beeminder.encryption_iv :beeminder_encryption_iv]
+              [:beeminder.is_enabled :beeminder_is_enabled])
+      (from :users)
+      (join :slack [:= :slack.user_id :users.id]
+            :beeminder [:= :beeminder.user_id :users.id])))
+
+(defn get-user-from-slack-id [db slack-id]
+  (to-user
+   db
+   (first
+    (j/query (:db db)
+             (sql/format
+              (where user-query [:= :slack.slack_user_id slack-id]))))))
+
+(defn write-user [db username email password]
+  (j/execute!
+   (:db db)
+   [(str/join " "
+              ["INSERT INTO users"
+               "(username, email, pass)"
+               "VALUES"
+               "(?, ?, ?)"])
+    username
+    email
+    (hashp password)]))
+
+(defn get-user [db username]
+  (to-user db (first (j/query (:db db) (sql/format (where user-query [:= :users.username username]))))))
+
+(defn get-all-users [db]
+  (map #(to-user db %) (j/query (:db db) (sql/format user-query))))
+
+(defn authenticated-user [db username password]
+  (let [user (get-user db username)]
+    (when (check password (:pass user))
+      user)))
+
+(defn get-goals [db beeminder-user]
+  (map
+   #(clojure.core/update % :tags edn/read-string)
+   (j/query
+    (:db db)
+    (-> (select :goal :tags)
+        (from :beeminder_goals)
+        (where [:= (:id beeminder-user) :beeminder_id])
+        sql/format))))
