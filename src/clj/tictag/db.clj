@@ -35,6 +35,7 @@
            :pends (atom (ring-buffer 16))))
   (stop [component]
     (when-let [ds (get-in component [:db :datasource])]
+      (timbre/debugf "Closing database pool: %s" ds)
       (hikari/close-datasource ds))
     (dissoc component :db)))
 
@@ -270,3 +271,7 @@
         (from :beeminder_goals)
         (where [:= (:id beeminder-user) :beeminder_id])
         sql/format))))
+
+(defn test-query! [db]
+  (try (j/query (:db db) (sql/format (select 1)))
+       (catch Exception e nil)))
