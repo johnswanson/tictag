@@ -11,7 +11,7 @@
                    :host     (env :pg-host "127.0.0.1")
                    :user     (env :pg-user)
                    :password (env :pg-password)}
-   :crypto-key    (codecs/hex->bytes (:tictag-crypto-key env))
+   :crypto-key    (codecs/hex->bytes (or (:tictag-crypto-key env) "deadbeef"))
    :slack         {:verification-token (env :slack-verification-token)}
    :tagtime       {:seed (or (some-> env :tagtime-seed Integer.) 666)
                    :gap  (or (some-> env :tagtime-gap Integer.) (* 60 45))}
