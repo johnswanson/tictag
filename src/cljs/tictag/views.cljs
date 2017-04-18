@@ -47,12 +47,11 @@
        [:td @my-count]
        [:td (gstring/format "%.1f%%" @tag-%)]
        [:td @time-per-day]])))
-
-(defn app
-  []
+(defn logged-in-app
+  [authenticated-user]
   (let [meeting-query-per-day (subscribe [:meeting-query-per-day])
         tag-counts (subscribe [:sorted-tag-counts])]
-    (fn []
+    (fn [authenticated-user]
       [:div
        [:span {:on-click #(dispatch [:fetch-pings])
                :style {:cursor :pointer}} "Click Me"]
@@ -68,4 +67,44 @@
            ^{:key (pr-str tag)}
            [tag-table-row tag])]]])))
 
+(defn username-input []
+  (let [username (reagent/atom "")]
+    (fn []
+      [:input
+       {:value @username
+        :on-change #(reset! username (.. % -target -value))
+        :on-blur #(dispatch [:login/username-input @username])}])))
+
+(defn password-input []
+  (let [password (reagent/atom "")]
+    (fn []
+      [:input
+       {:value @password
+        :on-change #(reset! password (.. % -target -value))
+        :on-blur #(dispatch [:login/password-input @password])}])))
+
+(defn login []
+  [:button {:on-click #(dispatch [:login/submit-login])}
+   "Login"])
+
+(defn signup []
+  [:button {:on-click #(dispatch [:login/submit-signup])}
+   "Sign Up"])
+
+(defn login-or-signup-form []
+  [:div
+   [username-input]
+   [password-input]
+   [login] [signup]])
+
+(defn logged-out-app []
+  [login-or-signup-form])
+
+(defn app
+  []
+  (let [has-token? (subscribe [:auth-token])]
+    (fn []
+      (if @has-token?
+        [logged-in-app has-token?]
+        [logged-out-app]))))
 

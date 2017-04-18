@@ -1,6 +1,8 @@
 (ns tictag.db
   (:require [com.stuartsierra.component :as component]
             [taoensso.timbre :as timbre]
+            [clj-time.jdbc]
+            [clj-time.coerce :as coerce]
             [clojure.string :as str]
             [clojure.edn :as edn]
             [clojure.data.csv :as csv]
@@ -14,7 +16,14 @@
             [honeysql-postgres.helpers :refer :all]
             [tictag.crypto :as crypto]
             [buddy.hashers :refer [check]]
-            [hikari-cp.core :as hikari]))
+            [hikari-cp.core :as hikari]
+            [tictag.utils :as utils]))
+
+(def ping-select (-> (select :ts
+                             [(sql/call :timezone :tz :ts) :local_time]
+                             :tags
+                             :user_id)
+                     (from :pings)))
 
 (defn datasource-options [{:keys [dbtype dbname host user password]}]
   {:pool-name   "db-pool"
@@ -39,63 +48,66 @@
       (hikari/close-datasource ds))
     (dissoc component :db)))
 
-(defn add-pend! [rb id long-time]
-  (into rb [[id long-time]]))
+(defn add-pend! [rb id time]
+  (into rb [[id time]]))
 
-(defn add-afk-pings! [db ts]
+(defn add-afk-pings! [db time]
   (j/execute!
    (:db db)
-   ["INSERT INTO pings (ts, tags, local_time, user_id) SELECT ?, 'afk', timezone(tz, to_timestamp(? / 1000)), id FROM users" ts ts]))
+   (-> (insert-into
+        [[:pings [:ts :tz :tags :user_id]]
+         (-> (select time (sql/call :timezone :users.tz time) "afk" :id)
+             (from :users))])
+       sql/format)))
 
-(defn add-pending! [{:keys [pends] :as db} long-time id]
-  (add-afk-pings! db long-time)
-  (swap! pends add-pend! id long-time))
+(defn add-pending! [{:keys [pends] :as db} time id]
+  (add-afk-pings! db time)
+  (swap! pends add-pend! id time))
 
 (defn pending-timestamp [{:keys [pends]} id]
   (second (first (filter #(= (first %) id) @pends))))
 
 (defn local-day [local-time] (str/replace (subs local-time 0 10) #"-" ""))
 
-(defn to-ping [{:keys [local_time ts tags calendar_event_id user_id]}]
+(defn to-ping [{:keys [local_time ts tags user_id]}]
   {:tags              (set (map keyword (str/split tags #" ")))
    :user-id           user_id
    :local-time        local_time
    :local-day         (local-day local_time)
-   :timestamp         ts
-   :calendar-event-id calendar_event_id})
+   :timestamp         (coerce/to-long ts)})
 
 (defn get-pings [db query]
-  (map to-ping (j/query db query)))
+  (map to-ping (j/query db (sql/format query))))
 
 (defn get-pings-by-user [db user]
-  (get-pings db (-> (select :*)
-                    (from :pings)
-                    (where [:= :pings.user_id (:id user)])
-                    sql/format)))
+  (get-pings db (-> ping-select
+                    (where [:= :pings.user_id (:id user)]))))
 
 (defn ping-from-id [db user id]
   (let [timestamp (pending-timestamp db id)]
     (first
      (get-pings
       (:db db)
-      ["select * from pings where ts=? and user_id=? limit 1"
-       timestamp
-       (:id user)]))))
+      (-> ping-select
+          (where [:= :ts timestamp]
+                 [:= :user_id (:id user)])
+          (limit 1))))))
 
 (defn last-ping [db user]
   (first
    (get-pings
     (:db db)
-    ["select * from pings where user_id=? order by ts desc limit 1"
-     (:id user)])))
+    (-> ping-select
+        (where [:= :user_id (:id user)])
+        (order-by [:ts :desc])))))
 
 (defn ping-from-long-time [db user long-time]
   (first
    (get-pings
     (:db db)
-    ["select * from pings where ts=? and user_id? limit 1"
-     long-time
-     (:id user)])))
+    (-> ping-select
+        (where [:= :ts (coerce/from-long long-time)] [:= :user_id (:id user)])
+        (limit 1)))))
 
 (defn is-ping? [{tagtime :tagtime} long-time]
   (tagtime/is-ping? tagtime long-time))
@@ -105,14 +117,10 @@
   [{tagtime :tagtime}]
   (:pings tagtime))
 
-(defn to-db-ping [{:keys [user-id tags timestamp local-time calendar-event-id]}]
-  (let [ping {:user_id           user-id
-              :tags              (str/join " " tags)
-              :ts                timestamp
-              :calendar_event_id calendar-event-id}]
-    (if local-time
-      (assoc ping :local_time local-time)
-      ping)))
+(defn to-db-ping [{:keys [user-id tags timestamp]}]
+  {:user_id user-id
+   :tags    (str/join " " tags)
+   :ts      (coerce/from-long timestamp)})
 
 (defn update-tags! [{db :db} pings]
   (timbre/debugf "Updating pings: %s" (pr-str pings))
@@ -120,13 +128,16 @@
               (-> (insert-into :pings)
                   (values (map to-db-ping pings))
                   (upsert (-> (on-conflict :ts :user_id)
-                              (do-update-set :tags :local_time)))
+                              (do-update-set :tags)))
                   sql/format)))
 
 (defn sleepy-pings
   "Return the most recent contiguous set of pings marked :afk in the database"
   [{db :db} user]
-  (->> ["select * from pings where user_id = ? order by ts desc limit 100" (:id user)]
+  (->> (-> ping-select
+           (where [:= :user_id (:id user)])
+           (order-by [:ts :desc])
+           (limit 100))
        (get-pings db)
        (drop-while (comp not :afk :tags))
        (take-while (comp :afk :tags))))
@@ -251,6 +262,9 @@
     email
     (hashp password)]))
 
+(defn get-user-by-id [db id]
+  (to-user db (first (j/query (:db db) (sql/format (where user-query [:= :users.id id]))))))
+
 (defn get-user [db username]
   (to-user db (first (j/query (:db db) (sql/format (where user-query [:= :users.username username]))))))
 
@@ -275,3 +289,7 @@
 (defn test-query! [db]
   (try (j/query (:db db) (sql/format (select 1)))
        (catch Exception e nil)))
+
+(defn get-pings-by-user-id [db id]
+  (get-pings db (-> ping-select
+                    (where [:= :pings.user_id id]))))

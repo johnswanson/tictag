@@ -2,18 +2,58 @@
   (:require [cljs.tools.reader.edn :as edn]
             [re-frame.core :refer [reg-event-fx reg-event-db]]
             [taoensso.timbre :as timbre]
-            [ajax.core :refer [transit-response-format]]))
+            [ajax.core :refer [transit-response-format transit-request-format]]))
+
+(reg-event-db
+ :login/password-input
+ (fn [db [_ password]]
+   (assoc-in db [:login :password] password)))
+
+(reg-event-db
+ :login/username-input
+ (fn [db [_ username]]
+   (assoc-in db [:login :username] username)))
+
+(defn authenticated-xhrio [m token]
+  (merge m {:headers {"Authorization" token}}))
+
+(reg-event-fx
+ :login/submit-login
+ (fn [{:keys [db]} _]
+   ;; TODO edit DB to say we're pending login and add UI
+   {:db         (dissoc db :login)
+    :http-xhrio {:method          :post
+                 :uri             "/token"
+                 :params          (:login db)
+                 :timeout         8000
+                 :format          (transit-request-format {})
+                 :response-format (transit-response-format {})
+                 :on-success      [:login/successful]
+                 :on-failure      [:login/failed]}}))
+
+(reg-event-db
+ :login/successful
+ (fn [db [_ result]]
+   (assoc db :auth-token (:token result))))
+
+(reg-event-db
+ :login/failed
+ (fn [db [_ result]]
+   ; TODO add handling of failure here
+   db))
 
 (reg-event-fx
  :fetch-pings
  (fn [{:keys [db]} _]
    {:db         (assoc db :fetching true)
-    :http-xhrio {:method          :get
-                 :uri             "/pings"
-                 :timeout         8000
-                 :response-format (transit-response-format {})
-                 :on-success      [:good-http-result]
-                 :on-failure      [:bad-http-result]}}))
+    :http-xhrio (authenticated-xhrio
+                 {:method          :get
+                  :uri             "/pings"
+                  :timeout         8000
+                  :response-format (transit-response-format {})
+                  :on-success      [:good-http-result]
+                  :on-failure      [:bad-http-result]}
+                 (:auth-token db))}))
 
 (reg-event-db
  :good-http-result

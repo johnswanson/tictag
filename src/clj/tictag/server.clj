@@ -15,8 +15,11 @@
             [hiccup.core :refer [html]]
             [hiccup.page :refer [html5]]
             [tictag.cli :as cli]
+            [tictag.users :as users]
             [tictag.beeminder :as beeminder]
-            [tictag.slack :as slack]))
+            [tictag.slack :as slack]
+            [tictag.jwt :as jwt]))
+
 
 (def index
   (html5
@@ -38,8 +41,9 @@
 (defn api-user [db {:keys [username password]}]
   (db/authenticated-user db username password))
 
-(defn pings [{:keys [db]} {:keys [params]}]
-  (response (db/get-pings-by-user (:db db) (api-user db params))))
+(defn pings [{:keys [db]} {:keys [user-id]}]
+  (when user-id
+    (response (db/get-pings-by-user-id (:db db) user-id))))
 
 (defn slack-text [slack-message]
   (get-in slack-message [:event :text]))
@@ -128,17 +132,33 @@
          :headers {"Content-Type" "text/plain"}
          :body "ERROR - NO DB CONNECTION"}))))
 
+(defn token [{:keys [db jwt]} {:keys [params]}]
+  (let [[valid? token] (users/get-token
+                        {:db db :jwt jwt}
+                        (:username params)
+                        (:password params))]
+    (if valid?
+      {:status 200 :headers {} :body token}
+      {:status 401 :headers {} :body nil})))
+
 (defn routes [component]
   (compojure.core/routes
    (POST "/slack" _ (partial slack component))
    (PUT "/time/:timestamp" _ (partial timestamp component))
+   (POST "/token" _ (partial token component))
    (GET "/pings" _ (partial pings component))
    (GET "/" _ index)
    (GET "/config" _ {:headers {"Content-Type" "application/edn"}
                      :status 200
-                     :body (pr-str {:tagtime-seed (:seed (:tagtime component))
-                                    :tagtime-gap  (:gap (:tagtime component))})})
+                     :body (pr-str {:tagtime-seed (-> component :tagtime :seed)
+                                    :tagtime-gap  (-> component :tagtime :gap)})})
    (GET "/healthcheck" _ (health-check component))))
+
+(defn wrap-user [handler jwt]
+  (fn [req]
+    (let [token (get-in req [:headers "authorization"])
+          user  (jwt/unsign jwt token)]
+      (handler (assoc req :user-id (:user-id user))))))
 
 (defrecord Server [db config tagtime]
   component/Lifecycle
@@ -146,6 +166,7 @@
     (timbre/debug "Starting server")
     (let [stop (http/run-server
                 (-> (routes component)
+                    (wrap-user (:jwt component))
                     (wrap-transit-response {:encoding :json})
                     (wrap-defaults (assoc-in api-defaults [:static :resources] "/public"))
                     (wrap-edn-params)

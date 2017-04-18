@@ -1,10 +1,12 @@
 DROP TABLE slack;
 DROP TABLE beeminder_goals;
 DROP TABLE beeminder;
-DELETE FROM pings;
-DROP INDEX "pings_user_id_idx";
-ALTER TABLE pings DROP CONSTRAINT pings_pkey;
-ALTER TABLE pings DROP COLUMN user_id;
-ALTER TABLE pings ADD PRIMARY KEY (ts);
-DROP TABLE pings_backup;
+ALTER TABLE pings RENAME TO pings_backup;
 DROP TABLE users;
+CREATE TABLE pings
+(
+ts BIGINT PRIMARY KEY,
+tags VARCHAR(1024),
+local_time VARCHAR(256),
+calendar_event_id VARCHAR(256)
+);

@@ -37,7 +37,7 @@
  :parsed-times
  (fn [_ _]
    (subscribe [:pings]))
- (fn [pings _]
+ (fn parse-times [pings _]
    (map #(f/parse formatter (:local-time %)) pings)))
 
 (reg-sub
@@ -236,4 +236,9 @@
                            (compare [(get tag-counts key2) key2]
                                     [(get tag-counts key1) key1])))
           tag-counts))))
+
+(reg-sub
+ :auth-token
+ (fn [db _]
+   (:auth-token db)))
 

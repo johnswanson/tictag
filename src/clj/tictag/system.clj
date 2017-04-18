@@ -13,11 +13,12 @@
    :server (component/using
             (server/map->Server
              {:config (:tictag-server config)})
-            [:db :tagtime])
+            [:db :tagtime :jwt])
    :tagtime (tagtime/tagtime
              (get-in config [:tagtime :gap])
              (get-in config [:tagtime :seed]))
    :repl-server (repl/->REPL)
+   :jwt (config :jwt)
    :db (component/using
         (db/map->Database {:db-spec    (:db config)
                            :crypto-key (:crypto-key config)})
