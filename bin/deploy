@@ -17,6 +17,8 @@ ssh $DEPLOY_USER@$DEPLOY_HOST docker run \
     -e PG_DATABASE=$PG_DATABASE \
     -e TICTAG_PORT=$TICTAG_PORT \
     -e TICTAG_CRYPTO_KEY=$TICTAG_CRYPTO_KEY \
+    -e EC_PRIV_KEY="$EC_PRIV_KEY" \
+    -e EC_PUB_KEY="$EC_PUB_KEY" \
     --restart always \
     --detach \
     $IMAGE
