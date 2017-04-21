@@ -21,7 +21,7 @@
           (let [long-time (tc/to-long time)
                 id        (next!)]
             (timbre/debug "CHIME!")
-            (db/add-pending! db long-time id)
+            (db/add-pending! db time id)
             (doseq [slack-user (map :slack (db/get-all-users db))]
               (slack/send-message! slack-user (format "PING! id: %s, long-time: %d" id long-time)))))))))
   (stop [component]
