@@ -56,7 +56,7 @@
    (:db db)
    (-> (insert-into
         [[:pings [:ts :tz :tags :user_id]]
-         (-> (select time (sql/call :timezone :users.tz time) "afk" :id)
+         (-> (select time :users.tz "afk" :id)
              (from :users))])
        sql/format)))
 
