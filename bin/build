@@ -1,4 +1,4 @@
 #!/bin/bash
-set -euf pipefail
+set -xeuf pipefail
 
 docker build -t $IMAGE .
