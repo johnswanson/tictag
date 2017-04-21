@@ -119,19 +119,15 @@
   [{tagtime :tagtime}]
   (:pings tagtime))
 
-(defn to-db-ping [{:keys [user-id tags timestamp]}]
-  {:user_id user-id
-   :tags    (str/join " " tags)
-   :ts      (coerce/from-long timestamp)})
-
 (defn update-tags! [{db :db} pings]
   (timbre/debugf "Updating pings: %s" (pr-str pings))
-  (j/execute! db
-              (-> (insert-into :pings)
-                  (values (map to-db-ping pings))
-                  (upsert (-> (on-conflict :ts :user_id)
-                              (do-update-set :tags)))
-                  sql/format)))
+  (j/with-db-transaction [db db]
+    (doseq [{:keys [tags user-id timestamp]} pings]
+      (j/execute! db (-> (update :pings)
+                         (sset {:tags (str/join " " tags)})
+                         (where [:= :ts (coerce/from-long timestamp)]
+                                [:= :user_id user-id])
+                         sql/format)))))
 
 (defn sleepy-pings
   "Return the most recent contiguous set of pings marked :afk in the database"
