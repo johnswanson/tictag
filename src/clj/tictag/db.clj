@@ -3,6 +3,7 @@
             [taoensso.timbre :as timbre]
             [clj-time.jdbc]
             [clj-time.coerce :as coerce]
+            [clj-time.format :as f]
             [clojure.string :as str]
             [clojure.edn :as edn]
             [clojure.data.csv :as csv]
@@ -67,7 +68,8 @@
 (defn pending-timestamp [{:keys [pends]} id]
   (second (first (filter #(= (first %) id) @pends))))
 
-(defn local-day [local-time] (str/replace (subs local-time 0 10) #"-" ""))
+(def ymd (f/formatter "yyyyMMdd"))
+(defn local-day [local-time] (f/unparse ymd local-time))
 
 (defn to-ping [{:keys [local_time ts tags user_id]}]
   {:tags              (set (map keyword (str/split tags #" ")))
