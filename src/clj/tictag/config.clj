@@ -2,7 +2,8 @@
   (:require [environ.core :refer [env]]
             [clojure.string :as str]
             [buddy.core.codecs :as codecs]
-            [buddy.core.keys :as keys]))
+            [buddy.core.keys :as keys]
+            [buddy.core.hash :as hash]))
 
 (def config
   {:tictag-server {:host (env :tictag-host "127.0.0.1")
@@ -12,7 +13,7 @@
                    :host     (env :pg-host "127.0.0.1")
                    :user     (env :pg-user)
                    :password (env :pg-password)}
-   :crypto-key    (some-> env :tictag-crypto-key codecs/hex->bytes)
+   :crypto-key    (some-> env :tictag-crypto-key hash/sha256)
    :jwt           {:private-key (some-> env :ec-priv-key keys/str->private-key)
                    :public-key  (some-> env :ec-pub-key keys/str->public-key)}
    :slack         {:verification-token (env :slack-verification-token)}
