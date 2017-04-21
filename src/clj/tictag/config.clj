@@ -12,9 +12,9 @@
                    :host     (env :pg-host "127.0.0.1")
                    :user     (env :pg-user)
                    :password (env :pg-password)}
-   :crypto-key    (codecs/hex->bytes (or (:tictag-crypto-key env) "deadbeef"))
-   :jwt           {:private-key (keys/str->private-key (env :ec-priv-key))
-                   :public-key  (keys/str->public-key (env :ec-pub-key))}
+   :crypto-key    (some-> env :tictag-crypto-key codecs/hex->bytes)
+   :jwt           {:private-key (some-> env :ec-priv-key keys/str->private-key)
+                   :public-key  (some-> env :ec-pub-key keys/str->public-key)}
    :slack         {:verification-token (env :slack-verification-token)}
    :tagtime       {:seed (or (some-> env :tagtime-seed Integer.) 666)
                    :gap  (or (some-> env :tagtime-gap Integer.) (* 60 45))}
