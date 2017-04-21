@@ -109,17 +109,17 @@
         (apply-command db user (slack-text params)))))
   {:status 200 :body ""})
 
-(defn timestamp [{:keys [db]} {:keys [params]}]
-  (future
-    (when (valid-timestamp? params)
-      (when-let [user (api-user db params)]
-        (timbre/debugf "Received a timestamp: %s"
-                       (pr-str params))
-        (update-pings! db user [(-> params
-                                    (assoc :user-id (:id user))
-                                    (update :timestamp cli/str-number?)
-                                    (dissoc :username :password))]))))
-  {:status 200 :body ""})
+(defn timestamp [{:keys [db]} {:keys [params user-id]}]
+  (if (and (valid-timestamp? params) user-id)
+    (when-let [user (db/get-user-by-id db user-id)]
+      (timbre/debugf "Received a timestamp: %s"
+                     (pr-str params))
+      (update-pings! db user [(-> params
+                                  (assoc :user-id (:id user))
+                                  (update :timestamp cli/str-number?)
+                                  (dissoc :username :password))])
+      {:status 200 :body ""})
+    {:status 401 :body "unauthorized"}))
 
 (defn health-check [component]
   (fn [request]
