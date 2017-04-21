@@ -141,17 +141,23 @@
       {:status 200 :headers {} :body token}
       {:status 401 :headers {} :body nil})))
 
+(defn config [component req]
+  (if-let [user-id (:user-id req)]
+    {:headers {"Content-Type" "application/edn"}
+     :status 200
+     :body (pr-str {:tagtime-seed (-> component :tagtime :seed)
+                    :tagtime-gap  (-> component :tagtime :gap)})}
+    {:status 401
+     :body "unauthorized"}))
+
 (defn routes [component]
   (compojure.core/routes
    (POST "/slack" _ (partial slack component))
    (PUT "/time/:timestamp" _ (partial timestamp component))
    (POST "/token" _ (partial token component))
    (GET "/pings" _ (partial pings component))
+   (GET "/config" _ (partial config component))
    (GET "/" _ index)
-   (GET "/config" _ {:headers {"Content-Type" "application/edn"}
-                     :status 200
-                     :body (pr-str {:tagtime-seed (-> component :tagtime :seed)
-                                    :tagtime-gap  (-> component :tagtime :gap)})})
    (GET "/healthcheck" _ (health-check component))))
 
 (defn wrap-user [handler jwt]
