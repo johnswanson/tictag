@@ -14,7 +14,7 @@
       (json/parse-string true)))
 
 (defn send-message! [user body]
-  (let [{:keys [channel-id bot-access-token]} (:slack user)]
+  (when-let [{:keys [channel-id bot-access-token]} (:slack user)]
     (slack-call! "chat.postMessage"
                  {:token   bot-access-token
                   :channel channel-id
