@@ -19,9 +19,9 @@
          :args {:tags args
                 :id cmd?}})
 
-      (if (and (= cmd? "sleep") (= (count args) 0))
-        {:command :sleep
-         :args {}}
+      (case cmd?
+        "sleep" {:command :sleep :args {}}
+        "\"" {:command :ditto :args {}}
         {:command :tag-last-ping
          :args {:tags all-args}}))))
 

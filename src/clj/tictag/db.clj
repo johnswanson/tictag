@@ -114,13 +114,17 @@
                  [:= :user_id (:id user)])
           (limit 1))))))
 
+(defn last-pings [db user count]
+  (get-pings
+   (:db db)
+   (-> ping-select
+       (where [:= :user_id (:id user)])
+       (order-by [:ts :desc])
+       (limit count))))
+
 (defn last-ping [db user]
-  (first
-   (get-pings
-    (:db db)
-    (-> ping-select
-        (where [:= :user_id (:id user)])
-        (order-by [:ts :desc])))))
+  (first (last-pings db user 1)))
+
 
 (defn ping-from-long-time [db user long-time]
   (first
@@ -143,7 +147,7 @@
   (j/with-db-transaction [db db]
     (doseq [{:keys [tags user-id timestamp]} pings]
       (j/execute! db (-> (update :pings)
-                         (sset {:tags (str/join " " tags)})
+                         (sset {:tags (str/join " " (map name tags))})
                          (where [:= :ts (coerce/from-long timestamp)]
                                 [:= :user_id user-id])
                          sql/format)))))

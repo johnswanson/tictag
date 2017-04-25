@@ -84,14 +84,19 @@
 (defn tag-last-ping [db user {:keys [tags]}]
   (tag-ping db user (db/last-ping db user) tags))
 
+(defn ditto [db user _]
+  (let [[last-ping second-to-last-ping] (db/last-pings db user 2)]
+    (tag-ping db user last-ping (:tags second-to-last-ping))))
+
 (defn apply-command [db user cmd]
   (timbre/debugf "Applying command: %s" (pr-str cmd))
   (let [{:keys [command args]} (cli/parse-body cmd)
-        f (case command
-            :sleep make-pings-sleepy
-            :tag-ping-by-id tag-ping-by-id
-            :tag-ping-by-long-time tag-ping-by-long-time
-            :tag-last-ping tag-last-ping)]
+        f                      (case command
+                                 :sleep                 make-pings-sleepy
+                                 :ditto                 ditto
+                                 :tag-ping-by-id        tag-ping-by-id
+                                 :tag-ping-by-long-time tag-ping-by-long-time
+                                 :tag-last-ping         tag-last-ping)]
     (timbre/debugf "Command parsed as: %s, args %s" (pr-str command) (pr-str args))
     (f db user args)))
 
