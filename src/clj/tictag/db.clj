@@ -21,7 +21,7 @@
             [tictag.utils :as utils]))
 
 (def ping-select (-> (select :ts
-                             [(sql/call :timezone :tz :ts) :local_time]
+                             [(sql/call :+ :tz_offset :ts) :local_time]
                              :tags
                              :user_id)
                      (from :pings)))
@@ -56,8 +56,18 @@
   (j/execute!
    (:db db)
    (-> (insert-into
-        [[:pings [:ts :tz :tags :user_id]]
-         (-> (select time :users.tz "afk" :id)
+        [[:pings [:ts :tz_offset :tags :user_id]]
+         (-> (select
+              time
+              (sql/call :-
+                        (sql/call :timezone
+                                  :users.tz
+                                  time)
+                        (sql/call :timezone
+                                  "UTC"
+                                  time))
+              "afk"
+              :id)
              (from :users))])
        sql/format)))
 
