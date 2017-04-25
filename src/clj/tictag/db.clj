@@ -52,6 +52,15 @@
 (defn add-pend! [rb id time]
   (into rb [[id time]]))
 
+(defn add-pings!
+  "At this point, just used for parsed TagTime data"
+  [db pings]
+  (j/execute!
+   (:db db)
+   (-> (insert-into :pings)
+       (values pings)
+       sql/format)))
+
 (defn add-afk-pings! [db time]
   (j/execute!
    (:db db)
