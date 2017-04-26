@@ -4,11 +4,7 @@
             [cljs-time.core :as t]
             [tictag.dates :refer [seconds-since-midnight days-since-epoch]]))
 
-(def formatter (f/formatters :date-time))
-(defn parse-date [ping]
-  (assoc ping
-         :local-time (f/parse formatter (:local-time ping))
-         :str-local-time (:local-time ping)))
+(def formatter (f/formatters :basic-date-time))
 
 (reg-sub :ping-query (fn [db _] (:ping-query db)))
 
@@ -62,9 +58,9 @@
 
 (reg-sub
  :seconds-since-midnight
- (fn [_ _] (subscribe [:pings]))
- (fn [pings _]
-   (map (comp seconds-since-midnight :local-time) pings)))
+ (fn [_ _] (subscribe [:parsed-times]))
+ (fn [parsed-times _]
+   (map seconds-since-midnight parsed-times)))
 
 (reg-sub
  :matrix-plot-height

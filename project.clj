@@ -55,7 +55,7 @@
                  [org.clojars.jds02006/cljs-time "0.5.0-SNAPSHOT"]
                  [day8.re-frame/http-fx "0.1.3"]
                  [slingshot "0.12.2"]
-                 [ring-transit "0.1.6"]
+                 [ring-middleware-format "0.7.2"]
                  [ring/ring-json "0.4.0"]
                  [cljs-ajax "0.5.8"]
                  [day8.re-frame/async-flow-fx "0.0.6"]

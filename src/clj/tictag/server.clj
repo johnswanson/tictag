@@ -6,10 +6,8 @@
             [compojure.core :refer [GET PUT POST]]
             [taoensso.timbre :as timbre]
             [ring.util.response :refer [response]]
-            [ring.middleware.json :refer [wrap-json-params]]
-            [ring.middleware.edn :refer [wrap-edn-params]]
-            [ring.middleware.transit :refer [wrap-transit-params wrap-transit-response]]
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
+            [ring.middleware.format :refer [wrap-restful-format]]
             [tictag.db :as db]
             [clojure.string :as str]
             [hiccup.core :refer [html]]
@@ -36,14 +34,20 @@
      [:script {:src "https://use.fontawesome.com/efa7507d6f.js"}]]]))
 
 (defn slack-user [db slack-message]
+  (timbre/tracef "Validating slack message: %s" slack-message)
   (db/get-user-from-slack-id db (get-in slack-message [:event :user])))
 
 (defn api-user [db {:keys [username password]}]
   (db/authenticated-user db username password))
 
+(defn unjoda [pings]
+  (map #(update % :local-time
+                (partial f/unparse
+                         (f/formatter :basic-date-time))) pings))
+
 (defn pings [{:keys [db]} {:keys [user-id]}]
   (when user-id
-    (response (db/get-pings-by-user-id (:db db) user-id))))
+    (response (unjoda (db/get-pings-by-user-id (:db db) user-id)))))
 
 (defn slack-text [slack-message]
   (get-in slack-message [:event :text]))
@@ -178,11 +182,8 @@
     (let [stop (http/run-server
                 (-> (routes component)
                     (wrap-user (:jwt component))
-                    (wrap-transit-response {:encoding :json})
-                    (wrap-defaults (assoc-in api-defaults [:static :resources] "/public"))
-                    (wrap-edn-params)
-                    (wrap-json-params)
-                    (wrap-transit-params))
+                    (wrap-restful-format :formats [:json-kw :edn :transit-json :transit-msgpack])
+                    (wrap-defaults (assoc-in api-defaults [:static :resources] "/public")))
                 config)]
       (timbre/debug "Server created")
       (assoc component :stop stop)))
