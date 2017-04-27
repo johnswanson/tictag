@@ -49,10 +49,10 @@
        [:td (gstring/format "%.1f%%" @tag-%)]
        [:td @time-per-day]])))
 (defn logged-in-app
-  [authenticated-user]
+  []
   (let [meeting-query-per-day (subscribe [:meeting-query-per-day])
         tag-counts (subscribe [:sorted-tag-counts])]
-    (fn [authenticated-user]
+    (fn []
       [:div
        [:span {:on-click #(dispatch [:fetch-pings])
                :style {:cursor :pointer}} "Click Me"]
@@ -68,49 +68,58 @@
            ^{:key (pr-str tag)}
            [tag-table-row tag])]]])))
 
-(defn username-input []
-  (let [username (subscribe [:login/username-input])]
-    (fn []
-      [:input
-       {:value     @username
-        :on-change #(dispatch [:login/username-input (.. % -target -value)])
-        :on-key-down #(condp = (.. % -which)
-                        ENTER (dispatch [:login/submit-login])
-                        nil)}])))
+(defn input [type]
+  (fn [& {:keys [value change login]}]
+    [:input
+     {:value       value
+      :type        type
+      :on-change   #(change (.. % -target -value))
+      :on-key-down #(condp = (.. % -which)
+                      ENTER (login)
+                      nil)}]))
 
-(defn password-input []
-  (let [password (subscribe [:login/password-input])]
-    (fn []
-      [:input
-       {:type      :password
-        :value     @password
-        :on-change #(dispatch [:login/password-input (.. % -target -value)])
-        :on-key-down #(condp = (.. % -which)
-                        ENTER (dispatch [:login/submit-login])
-                        nil)}])))
+(def username-input (input :text))
+(def password-input (input :password))
 
-(defn login []
-  [:button {:on-click #(dispatch [:login/submit-login])}
+(defn login [f]
+  [:button {:on-click f}
    "Login"])
 
-(defn signup []
-  [:button {:on-click #(dispatch [:login/submit-signup])}
+(defn signup [f]
+  [:button {:on-click f}
    "Sign Up"])
 
-(defn login-or-signup-form []
+(defn login-or-signup-form [& {:keys [username password login-fn signup-fn ch-username ch-password]}]
   [:div
-   [username-input]
-   [password-input]
-   [login] [signup]])
-
-(defn logged-out-app []
-  [login-or-signup-form])
+   [:div
+    [username-input
+     :value username
+     :change ch-username
+     :login login-fn]
+    [password-input
+     :value password
+     :change ch-password
+     :login login-fn]]
+   [login login-fn]
+   [signup signup-fn]])
 
 (defn app
   []
-  (let [has-token? (subscribe [:auth-token])]
+  (let [auth-token?   (subscribe [:auth-token])
+        temp-username (subscribe [:login/username-input])
+        temp-password (subscribe [:login/password-input])
+        login-fn      #(dispatch [:login/submit-login])
+        signup-fn     #(dispatch [:login/submit-signup])
+        ch-password   #(dispatch [:login/password-input %])
+        ch-username   #(dispatch [:login/username-input %])]
     (fn []
-      (if @has-token?
-        [logged-in-app has-token?]
-        [logged-out-app]))))
+      (if @auth-token?
+        [logged-in-app]
+        [login-or-signup-form
+         :username @temp-username
+         :password @temp-password
+         :login-fn login-fn
+         :signup-fn signup-fn
+         :ch-username ch-username
+         :ch-password ch-password]))))
 
