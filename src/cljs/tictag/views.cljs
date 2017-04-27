@@ -92,14 +92,18 @@
 (defn login-or-signup-form [& {:keys [username password login-fn signup-fn ch-username ch-password]}]
   [:div
    [:div
-    [username-input
-     :value username
-     :change ch-username
-     :login login-fn]
-    [password-input
-     :value password
-     :change ch-password
-     :login login-fn]]
+    [:div
+     [:label "Username"
+      [username-input
+       :value username
+       :change ch-username
+       :login login-fn]]]
+    [:div
+     [:label "Password"
+      [password-input
+       :value password
+       :change ch-password
+       :login login-fn]]]]
    [login login-fn]
    [signup signup-fn]])
 
