@@ -7,7 +7,7 @@
   :figwheel {:css-dirs ["resources/public/css"]}
   :cljsbuild {:builds [{:id           "dev"
                         :figwheel     true
-                        :source-paths ["src/cljs"]
+                        :source-paths ["src/cljs" "src/cljc"]
                         :compiler     {:main          "tictag.dev"
                                        :asset-path    "/js/compiled"
                                        :output-to     "resources/public/js/compiled/app.js"
@@ -16,7 +16,7 @@
                                        :source-map    true}}
                        {:id           "prod"
                         :figwheel     false
-                        :source-paths ["src/cljs"]
+                        :source-paths ["src/cljs" "src/cljc"]
                         :compiler     {:main          "tictag.prod"
                                        :asset-path    "/js/compiled"
                                        :output-to     "resources/public/js/compiled/app.js"
@@ -29,7 +29,7 @@
                                      :dependencies [[org.clojure/tools.namespace "0.2.11"]
                                                     [com.cemerick/piggieback "0.2.1"]]
                                      :plugins      [[lein-environ "1.1.0"]]}]}
-  :source-paths ["src/clj"]
+  :source-paths ["src/clj" "src/cljc"]
   :main tictag.main
   :repl-options {:init-ns user :nrepl-middleware [cemerick.piggieback/wrap-cljs-repl]}
   :target-path "target/%s"
@@ -82,4 +82,6 @@
                  [clojure-csv/clojure-csv "2.0.2"]
                  [buddy "1.3.0"]
                  [buddy/buddy-hashers "1.2.0"]
-                 [hikari-cp "1.7.5"]])
+                 [hikari-cp "1.7.5"]
+                 [bidi "2.0.17"]
+                 [kibu/pushy "0.3.7"]])

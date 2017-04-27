@@ -233,10 +233,13 @@
                                     [(get tag-counts key1) key1])))
           tag-counts))))
 
+(defn auth-token [db]
+  (:auth-token db))
+
 (reg-sub
  :auth-token
  (fn [db _]
-   (:auth-token db)))
+   (auth-token db)))
 
 (reg-sub
  :login/password-input
@@ -247,4 +250,15 @@
  :login/username-input
  (fn [db _]
    (-> db :login :username)))
+
+(reg-sub
+ :login/email-input
+ (fn [db _]
+   (-> db :login :email)))
+
+(reg-sub
+ :active-panel
+ (fn [db _]
+   (some-> db :nav :handler)))
+
 

@@ -10,5 +10,6 @@
 
 (defn ^:export main
   []
+  (dispatch-sync [:initialize])
   (reagent/render [tictag.views/app]
                   (.getElementById js/document "app")))

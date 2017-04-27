@@ -1,8 +1,9 @@
 (ns tictag.events
   (:require [cljs.tools.reader.edn :as edn]
-            [re-frame.core :refer [reg-event-fx reg-event-db]]
+            [re-frame.core :refer [reg-event-fx reg-event-db reg-fx]]
             [taoensso.timbre :as timbre]
-            [ajax.core :refer [transit-response-format transit-request-format]]))
+            [ajax.core :refer [transit-response-format transit-request-format]]
+            [tictag.nav :as nav]))
 
 (reg-event-db
  :login/password-input
@@ -13,6 +14,11 @@
  :login/username-input
  (fn [db [_ username]]
    (assoc-in db [:login :username] username)))
+
+(reg-event-db
+ :login/email-input
+ (fn [db [_ email]]
+   (assoc-in db [:login :email] email)))
 
 (defn authenticated-xhrio [m token]
   (merge m {:headers {"Authorization" token}}))
@@ -30,12 +36,25 @@
                  :on-success      [:login/successful]
                  :on-failure      [:login/failed]}}))
 
-(reg-event-db
+(reg-event-fx
+ :login/submit-signup
+ (fn [{:keys [db]} _]
+   {:http-xhrio {:method          :post
+                 :uri             "/signup"
+                 :params          (:login db)
+                 :timeout         8000
+                 :format          (transit-request-format {})
+                 :response-format (transit-response-format {})
+                 :on-success      [:login/successful]
+                 :on-failure      [:login/failed]}}))
+
+(reg-event-fx
  :login/successful
- (fn [db [_ result]]
-   (-> db
-       (assoc :auth-token (:token result))
-       (dissoc :login))))
+ (fn [{:keys [db]} [_ result]]
+   {:db (-> db
+            (assoc :auth-token (:token result))
+            (dissoc :login))
+    :pushy-navigate :dashboard}))
 
 (reg-event-db
  :login/failed
@@ -72,3 +91,33 @@
    (if (seq v)
      (assoc db :ping-query v)
      (assoc db :ping-query nil))))
+
+(reg-fx
+ :pushy-init
+ (fn [_]
+   (nav/start!)))
+
+(reg-event-fx
+ :initialize
+ (fn [_ _]
+   {:pushy-init true}))
+
+(reg-event-db
+ :set-current-page
+ (fn [db [_ match]]
+   (assoc db :nav match)))
+
+(reg-fx
+ :pushy-replace-token!
+ (fn [route]
+   (nav/replace-token! route)))
+
+(reg-fx
+ :pushy-navigate
+ (fn [route]
+   (nav/set-token! route)))
+
+(reg-event-fx
+ :redirect-to-page
+ (fn [_ [_ page]]
+   {:pushy-replace-token! page}))

@@ -167,6 +167,8 @@
    (GET "/pings" _ (partial pings component))
    (GET "/config" _ (partial config component))
    (GET "/" _ index)
+   (GET "/signup" _ index)
+   (GET "/login" _ index)
    (GET "/healthcheck" _ (health-check component))))
 
 (defn wrap-user [handler jwt]
