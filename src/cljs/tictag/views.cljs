@@ -2,6 +2,7 @@
   (:require [reagent.core :as reagent]
             [re-frame.core :refer [subscribe dispatch]]
             [clojure.string :as str]
+            [tictag.constants :refer [ENTER]]
             [tictag.events]
             [tictag.subs]
             [tictag.dates :refer [days-since-epoch seconds-since-midnight]]
@@ -68,20 +69,25 @@
            [tag-table-row tag])]]])))
 
 (defn username-input []
-  (let [username (reagent/atom "")]
+  (let [username (subscribe [:login/username-input])]
     (fn []
       [:input
-       {:value @username
-        :on-change #(reset! username (.. % -target -value))
-        :on-blur #(dispatch [:login/username-input @username])}])))
+       {:value     @username
+        :on-change #(dispatch [:login/username-input (.. % -target -value)])
+        :on-key-down #(condp = (.. % -which)
+                        ENTER (dispatch [:login/submit-login])
+                        nil)}])))
 
 (defn password-input []
-  (let [password (reagent/atom "")]
+  (let [password (subscribe [:login/password-input])]
     (fn []
       [:input
-       {:value @password
-        :on-change #(reset! password (.. % -target -value))
-        :on-blur #(dispatch [:login/password-input @password])}])))
+       {:type      :password
+        :value     @password
+        :on-change #(dispatch [:login/password-input (.. % -target -value)])
+        :on-key-down #(condp = (.. % -which)
+                        ENTER (dispatch [:login/submit-login])
+                        nil)}])))
 
 (defn login []
   [:button {:on-click #(dispatch [:login/submit-login])}

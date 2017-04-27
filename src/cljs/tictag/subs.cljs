@@ -238,3 +238,13 @@
  (fn [db _]
    (:auth-token db)))
 
+(reg-sub
+ :login/password-input
+ (fn [db _]
+   (-> db :login :password)))
+
+(reg-sub
+ :login/username-input
+ (fn [db _]
+   (-> db :login :username)))
+

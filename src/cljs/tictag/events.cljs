@@ -21,8 +21,7 @@
  :login/submit-login
  (fn [{:keys [db]} _]
    ;; TODO edit DB to say we're pending login and add UI
-   {:db         (dissoc db :login)
-    :http-xhrio {:method          :post
+   {:http-xhrio {:method          :post
                  :uri             "/token"
                  :params          (:login db)
                  :timeout         8000
@@ -34,7 +33,9 @@
 (reg-event-db
  :login/successful
  (fn [db [_ result]]
-   (assoc db :auth-token (:token result))))
+   (-> db
+       (assoc :auth-token (:token result))
+       (dissoc :login))))
 
 (reg-event-db
  :login/failed
