@@ -63,6 +63,12 @@
    db))
 
 (reg-event-fx
+ :logout
+ (fn [{:keys [db]} _]
+   {:db (dissoc db :auth-token)
+    :pushy-navigate :login}))
+
+(reg-event-fx
  :fetch-pings
  (fn [{:keys [db]} _]
    {:db         (assoc db :fetching true)

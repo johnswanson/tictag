@@ -57,7 +57,7 @@
         tag-counts            (subscribe [:sorted-tag-counts])]
     (fn []
       (if-not @auth-token
-        (dispatch [:redirect-to-page :login])
+        (dispatch [:redirect-to-page :login]) ;; this seems bad...
         [:div
          [:span {:on-click #(dispatch [:fetch-pings])
                  :style    {:cursor :pointer}} "Click Me"]
@@ -71,7 +71,8 @@
            [:tr [:th "Tag"] [:th "Count"] [:th "Percent of Pings"] [:th "Time Per Day"]]
            (for [tag @tag-counts]
              ^{:key (pr-str tag)}
-             [tag-table-row tag])]]]))))
+             [tag-table-row tag])]]
+         [:button {:on-click #(dispatch [:logout])} "Logout"]]))))
 
 (defn input [type]
   (fn [& {:keys [value change submit]}]
