@@ -25,11 +25,11 @@
 
 (reg-event-fx
  :login/submit-login
- (fn [{:keys [db]} _]
+ (fn [{:keys [db]} [_ params]]
    ;; TODO edit DB to say we're pending login and add UI
    {:http-xhrio {:method          :post
                  :uri             "/token"
-                 :params          (:login db)
+                 :params          params
                  :timeout         8000
                  :format          (transit-request-format {})
                  :response-format (transit-response-format {})
@@ -38,10 +38,10 @@
 
 (reg-event-fx
  :login/submit-signup
- (fn [{:keys [db]} _]
+ (fn [{:keys [db]} [_ params]]
    {:http-xhrio {:method          :post
                  :uri             "/signup"
-                 :params          (:login db)
+                 :params          params
                  :timeout         8000
                  :format          (transit-request-format {})
                  :response-format (transit-response-format {})

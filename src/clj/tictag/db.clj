@@ -220,7 +220,7 @@
                        beeminder_encryption_iv
                        beeminder_is_enabled
                        beeminder_id]}]
-  (when user
+  (when (and user beeminder_encrypted_token beeminder_encryption_iv)
     {:id       beeminder_id
      :username beeminder_username
      :enabled? beeminder_is_enabled
@@ -230,7 +230,7 @@
                 beeminder_encryption_iv)}))
 
 (defn slack-from-db [db {:as user :keys [slack_username slack_encrypted_bot_access_token slack_encryption_iv slack_channel_id]}]
-  (when user
+  (when (and user slack_encrypted_bot_access_token slack_encryption_iv)
     {:username         slack_username
      :channel-id       slack_channel_id
      :bot-access-token (crypto/decrypt
@@ -260,8 +260,8 @@
               [:beeminder.encryption_iv :beeminder_encryption_iv]
               [:beeminder.is_enabled :beeminder_is_enabled])
       (from :users)
-      (join :slack [:= :slack.user_id :users.id]
-            :beeminder [:= :beeminder.user_id :users.id])))
+      (left-join :slack [:= :slack.user_id :users.id]
+                 :beeminder [:= :beeminder.user_id :users.id])))
 
 (defn get-user-from-slack-id [db slack-id]
   (to-user
@@ -271,17 +271,12 @@
              (sql/format
               (where user-query [:= :slack.slack_user_id slack-id]))))))
 
-(defn write-user [db username email password]
+(defn write-user [db {:keys [username password email tz] :as user}]
   (j/execute!
    (:db db)
-   [(str/join " "
-              ["INSERT INTO users"
-               "(username, email, pass)"
-               "VALUES"
-               "(?, ?, ?)"])
-    username
-    email
-    (hashp password)]))
+   (-> (insert-into :users)
+       (values [{:username username :email email :pass (hashp password) :tz tz}])
+       sql/format)))
 
 (defn get-user-by-id [db id]
   (to-user db (first (j/query (:db db) (sql/format (where user-query [:= :users.id id]))))))

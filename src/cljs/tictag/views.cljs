@@ -86,6 +86,7 @@
 (def username-input (input :text))
 (def email-input (input :text))
 (def password-input (input :password))
+(def tz-input (input :text))
 
 (defn login-button [f]
   [:button {:on-click f} "Login"])
@@ -94,7 +95,7 @@
   [:button {:on-click f}
    "Sign Up"])
 
-(defn signup-form [& {:keys [username password email signup-fn ch-username ch-password ch-email]}]
+(defn signup-form [& {:keys [username password email timezone signup-fn ch-username ch-password ch-email ch-timezone]}]
   [:div
    [:div
     [:div
@@ -114,6 +115,12 @@
       [password-input
        :value password
        :change ch-password
+       :submit signup-fn]]]
+    [:div
+     [:label "Time Zone (e.g. \"America/Los_Angeles)"
+      [tz-input
+       :value timezone
+       :change ch-timezone
        :submit signup-fn]]]]
    [signup-button signup-fn]
    [:a {:href (route-for :login)} "Login"]])
@@ -137,11 +144,12 @@
    [:a {:href (route-for :signup)} "Signup"]])
 
 (defn login []
-  (let [temp-username (subscribe [:login/username-input])
-        temp-password (subscribe [:login/password-input])
-        login-fn      #(dispatch [:login/submit-login])
-        ch-password   #(dispatch [:login/password-input %])
-        ch-username   #(dispatch [:login/username-input %])]
+  (let [temp-username (reagent/atom nil)
+        temp-password (reagent/atom nil)
+        login-fn      #(dispatch [:login/submit-login {:username @temp-username
+                                                       :password @temp-password}])
+        ch-password   #(reset! temp-password %)
+        ch-username   #(reset! temp-username %)]
     (fn []
       [login-form
        :username @temp-username
@@ -151,22 +159,30 @@
        :ch-password ch-password])))
 
 (defn signup []
-  (let [temp-username (subscribe [:login/username-input])
-        temp-password (subscribe [:login/password-input])
-        temp-email    (subscribe [:login/email-input])
-        signup-fn     #(dispatch [:login/submit-signup])
-        ch-password   #(dispatch [:login/password-input %])
-        ch-email      #(dispatch [:login/email-input %])
-        ch-username   #(dispatch [:login/username-input %])]
+  (let [temp-username (reagent/atom nil)
+        temp-password (reagent/atom nil)
+        temp-email    (reagent/atom nil)
+        temp-timezone (reagent/atom nil)
+        signup-fn     #(dispatch [:login/submit-signup {:username @temp-username
+                                                        :password @temp-password
+                                                        :email    @temp-email
+                                                        :tz       @temp-timezone}])
+        ch-password   #(reset! temp-password %)
+        ch-timezone   #(reset! temp-timezone %)
+        ch-email      #(reset! temp-email %)
+        ch-username   #(reset! temp-username %)]
     (fn []
       [signup-form
        :username @temp-username
        :password @temp-password
+       :timezone @temp-timezone
        :email @temp-email
+       :timezone @temp-timezone
        :signup-fn signup-fn
        :ch-username ch-username
        :ch-email ch-email
-       :ch-password ch-password])))
+       :ch-password ch-password
+       :ch-timezone ch-timezone])))
 
 (defn app
   []

@@ -16,7 +16,8 @@
             [tictag.users :as users]
             [tictag.beeminder :as beeminder]
             [tictag.slack :as slack]
-            [tictag.jwt :as jwt]))
+            [tictag.jwt :as jwt]
+            [struct.core :as st]))
 
 
 (def index
@@ -159,6 +160,23 @@
     {:status 401
      :body "unauthorized"}))
 
+(def +new-user-schema+
+  {:username [st/required st/string]
+   :password [st/required st/string]
+   :email    [st/required st/string]
+   :tz       [st/required st/string]})
+
+(defn signup [{:keys [db jwt]} {:keys [params]}]
+  (let [[invalid? user] (st/validate params +new-user-schema+)]
+    (if invalid?
+      {:status 401 :body "unauthorized"}
+      (let [written? (db/write-user db user)
+            [valid? token] (users/get-token
+                            {:db db :jwt jwt}
+                            (:username params)
+                            (:password params))]
+        {:status 200 :headers {} :body token}))))
+
 (defn routes [component]
   (compojure.core/routes
    (POST "/slack" _ (partial slack component))
@@ -168,6 +186,7 @@
    (GET "/config" _ (partial config component))
    (GET "/" _ index)
    (GET "/signup" _ index)
+   (POST "/signup" _ (partial signup component))
    (GET "/login" _ index)
    (GET "/healthcheck" _ (health-check component))))
 
