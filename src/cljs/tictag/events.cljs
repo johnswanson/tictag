@@ -39,7 +39,8 @@
    {:db (-> db
             (assoc :auth-token (:token result))
             (dissoc :login))
-    :pushy-navigate :dashboard}))
+    :pushy-navigate :dashboard
+    :dispatch [:fetch-pings]}))
 
 (reg-event-db
  :login/failed

@@ -59,8 +59,6 @@
       (if-not @auth-token
         (dispatch [:redirect-to-page :login]) ;; this seems bad...
         [:div
-         [:span {:on-click #(dispatch [:fetch-pings])
-                 :style    {:cursor :pointer}} "Click Me"]
          [:input {:type      :text
                   :on-change #(dispatch [:update-ping-query (.. % -target -value)])}]
          [matrix-plot]
