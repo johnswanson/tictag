@@ -5,21 +5,6 @@
             [ajax.core :refer [transit-response-format transit-request-format]]
             [tictag.nav :as nav]))
 
-(reg-event-db
- :login/password-input
- (fn [db [_ password]]
-   (assoc-in db [:login :password] password)))
-
-(reg-event-db
- :login/username-input
- (fn [db [_ username]]
-   (assoc-in db [:login :username] username)))
-
-(reg-event-db
- :login/email-input
- (fn [db [_ email]]
-   (assoc-in db [:login :email] email)))
-
 (defn authenticated-xhrio [m token]
   (merge m {:headers {"Authorization" token}}))
 
