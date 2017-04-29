@@ -20,6 +20,7 @@ jobs:
       - store_artifacts:
           path: target/uberjar/tictag.jar
           destination: uberjar
+      - add_ssh_keys
       - deploy:
           name: Deploy master
           command: |
