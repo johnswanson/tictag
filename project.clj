@@ -24,8 +24,8 @@
                                        :optimizations :advanced}}]}
   :plugins [[lein-cljsbuild "1.1.5"]]
   :test-paths ["test/clj"]
-  :prep-tasks ["compile" ["cljsbuild" "once"]]
-  :profiles {:uberjar {:aot   :all}
+  :profiles {:uberjar {:aot   :all
+                       :prep-tasks ["compile" ["cljsbuild" "once" "prod"]]}
              :dev     [:dev-secrets {:source-paths ["dev" "test/clj"]
                                      :dependencies [[org.clojure/tools.namespace "0.2.11"]
                                                     [com.cemerick/piggieback "0.2.1"]]
