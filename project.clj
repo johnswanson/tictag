@@ -15,6 +15,7 @@
                                        :optimizations :none
                                        :source-map    true}}
                        {:id           "prod"
+                        :jar          true
                         :figwheel     false
                         :source-paths ["src/cljs" "src/cljc"]
                         :compiler     {:main          "tictag.prod"
@@ -23,8 +24,8 @@
                                        :optimizations :advanced}}]}
   :plugins [[lein-cljsbuild "1.1.5"]]
   :test-paths ["test/clj"]
-  :profiles {:uberjar {:hooks [leiningen.cljsbuild]
-                       :aot   :all}
+  :prep-tasks ["compile" ["cljsbuild" "once"]]
+  :profiles {:uberjar {:aot   :all}
              :dev     [:dev-secrets {:source-paths ["dev" "test/clj"]
                                      :dependencies [[org.clojure/tools.namespace "0.2.11"]
                                                     [com.cemerick/piggieback "0.2.1"]]
@@ -33,7 +34,7 @@
   :main tictag.main
   :repl-options {:init-ns user :nrepl-middleware [cemerick.piggieback/wrap-cljs-repl]}
   :target-path "target/%s"
-  :uberjar-name "standalone.jar"
+  :uberjar-name "tictag.jar"
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [org.clojure/clojurescript "1.9.456"]
                  [org.clojure/data.csv "0.1.3"]

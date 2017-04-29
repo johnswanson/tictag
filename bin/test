@@ -1,4 +1,0 @@
-#!/bin/bash
-set -euf pipefail
-
-docker run $IMAGE test

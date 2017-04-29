@@ -1,24 +1,9 @@
 #!/bin/bash
 set -euf pipefail
 
-docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
-docker push $IMAGE
+HOME_DIR=/home/$DEPLOY_USER
+curl -L https://github.com/gliderlabs/sigil/releases/download/v0.4.0/sigil_0.4.0_Linux_x86_64.tgz | tar -zxC /usr/local/bin
+sigil -p -f templates/tictag.env > /tmp/tictag.env
+scp target/uberjar/tictag.jar /tmp/tictag.env $DEPLOY_USER@$DEPLOY_HOST:$HOME_DIR/
+ssh $DEPLOY_USER@$DEPLOY_HOST sudo systemctl restart tictag.service
 
-ssh $DEPLOY_USER@$DEPLOY_HOST docker pull $IMAGE
-
-ssh $DEPLOY_USER@$DEPLOY_HOST docker kill tictag || echo "ok"
-ssh $DEPLOY_USER@$DEPLOY_HOST docker rm tictag || echo "ok"
-ssh $DEPLOY_USER@$DEPLOY_HOST docker run \
-    --net=host \
-    --name=tictag \
-    -e SLACK_VERIFICATION_TOKEN=$SLACK_VERIFICATION_TOKEN \
-    -e PG_USER=$PG_USER \
-    -e PG_PASSWORD=$PG_PASSWORD \
-    -e PG_DATABASE=$PG_DATABASE \
-    -e TICTAG_PORT=$TICTAG_PORT \
-    -e TICTAG_CRYPTO_KEY=$TICTAG_CRYPTO_KEY \
-    -e EC_PRIV_KEY=$EC_PRIV_KEY \
-    -e EC_PUB_KEY=$EC_PUB_KEY \
-    --restart always \
-    --detach \
-    $IMAGE
