@@ -242,23 +242,12 @@
    (auth-token db)))
 
 (reg-sub
- :login/password-input
- (fn [db _]
-   (-> db :login :password)))
-
-(reg-sub
- :login/username-input
- (fn [db _]
-   (-> db :login :username)))
-
-(reg-sub
- :login/email-input
- (fn [db _]
-   (-> db :login :email)))
-
-(reg-sub
  :active-panel
  (fn [db _]
    (some-> db :nav :handler)))
 
+(reg-sub
+ :login-errors
+ (fn [db [_ field]]
+   (some-> db :signup :errors field)))
 

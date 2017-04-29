@@ -309,3 +309,10 @@
 (defn get-pings-by-user-id [db id]
   (get-pings db (-> ping-select
                     (where [:= :pings.user_id id]))))
+
+(defn timezones [db]
+  (j/query
+   (:db db)
+   (-> (select :name)
+       (from :pg-timezone-names)
+       sql/format)))

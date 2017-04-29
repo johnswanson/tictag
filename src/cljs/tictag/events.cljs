@@ -3,7 +3,8 @@
             [re-frame.core :refer [reg-event-fx reg-event-db reg-fx]]
             [taoensso.timbre :as timbre]
             [ajax.core :refer [transit-response-format transit-request-format]]
-            [tictag.nav :as nav]))
+            [tictag.nav :as nav]
+            [tictag.schemas :as schemas]))
 
 (defn authenticated-xhrio [m token]
   (merge m {:headers {"Authorization" token}}))
@@ -21,24 +22,33 @@
                  :on-success      [:login/successful]
                  :on-failure      [:login/failed]}}))
 
+(defn allowed-timezones [db]
+  (let [tzs (:allowed-timezones db)]
+    (set (map :name tzs))))
+
 (reg-event-fx
  :login/submit-signup
  (fn [{:keys [db]} [_ params]]
-   {:http-xhrio {:method          :post
-                 :uri             "/signup"
-                 :params          params
-                 :timeout         8000
-                 :format          (transit-request-format {})
-                 :response-format (transit-response-format {})
-                 :on-success      [:login/successful]
-                 :on-failure      [:login/failed]}}))
+   (let [[errs? params] (schemas/validate params
+                                          (schemas/+new-user-schema+
+                                           (allowed-timezones db)))]
+     (if-not errs?
+       {:http-xhrio {:method          :post
+                     :uri             "/signup"
+                     :params          params
+                     :timeout         8000
+                     :format          (transit-request-format {})
+                     :response-format (transit-response-format {})
+                     :on-success      [:login/successful]
+                     :on-failure      [:login/failed]}}
+       {:db (assoc-in db [:signup :errors] errs?)}))))
 
 (reg-event-fx
  :login/successful
  (fn [{:keys [db]} [_ result]]
    {:db (-> db
             (assoc :auth-token (:token result))
-            (dissoc :login))
+            (dissoc :signup))
     :pushy-navigate :dashboard
     :dispatch [:fetch-pings]}))
 
@@ -92,7 +102,19 @@
 (reg-event-fx
  :initialize
  (fn [_ _]
-   {:pushy-init true}))
+   {:pushy-init true
+    :http-xhrio {:method          :get
+                 :uri             "/api/timezones"
+                 :timeout         8000
+                 :format          (transit-request-format {})
+                 :response-format (transit-response-format {})
+                 :on-success      [:success-timezones]
+                 :on-failure      [:failed-timezones]}}))
+
+(reg-event-db
+ :success-timezones
+ (fn [db [_ timezones]]
+   (assoc db :allowed-timezones timezones)))
 
 (reg-event-db
  :set-current-page

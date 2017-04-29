@@ -3,7 +3,7 @@
             [clj-time.core :as t]
             [com.stuartsierra.component :as component]
             [org.httpkit.server :as http]
-            [compojure.core :refer [GET PUT POST]]
+            [compojure.core :refer [GET PUT POST context]]
             [taoensso.timbre :as timbre]
             [ring.util.response :refer [response]]
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
@@ -17,7 +17,7 @@
             [tictag.beeminder :as beeminder]
             [tictag.slack :as slack]
             [tictag.jwt :as jwt]
-            [struct.core :as st]))
+            [tictag.schemas :as schemas]))
 
 
 (def index
@@ -160,14 +160,10 @@
     {:status 401
      :body "unauthorized"}))
 
-(def +new-user-schema+
-  {:username [st/required st/string]
-   :password [st/required st/string]
-   :email    [st/required st/string]
-   :tz       [st/required st/string]})
-
 (defn signup [{:keys [db jwt]} {:keys [params]}]
-  (let [[invalid? user] (st/validate params +new-user-schema+)]
+  (let [[invalid? user] (schemas/validate
+                         params
+                         (schemas/+new-user-schema+ (set (map :name (db/timezones db)))))]
     (if invalid?
       {:status 401 :body "unauthorized"}
       (let [written? (db/write-user db user)
@@ -176,6 +172,9 @@
                             (:username params)
                             (:password params))]
         {:status 200 :headers {} :body token}))))
+
+(defn timezone-list [component _]
+  (db/timezones (:db component)))
 
 (defn routes [component]
   (compojure.core/routes
@@ -186,6 +185,8 @@
    (GET "/config" _ (partial config component))
    (GET "/" _ index)
    (GET "/signup" _ index)
+   (context "/api" []
+            (GET "/timezones" _ (partial timezone-list component)))
    (POST "/signup" _ (partial signup component))
    (GET "/login" _ index)
    (GET "/healthcheck" _ (health-check component))))
