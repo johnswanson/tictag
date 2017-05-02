@@ -1,6 +1,6 @@
 (ns tictag.events
   (:require [cljs.tools.reader.edn :as edn]
-            [re-frame.core :refer [reg-event-fx reg-event-db reg-fx]]
+            [re-frame.core :refer [reg-event-fx reg-event-db reg-fx reg-cofx inject-cofx]]
             [taoensso.timbre :as timbre]
             [ajax.core :refer [transit-response-format transit-request-format]]
             [tictag.nav :as nav]
@@ -129,17 +129,29 @@
    (doseq [[k v] kv]
      (.set goog.net.cookies (name k) v))))
 
+(reg-cofx
+ :cookie
+ (fn [coeffects key]
+   (assoc-in coeffects
+             [:cookies key]
+             (.get goog.net.cookies (name key)))))
+
 (reg-event-fx
  :initialize
- (fn [_ _]
-   {:pushy-init true
-    :http-xhrio {:method          :get
-                 :uri             "/api/timezones"
-                 :timeout         8000
-                 :format          (transit-request-format {})
-                 :response-format (transit-response-format {})
-                 :on-success      [:success-timezones]
-                 :on-failure      [:failed-timezones]}}))
+ [(inject-cofx :cookie :auth-token)]
+ (fn [{:keys [cookies]} _]
+   (let [result {:pushy-init     true
+                 :http-xhrio     {:method          :get
+                                  :uri             "/api/timezones"
+                                  :timeout         8000
+                                  :format          (transit-request-format {})
+                                  :response-format (transit-response-format {})
+                                  :on-success      [:success-timezones]
+                                  :on-failure      [:failed-timezones]}
+                 :db             {:auth-token (:auth-token cookies)}}]
+     (if-let [token (:auth-token cookies)]
+       (assoc result :dispatch-later [{:dispatch [:fetch-pings] :ms 100} {:dispatch [:fetch-user-info] :ms 100}])
+       result))))
 
 (reg-event-db
  :success-timezones
