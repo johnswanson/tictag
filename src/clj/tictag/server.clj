@@ -3,7 +3,7 @@
             [clj-time.core :as t]
             [com.stuartsierra.component :as component]
             [org.httpkit.server :as http]
-            [compojure.core :refer [GET PUT POST context]]
+            [compojure.core :refer [GET PUT POST DELETE context]]
             [taoensso.timbre :as timbre]
             [ring.util.response :refer [response]]
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
@@ -200,12 +200,43 @@
   (-> user
       (select-keys [:username :email :tz :beeminder :slack])
       (update :beeminder #(select-keys % [:username :enabled? :token]))
-      (update :slack #(select-keys % [:username]))))
+      (update :slack #(select-keys % [:username]))
+      (update :beeminder #(if (seq %) % nil))
+      (update :slack #(if (seq %) % nil))))
 
 (defn my-user [{:keys [db]} {:keys [user-id]}]
   (if user-id
     (response (sanitize (db/get-user-by-id db user-id)))
     {:status 401 :headers {"Content-Type" "text/plain"} :body "unauthorized"}))
+
+(defn delete-beeminder [{:keys [db]} {:keys [user-id]}]
+  (if user-id
+    (do (db/delete-beeminder db user-id)
+        (response {}))
+    {:status 401 :body {:error "unauthorized"}}))
+
+(defn delete-slack [{:keys [db]} {:keys [user-id]}]
+  (if user-id
+    (do
+      (db/delete-slack db user-id)
+      (response {}))
+    {:status 401 :body {:error "unauthorized"}}))
+
+(defn add-beeminder [{:keys [db]} {:keys [params user-id]}]
+  (if-let [bm-user (beeminder/user-for (:token params))]
+    (try
+      (do
+        (db/write-beeminder
+         db
+         {:id user-id}
+         (:username bm-user)
+         (:token params)
+         false)
+        (response {:username (:username bm-user)
+                   :enabled? false
+                   :token    (:token params)}))
+      (catch Exception e {:status 401 :body "unauthorized"}))
+    {:status 401 :body "unauthorized"}))
 
 (defn routes [component]
   (compojure.core/routes
@@ -222,7 +253,10 @@
    (GET "/settings" _ (index component))
    (context "/api" []
             (GET "/timezones" _ (partial timezone-list component))
-            (GET "/user/me" _ (partial my-user component)))
+            (GET "/user/me" _ (partial my-user component))
+            (POST "/user/me/beeminder" _ (partial add-beeminder component))
+            (DELETE "/user/me/beeminder" _ (partial delete-beeminder component))
+            (DELETE "/user/me/slack" _ (partial delete-slack component)))
    (POST "/signup" _ (partial signup component))
    (GET "/healthcheck" _ (health-check component))))
 

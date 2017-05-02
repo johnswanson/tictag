@@ -87,7 +87,9 @@
 (reg-event-db
  :user-me-success
  (fn [db [_ user]]
-   (assoc db :authorized-user user)))
+   (-> db
+       (assoc :authorized-user user)
+       (assoc-in [:settings :temp] user))))
 
 (reg-event-db
  :user-me-failure
@@ -116,6 +118,54 @@
  :pushy-init
  (fn [_]
    (nav/start!)))
+
+(reg-event-db
+ :edit-beeminder-token
+ (fn [db [_ v]]
+   (assoc-in db [:settings :temp :beeminder :token] v)))
+
+(reg-event-fx
+ :save-beeminder-token
+ (fn [{:keys [db]} _]
+   {:http-xhrio (authenticated-xhrio
+                 {:method          :post
+                  :uri             "/api/user/me/beeminder"
+                  :params          (-> db
+                                       (get-in [:settings :temp :beeminder])
+                                       (select-keys [:token]))
+                  :format          (transit-request-format {})
+                  :response-format (transit-request-format {})
+                  :on-success      [:beeminder/token-succeed]
+                  :on-failure      [:beeminder/token-fail]}
+                 (:auth-token db))}))
+
+(reg-event-fx
+ :delete-slack
+ (fn [{:keys [db]} _]
+   {:http-xhrio (authenticated-xhrio
+                 {:method          :delete
+                  :uri             "/api/user/me/slack"
+                  :timeout         8000
+                  :format          (transit-request-format {})
+                  :response-format (transit-response-format {})
+                  :on-success      [:slack/delete-succeed]
+                  :on-failure      [:slack/delete-fail]}
+                 (:auth-token db))
+    :db (update db :authorized-user dissoc :slack)}))
+
+(reg-event-fx
+ :delete-beeminder
+ (fn [{:keys [db]} _]
+   {:http-xhrio (authenticated-xhrio
+                 {:method          :delete
+                  :uri             "/api/user/me/beeminder"
+                  :timeout         8000
+                  :format          (transit-request-format {})
+                  :response-format (transit-response-format {})
+                  :on-success      [:beeminder/delete-succeed]
+                  :on-failure      [:beeminder/delete-fail]}
+                 (:auth-token db))
+    :db (update db :authorized-user dissoc :beeminder)}))
 
 (reg-fx
  :set-cookie
@@ -163,6 +213,9 @@
 (def not-logged-in-but-at-auth-page
   {:pushy-replace-token! :login})
 
+(def logged-in-and-at-slack-callback
+  {:pushy-replace-token! :dashboard})
+
 (def logged-in-and-at-auth-page
   {:dispatch-n [[:fetch-pings] [:fetch-user-info]]})
 
@@ -173,6 +226,8 @@
    (merge-with
     merge
     {:db (assoc db :nav match)}
+    (when (and (= (:handler match) :slack-callback) (:auth-token db))
+      logged-in-and-at-slack-callback)
     (when (and (= (:handler match) :dashboard) (:auth-token db))
       logged-in-and-at-auth-page)
     (when (and (= (:handler match) :settings) (:auth-token db))

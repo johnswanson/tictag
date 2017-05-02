@@ -119,3 +119,11 @@
                              (-> @resp :opts :method)
                              (:status @resp)))))))))
 
+(defn user-for [token]
+  (let [resp (-> (http/request {:url         "https://www.beeminder.com/api/v1/users/me.json"
+                                :method      :get
+                                :query-params {:auth_token token}})
+                 (deref))]
+    (if (= (:status resp) 200)
+      (cheshire/parse-string (:body resp) true)
+      nil)))

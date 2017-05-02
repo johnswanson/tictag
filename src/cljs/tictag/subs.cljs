@@ -247,6 +247,11 @@
    (:authorized-user db)))
 
 (reg-sub
+ :temp-beeminder-token
+ (fn [db _]
+   (get-in db [:settings :temp :beeminder :token])))
+
+(reg-sub
  :active-panel
  (fn [db _]
    (some-> db :nav :handler)))

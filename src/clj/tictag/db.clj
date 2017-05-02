@@ -214,6 +214,16 @@
        channel-id
        slack-user-id)))))
 
+(defn delete-slack [db user-id]
+  (j/execute! (:db db) (-> (delete-from :slack)
+                           (where [:= :user-id user-id])
+                           sql/format)))
+
+(defn delete-beeminder [db user-id]
+  (j/execute! (:db db) (-> (delete-from :beeminder)
+                           (where [:= :user-id user-id])
+                           sql/format)))
+
 (defn beeminder-from-db
   [db {:as user :keys [beeminder_username
                        beeminder_encrypted_token
