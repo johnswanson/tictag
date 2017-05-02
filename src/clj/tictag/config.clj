@@ -7,8 +7,10 @@
             [buddy.core.hash :as hash]))
 
 (def config
-  {:tictag-server {:host (env :tictag-host "127.0.0.1")
-                   :port (or (some-> env :tictag-port Integer.) 8080)}
+  {:tictag-server {:host                (env :tictag-host "127.0.0.1")
+                   :port                (or (some-> env :tictag-port Integer.) 8080)
+                   :slack-client-id     (env :slack-client-id)
+                   :slack-client-secret (env :slack-client-secret)}
    :db            {:dbtype   "postgresql"
                    :dbname   (env :pg-database)
                    :host     (env :pg-host "127.0.0.1")

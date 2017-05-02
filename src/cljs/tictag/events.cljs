@@ -4,7 +4,8 @@
             [taoensso.timbre :as timbre]
             [ajax.core :refer [transit-response-format transit-request-format]]
             [tictag.nav :as nav]
-            [tictag.schemas :as schemas]))
+            [tictag.schemas :as schemas]
+            [goog.net.cookies]))
 
 (defn authenticated-xhrio [m token]
   (merge m {:headers {"Authorization" token}}))
@@ -46,11 +47,12 @@
 (reg-event-fx
  :login/successful
  (fn [{:keys [db]} [_ result]]
-   {:db (-> db
-            (assoc :auth-token (:token result))
-            (dissoc :signup))
+   {:db             (-> db
+                        (assoc :auth-token (:token result))
+                        (dissoc :signup))
     :pushy-navigate :dashboard
-    :dispatch [:fetch-pings]}))
+    :set-cookie     {:auth-token (:token result)}
+    :dispatch-n     [[:fetch-pings] [:fetch-user-info]]}))
 
 (reg-event-db
  :login/failed
@@ -73,17 +75,39 @@
                   :uri             "/pings"
                   :timeout         8000
                   :response-format (transit-response-format {})
-                  :on-success      [:good-http-result]
-                  :on-failure      [:bad-http-result]}
+                  :on-success      [:good-pings-result]
+                  :on-failure      [:bad-pings-result]}
+                 (:auth-token db))}))
+
+(reg-event-fx
+ :fetch-user-info
+ (fn [{:keys [db]} _]
+   {:http-xhrio (authenticated-xhrio
+                 {:method :get
+                  :uri "/api/user/me"
+                  :response-format (transit-response-format {})
+                  :on-success [:user-me-success]
+                  :on-failure [:user-me-failure]}
                  (:auth-token db))}))
 
 (reg-event-db
- :good-http-result
+ :user-me-success
+ (fn [db [_ user]]
+   (assoc db :authorized-user user)))
+
+(reg-event-db
+ :user-me-failure
+ (fn [{:keys [db]} _]
+   ;; TODO
+   db))
+
+(reg-event-db
+ :good-pings-result
  (fn [db [_ result]]
    (assoc db :pings result)))
 
 (reg-event-db
- :bad-http-result
+ :bad-pings-result
  (fn [db [_ result]]
    (timbre/errorf "BAD RESULT: %s" (pr-str (keys result)))))
 
@@ -98,6 +122,12 @@
  :pushy-init
  (fn [_]
    (nav/start!)))
+
+(reg-fx
+ :set-cookie
+ (fn [kv]
+   (doseq [[k v] kv]
+     (.set goog.net.cookies (name k) v))))
 
 (reg-event-fx
  :initialize

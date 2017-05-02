@@ -7,11 +7,28 @@
             [tictag.subs]
             [tictag.nav :refer [route-for]]
             [tictag.dates :refer [days-since-epoch seconds-since-midnight]]
+            [tictag.views.settings]
+            [tictag.views.common :refer [page]]
             [cljs-time.core :as t]
             [cljs-time.format :as f]
             [goog.string :as gstring]
             [goog.string.format])
   (:import [goog.date.Interval]))
+
+(defn input [type]
+  (fn [& {:keys [value change submit]}]
+    [:input
+     {:value       value
+      :type        type
+      :on-change   #(change (.. % -target -value))
+      :on-key-down #(condp = (.. % -which)
+                      ENTER (submit)
+                      nil)}]))
+
+(def username-input (input :text))
+(def email-input (input :text))
+(def password-input (input :password))
+(def tz-input (input :text))
 
 (defn datapoint [ping]
   (let [active? (subscribe [:ping-active? ping])
@@ -50,17 +67,30 @@
        [:td (gstring/format "%.1f%%" @tag-%)]
        [:td @time-per-day]])))
 
+(defn slack-auth-button [auth-user]
+  (when-not (:slack auth-user)
+    [:a {:href (str "https://slack.com/oauth/authorize?scope=bot,users:read&client_id=" js/slack_client_id)}
+
+     [:img {:alt      "Add to Slack"
+            :height   40
+            :width    "139"
+            :src      "https://platform.slack-edge.com/img/add_to_slack.png"
+            :src-set= "https://platform.slack.edge.com/img/add_to_slack.png 1x, https://platform.slack-edge.com/img/add_to_slack@2x.png"}]]))
+
 (defn logged-in-app
   []
   (let [auth-token            (subscribe [:auth-token])
+        auth-user             (subscribe [:authorized-user])
         meeting-query-per-day (subscribe [:meeting-query-per-day])
         tag-counts            (subscribe [:sorted-tag-counts])]
     (fn []
       (if-not @auth-token
         (dispatch [:redirect-to-page :login]) ;; this seems bad...
         [:div
-         [:input {:type      :text
-                  :on-change #(dispatch [:update-ping-query (.. % -target -value)])}]
+         [slack-auth-button @auth-user]
+         [:div
+          [:input {:type      :text
+                   :on-change #(dispatch [:update-ping-query (.. % -target -value)])}]]
          [matrix-plot]
          [:div @meeting-query-per-day " minutes per day"]
          [:table
@@ -71,21 +101,6 @@
              ^{:key (pr-str tag)}
              [tag-table-row tag])]]
          [:button {:on-click #(dispatch [:logout])} "Logout"]]))))
-
-(defn input [type]
-  (fn [& {:keys [value change submit]}]
-    [:input
-     {:value       value
-      :type        type
-      :on-change   #(change (.. % -target -value))
-      :on-key-down #(condp = (.. % -which)
-                      ENTER (submit)
-                      nil)}]))
-
-(def username-input (input :text))
-(def email-input (input :text))
-(def password-input (input :password))
-(def tz-input (input :text))
 
 (defn login-button [f]
   [:button {:on-click f} "Login"])
@@ -199,10 +214,11 @@
   []
   (let [active-panel (subscribe [:active-panel])]
     (fn []
-      (case @active-panel
-        :signup    [signup]
-        :login     [login]
-        :dashboard [logged-in-app]
-        ;; if :active-panel not set yet, just wait for pushy to initialize
-        [:div]))))
+      [page
+       (case @active-panel
+         :signup    [signup]
+         :login     [login]
+         :dashboard [logged-in-app]
+         ;; if :active-panel not set yet, just wait for pushy to initialize
+         [:div])])))
 

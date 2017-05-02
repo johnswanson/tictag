@@ -20,7 +20,7 @@
             [tictag.schemas :as schemas]))
 
 
-(def index
+(defn index [component]
   (html5
    [:html {:lang "en"}
     [:head
@@ -31,6 +31,7 @@
      [:link {:rel "stylesheet" :href "/css/app.css"}]]
     [:body
      [:div#app]
+     [:script {} (format "var slack_client_id='%s'" (-> component :config :slack-client-id))]
      [:script {:src "/js/compiled/app.js"}]
      [:script {:src "https://use.fontawesome.com/efa7507d6f.js"}]]]))
 
@@ -176,20 +177,61 @@
 (defn timezone-list [component _]
   (db/timezones (:db component)))
 
+(defn slack-callback [{:keys [config db] :as component} {:keys [params user-id]}]
+  (if user-id
+    (let [code              (:code params)
+          token-resp        (slack/oauth-access-token (:slack-client-id config)
+                                                      (:slack-client-secret config)
+                                                      code
+                                                      (:slack-redirect-uri config))
+          access-token      (token-resp :access-token)
+          bot-access-token  (-> token-resp :bot :bot-access-token)
+          slack-user-id     (:user-id token-resp)
+          {:keys [user]}    (slack/users-info access-token slack-user-id)
+          {:keys [channel]} (slack/im-open bot-access-token slack-user-id)]
+      (if (and user-id user bot-access-token channel (:id channel) slack-user-id)
+        (do
+          (db/write-slack db {:id user-id} (:name user) bot-access-token (:id channel) slack-user-id)
+          (index component))
+        {:status 401 :headers {"Content-Type" "text/plain"} :body "unauthorized"}))
+    {:status 401 :headers {"Content-Type" "text/plain"} :body "unauthorized"}))
+
+(defn sanitize [user]
+  (-> user
+      (select-keys [:username :email :tz :beeminder :slack])
+      (update :beeminder #(select-keys % [:username :enabled? :token]))
+      (update :slack #(select-keys % [:username]))))
+
+(defn my-user [{:keys [db]} {:keys [user-id]}]
+  (if user-id
+    (response (sanitize (db/get-user-by-id db user-id)))
+    {:status 401 :headers {"Content-Type" "text/plain"} :body "unauthorized"}))
+
 (defn routes [component]
   (compojure.core/routes
+   (GET "/slack-callback" _ (partial slack-callback component))
    (POST "/slack" _ (partial slack component))
    (PUT "/time/:timestamp" _ (partial timestamp component))
    (POST "/token" _ (partial token component))
    (GET "/pings" _ (partial pings component))
    (GET "/config" _ (partial config component))
-   (GET "/" _ index)
-   (GET "/signup" _ index)
+   (GET "/" _ (index component))
+   (GET "/signup" _ (index component))
+   (GET "/login" _ (index component))
+   (GET "/settings" _ (index component))
    (context "/api" []
-            (GET "/timezones" _ (partial timezone-list component)))
+            (GET "/timezones" _ (partial timezone-list component))
+            (GET "/user/me" _ (partial my-user component)))
    (POST "/signup" _ (partial signup component))
-   (GET "/login" _ index)
    (GET "/healthcheck" _ (health-check component))))
+
+(defn wrap-session-auth [handler jwt]
+  (fn [req]
+    (if (:user-id req)
+      (handler req)
+      (let [token (get-in req [:cookies "auth-token" :value])
+             user (jwt/unsign jwt token)]
+        (handler (assoc req :user-id (:user-id user)))))))
 
 (defn wrap-user [handler jwt]
   (fn [req]
@@ -203,9 +245,12 @@
     (timbre/debug "Starting server")
     (let [stop (http/run-server
                 (-> (routes component)
+                    (wrap-session-auth (:jwt component))
                     (wrap-user (:jwt component))
                     (wrap-restful-format :formats [:json-kw :edn :transit-json :transit-msgpack])
-                    (wrap-defaults (assoc-in api-defaults [:static :resources] "/public")))
+                    (wrap-defaults (-> api-defaults
+                                       (assoc-in [:static :resources] "/public")
+                                       (assoc :cookies true))))
                 config)]
       (timbre/debug "Server created")
       (assoc component :stop stop)))

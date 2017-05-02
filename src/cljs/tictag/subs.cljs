@@ -242,6 +242,11 @@
    (auth-token db)))
 
 (reg-sub
+ :authorized-user
+ (fn [db _]
+   (:authorized-user db)))
+
+(reg-sub
  :active-panel
  (fn [db _]
    (some-> db :nav :handler)))
