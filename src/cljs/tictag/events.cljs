@@ -59,11 +59,6 @@
    ; TODO add handling of failure here
    db))
 
-(reg-event-fx
- :logout
- (fn [{:keys [db]} _]
-   {:db (dissoc db :auth-token)
-    :pushy-navigate :login}))
 
 (reg-event-fx
  :fetch-pings
@@ -155,18 +150,31 @@
  (fn [db [_ timezones]]
    (assoc db :allowed-timezones timezones)))
 
+(def logging-out
+  {:pushy-replace-token! :login
+   :db {:auth-token nil}
+   :set-cookie {:auth-token nil}})
+
+(def not-logged-in-but-at-dashboard
+  {:pushy-replace-token! :login})
+
+(def logged-in-and-at-dashboard
+  {:dispatch-n [[:fetch-pings] [:fetch-user-info]]})
 
 (reg-event-fx
  :set-current-page
  (fn [{:keys [db]} [_ match]]
    (js/console.log db match)
-   (merge {:db (assoc db :nav match)}
-          (when (and (= (:handler match) :dashboard) (:auth-token db))
-            {:dispatch-n
-             [[:fetch-pings]
-              [:fetch-user-info]]})
-          (when (and (= (:handler match) :dashboard) (not (:auth-token db)))
-            {:pushy-replace-token! :login}))))
+   (merge-with
+    merge
+    {:db (assoc db :nav match)}
+    (when (and (= (:handler match) :dashboard) (:auth-token db))
+      logged-in-and-at-dashboard)
+    (when (and (= (:handler match) :dashboard) (not (:auth-token db)))
+      not-logged-in-but-at-dashboard)
+    (when (= (:handler match) :logout)
+      logging-out))))
+
 
 (reg-fx
  :pushy-replace-token!
