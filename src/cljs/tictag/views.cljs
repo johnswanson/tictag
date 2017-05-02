@@ -67,24 +67,12 @@
        [:td (gstring/format "%.1f%%" @tag-%)]
        [:td @time-per-day]])))
 
-(defn slack-auth-button [auth-user]
-  (when-not (:slack auth-user)
-    [:a {:href (str "https://slack.com/oauth/authorize?scope=bot,users:read&client_id=" js/slack_client_id)}
-
-     [:img {:alt      "Add to Slack"
-            :height   40
-            :width    "139"
-            :src      "https://platform.slack-edge.com/img/add_to_slack.png"
-            :src-set= "https://platform.slack.edge.com/img/add_to_slack.png 1x, https://platform.slack-edge.com/img/add_to_slack@2x.png"}]]))
-
 (defn logged-in-app
   []
-  (let [auth-user             (subscribe [:authorized-user])
-        meeting-query-per-day (subscribe [:meeting-query-per-day])
+  (let [meeting-query-per-day (subscribe [:meeting-query-per-day])
         tag-counts            (subscribe [:sorted-tag-counts])]
     (fn []
       [:div
-       [slack-auth-button @auth-user]
        [:div
         [:input {:type      :text
                  :on-change #(dispatch [:update-ping-query (.. % -target -value)])}]]
@@ -216,6 +204,7 @@
          :signup    [signup]
          :login     [login]
          :dashboard [logged-in-app]
+         :settings  [tictag.views.settings/settings]
          ;; if :active-panel not set yet, just wait for pushy to initialize
          [:div])])))
 

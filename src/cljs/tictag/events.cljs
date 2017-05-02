@@ -123,6 +123,11 @@
    (doseq [[k v] kv]
      (.set goog.net.cookies (name k) v))))
 
+(reg-fx
+ :delete-cookie
+ (fn [k]
+   (.remove goog.net.cookies (name k))))
+
 (reg-cofx
  :cookie
  (fn [coeffects key]
@@ -153,12 +158,12 @@
 (def logging-out
   {:pushy-replace-token! :login
    :db {:auth-token nil}
-   :set-cookie {:auth-token nil}})
+   :delete-cookie :auth-token})
 
-(def not-logged-in-but-at-dashboard
+(def not-logged-in-but-at-auth-page
   {:pushy-replace-token! :login})
 
-(def logged-in-and-at-dashboard
+(def logged-in-and-at-auth-page
   {:dispatch-n [[:fetch-pings] [:fetch-user-info]]})
 
 (reg-event-fx
@@ -169,9 +174,13 @@
     merge
     {:db (assoc db :nav match)}
     (when (and (= (:handler match) :dashboard) (:auth-token db))
-      logged-in-and-at-dashboard)
+      logged-in-and-at-auth-page)
+    (when (and (= (:handler match) :settings) (:auth-token db))
+      logged-in-and-at-auth-page)
     (when (and (= (:handler match) :dashboard) (not (:auth-token db)))
-      not-logged-in-but-at-dashboard)
+      not-logged-in-but-at-auth-page)
+    (when (and (= (:handler match) :settings) (not (:auth-token db)))
+      not-logged-in-but-at-auth-page)
     (when (= (:handler match) :logout)
       logging-out))))
 

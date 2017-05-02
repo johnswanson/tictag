@@ -218,6 +218,7 @@
    (GET "/" _ (index component))
    (GET "/signup" _ (index component))
    (GET "/login" _ (index component))
+   (GET "/logout" _ (index component))
    (GET "/settings" _ (index component))
    (context "/api" []
             (GET "/timezones" _ (partial timezone-list component))

@@ -1,5 +1,5 @@
 (ns tictag.views.common
-  (:require [re-frame.core :refer [dispatch]]
+  (:require [re-frame.core :refer [dispatch subscribe]]
             [tictag.nav :refer [route-for]]))
 
 (defn login-link [] [:a {:href (route-for :login)} "Login"])
@@ -7,10 +7,12 @@
 (defn logout-link [] [:a {:href (route-for :logout)} "Log Out"])
 
 (defn- links []
-  [:div {}
-   [login-link]
-   [signup-link]
-   [logout-link]])
+  (let [user (subscribe [:authorized-user])]
+    (fn links []
+      [:div {}
+       (when-not @user [login-link])
+       (when-not @user [signup-link])
+       (when @user [logout-link])])))
 
 (defn- nav []
   [:nav
