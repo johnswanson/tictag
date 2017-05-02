@@ -79,28 +79,25 @@
 
 (defn logged-in-app
   []
-  (let [auth-token            (subscribe [:auth-token])
-        auth-user             (subscribe [:authorized-user])
+  (let [auth-user             (subscribe [:authorized-user])
         meeting-query-per-day (subscribe [:meeting-query-per-day])
         tag-counts            (subscribe [:sorted-tag-counts])]
     (fn []
-      (if-not @auth-token
-        (dispatch [:redirect-to-page :login]) ;; this seems bad...
-        [:div
-         [slack-auth-button @auth-user]
-         [:div
-          [:input {:type      :text
-                   :on-change #(dispatch [:update-ping-query (.. % -target -value)])}]]
-         [matrix-plot]
-         [:div @meeting-query-per-day " minutes per day"]
-         [:table
-          {:style {:border "1px solid black"}}
-          [:tbody
-           [:tr [:th "Tag"] [:th "Count"] [:th "Percent of Pings"] [:th "Time Per Day"]]
-           (for [tag @tag-counts]
-             ^{:key (pr-str tag)}
-             [tag-table-row tag])]]
-         [:button {:on-click #(dispatch [:logout])} "Logout"]]))))
+      [:div
+       [slack-auth-button @auth-user]
+       [:div
+        [:input {:type      :text
+                 :on-change #(dispatch [:update-ping-query (.. % -target -value)])}]]
+       [matrix-plot]
+       [:div @meeting-query-per-day " minutes per day"]
+       [:table
+        {:style {:border "1px solid black"}}
+        [:tbody
+         [:tr [:th "Tag"] [:th "Count"] [:th "Percent of Pings"] [:th "Time Per Day"]]
+         (for [tag @tag-counts]
+           ^{:key (pr-str tag)}
+           [tag-table-row tag])]]
+       [:button {:on-click #(dispatch [:logout])} "Logout"]])))
 
 (defn login-button [f]
   [:button {:on-click f} "Login"])

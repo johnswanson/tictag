@@ -51,8 +51,7 @@
                         (assoc :auth-token (:token result))
                         (dissoc :signup))
     :pushy-navigate :dashboard
-    :set-cookie     {:auth-token (:token result)}
-    :dispatch-n     [[:fetch-pings] [:fetch-user-info]]}))
+    :set-cookie     {:auth-token (:token result)}}))
 
 (reg-event-db
  :login/failed
@@ -140,28 +139,34 @@
  :initialize
  [(inject-cofx :cookie :auth-token)]
  (fn [{:keys [cookies]} _]
-   (let [result {:pushy-init     true
-                 :http-xhrio     {:method          :get
-                                  :uri             "/api/timezones"
-                                  :timeout         8000
-                                  :format          (transit-request-format {})
-                                  :response-format (transit-response-format {})
-                                  :on-success      [:success-timezones]
-                                  :on-failure      [:failed-timezones]}
-                 :db             {:auth-token (:auth-token cookies)}}]
-     (if-let [token (:auth-token cookies)]
-       (assoc result :dispatch-later [{:dispatch [:fetch-pings] :ms 100} {:dispatch [:fetch-user-info] :ms 100}])
-       result))))
+   (merge {:pushy-init true
+           :http-xhrio {:method          :get
+                        :uri             "/api/timezones"
+                        :timeout         8000
+                        :format          (transit-request-format {})
+                        :response-format (transit-response-format {})
+                        :on-success      [:success-timezones]
+                        :on-failure      [:failed-timezones]}
+           :db {:auth-token (:auth-token cookies)}})))
+
 
 (reg-event-db
  :success-timezones
  (fn [db [_ timezones]]
    (assoc db :allowed-timezones timezones)))
 
-(reg-event-db
+
+(reg-event-fx
  :set-current-page
- (fn [db [_ match]]
-   (assoc db :nav match)))
+ (fn [{:keys [db]} [_ match]]
+   (js/console.log db match)
+   (merge {:db (assoc db :nav match)}
+          (when (and (= (:handler match) :dashboard) (:auth-token db))
+            {:dispatch-n
+             [[:fetch-pings]
+              [:fetch-user-info]]})
+          (when (and (= (:handler match) :dashboard) (not (:auth-token db)))
+            {:pushy-replace-token! :login}))))
 
 (reg-fx
  :pushy-replace-token!
