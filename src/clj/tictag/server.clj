@@ -25,9 +25,13 @@
    [:html {:lang "en"}
     [:head
      [:meta {:charset "utf-8"}]
-     [:link {:href "https://fonts.googleapis.com/css?family=Roboto:400,300,200"
+     [:link {:href "https://fonts.googleapis.com/css?family=Roboto:300,400,500,700,400italic"
              :rel "stylesheet"
              :type "text/css"}]
+     [:link {:href "https://fonts.googleapis.com/css?family=Roboto+Condensed:300,400"
+             :rel "stylesheet"
+             :type "text/css"}]
+     [:link {:rel "stylesheet" :href "//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap.css"}]
      [:link {:rel "stylesheet" :href "/css/app.css"}]]
     [:body
      [:div#app]

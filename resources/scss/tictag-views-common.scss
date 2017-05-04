@@ -1,0 +1,13 @@
+.ttvc-navbar {
+    background-color: #222;
+}
+div.ttvc-link > a {
+    font-size: 2em;
+}
+div.ttvc-link.active > a {
+    color: #777;
+}
+div.ttvc-link.inactive > a {
+    color: #fff;
+}
+

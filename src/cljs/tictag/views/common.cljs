@@ -1,27 +1,36 @@
 (ns tictag.views.common
   (:require [re-frame.core :refer [dispatch subscribe]]
-            [tictag.nav :refer [route-for]]))
+            [re-com.core :refer [h-box box v-box]]
+            [tictag.nav :refer [route-for]]
+            [goog.string :as str]))
 
-(defn login-link [] [:a {:href (route-for :login)} "Login"])
-(defn signup-link [] [:a {:href (route-for :signup)} "Signup"])
-(defn logout-link [] [:a {:href (route-for :logout)} "Log Out"])
+(defn link [route-name current-page]
+   [box
+    :class (if (= current-page route-name)
+             "ttvc-link inactive"
+             "ttvc-link active")
+    :child [:a {:href (route-for route-name)}
+            (str/capitalize (name route-name))]])
 
-(defn- links []
-  (let [user (subscribe [:authorized-user])]
-    (fn links []
-      [:div {}
-       (when-not @user [login-link])
-       (when-not @user [signup-link])
-       (when @user [logout-link])])))
+(defn nav-for-user [user current-page]
+  [h-box
+   :class "ttvc-navbar"
+   :height "6em"
+   :justify :around
+   :align :center
+   :children [(when-not user [link :login current-page])
+              (when-not user [link :signup current-page])
+              (when user [link :dashboard current-page])
+              (when user [link :settings current-page])
+              (when user [link :logout current-page])]])
 
-(defn- nav []
-  [:nav
-   [:span.logo "TagTime"]
-   [links]])
+(defn- nav [& {:keys [children]}]
+  (let [user         (subscribe [:authorized-user])
+        current-page (subscribe [:active-panel])]
+    [nav-for-user @user @current-page]))
 
-(defn page [& content]
-  [:div
-   {}
-   [nav]
-   content])
-
+(defn page
+  [& content]
+  [v-box
+   :children [[nav]
+              content]])
