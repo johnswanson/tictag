@@ -22,10 +22,18 @@
                                        :asset-path    "/js/compiled"
                                        :output-to     "resources/public/js/compiled/app.js"
                                        :optimizations :advanced}}]}
-  :plugins [[lein-cljsbuild "1.1.5"]]
+  :plugins [[lein-cljsbuild "1.1.5"]
+            [lein-shell "0.5.0"]]
   :test-paths ["test/clj"]
-  :profiles {:uberjar {:aot   :all
-                       :prep-tasks ["compile" ["cljsbuild" "once" "prod"]]
+  :profiles {:uberjar {:aot             :all
+                       :prep-tasks      ["compile"
+                                         ["cljsbuild" "once" "prod"]
+                                         ["shell"
+                                          "sassc"
+                                          "-I" "resources/scss"
+                                          "-t" "compressed"
+                                          "resources/scss/app.scss"
+                                          "resources/public/css/app.css"]]
                        :closure-defines {:goog.DEBUG false}}
              :dev     [:dev-secrets {:source-paths ["dev" "test/clj"]
                                      :dependencies [[org.clojure/tools.namespace "0.2.11"]

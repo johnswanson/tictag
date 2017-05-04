@@ -16,6 +16,13 @@ jobs:
             - /root/.m2
             - /root/.lein
           key: << checksum "project.clj" >>
+      - run: |
+          apt-get update && apt-get install --no-install-recommends -y g++ build-essential
+          cd /tmp
+          git clone --depth=1 https://github.com/sass/libsass.git
+          git clone --depth=1 https://github.com/sass/sassc.git
+          export SASS_LIBSASS_PATH=/tmp/libsass
+          cd /tmp/sassc; make install
       - run: lein do test, uberjar
       - store_artifacts:
           path: target/uberjar/tictag.jar
