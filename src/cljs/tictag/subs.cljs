@@ -261,3 +261,8 @@
  (fn [db [_ field]]
    (some-> db :signup :errors field)))
 
+(reg-sub
+ :allowed-timezones
+ (fn [db _]
+   (map :name (:allowed-timezones db))))
+

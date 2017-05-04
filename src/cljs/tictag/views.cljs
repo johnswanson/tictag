@@ -8,6 +8,7 @@
             [tictag.nav :refer [route-for]]
             [tictag.dates :refer [days-since-epoch seconds-since-midnight]]
             [tictag.views.settings]
+            [tictag.views.signup]
             [tictag.views.common :refer [page]]
             [cljs-time.core :as t]
             [cljs-time.format :as f]
@@ -90,44 +91,6 @@
 (defn login-button [f]
   [:button {:on-click f} "Login"])
 
-(defn signup-button [f]
-  [:button {:on-click f}
-   "Sign Up"])
-
-(defn signup-form [& {:keys [username password email timezone signup-fn ch-username ch-password ch-email ch-timezone username-errors password-errors email-errors tz-errors]}]
-  [:div
-   [:div
-    [:div
-     [:label "Username"
-      [username-input
-       :value username
-       :change ch-username
-       :submit signup-fn]]
-     (when username-errors [:span {} username-errors])]
-    [:div
-     [:label "Email Address"
-      [email-input
-       :value email
-       :change ch-email
-       :submit signup-fn]]
-     (when email-errors [:span {} email-errors])]
-    [:div
-     [:label "Password"
-      [password-input
-       :value password
-       :change ch-password
-       :submit signup-fn]]
-     (when password-errors [:span {} password-errors])]
-    [:div
-     [:label "Time Zone (e.g. \"America/Los_Angeles)"
-      [tz-input
-       :value timezone
-       :change ch-timezone
-       :submit signup-fn]]
-     (when tz-errors [:span {} tz-errors])]]
-   [signup-button signup-fn]
-   [:a {:href (route-for :login)} "Login"]])
-
 (defn login-form [& {:keys [username password login-fn ch-username ch-password]}]
   [:div
    [:div
@@ -161,47 +124,13 @@
        :ch-username ch-username
        :ch-password ch-password])))
 
-(defn signup []
-  (let [temp-username   (reagent/atom nil)
-        temp-password   (reagent/atom nil)
-        temp-email      (reagent/atom nil)
-        temp-timezone   (reagent/atom nil)
-        signup-fn       #(dispatch [:login/submit-signup {:username @temp-username
-                                                          :password @temp-password
-                                                          :email    @temp-email
-                                                          :tz       @temp-timezone}])
-        ch-password     #(reset! temp-password %)
-        ch-timezone     #(reset! temp-timezone %)
-        ch-email        #(reset! temp-email %)
-        ch-username     #(reset! temp-username %)
-        username-errors (subscribe [:login-errors :username])
-        password-errors (subscribe [:login-errors :password])
-        email-errors    (subscribe [:login-errors :email])
-        tz-errors       (subscribe [:login-errors :tz])]
-    (fn []
-      [signup-form
-       :username @temp-username
-       :username-errors @username-errors
-       :password @temp-password
-       :password-errors @password-errors
-       :timezone @temp-timezone
-       :tz-errors @tz-errors
-       :email @temp-email
-       :email-errors @email-errors
-       :timezone @temp-timezone
-       :signup-fn signup-fn
-       :ch-username ch-username
-       :ch-email ch-email
-       :ch-password ch-password
-       :ch-timezone ch-timezone])))
-
 (defn app
   []
   (let [active-panel (subscribe [:active-panel])]
     (fn []
       [page
        (case @active-panel
-         :signup    [signup]
+         :signup    [tictag.views.signup/signup]
          :login     [login]
          :dashboard [logged-in-app]
          :settings  [tictag.views.settings/settings]

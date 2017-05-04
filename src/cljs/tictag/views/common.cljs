@@ -15,10 +15,11 @@
 (defn nav-for-user [user current-page]
   [h-box
    :class "ttvc-navbar"
-   :height "6em"
+   :height "3em"
    :justify :around
    :align :center
-   :children [(when-not user [link :login current-page])
+   :children [[box :child [:span "TTC"]]
+              (when-not user [link :login current-page])
               (when-not user [link :signup current-page])
               (when user [link :dashboard current-page])
               (when user [link :settings current-page])
