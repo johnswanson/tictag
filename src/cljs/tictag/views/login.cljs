@@ -5,30 +5,36 @@
             [tictag.views.inputs :refer [input input-password]]))
 
 (defn login []
-  (let [username          (reagent/atom "")
-        username-errors   (subscribe [:login-errors :username])
-        password          (reagent/atom "")
-        password-errors   (subscribe [:login-errors :password])]
+  (let [username        (reagent/atom "")
+        username-errors (subscribe [:login-errors :username])
+        password        (reagent/atom "")
+        password-errors (subscribe [:login-errors :password])
+        submit          #(dispatch [:login/submit-login
+                                    {:username @username
+                                     :password @password}])]
     (fn []
-      [re-com/v-box
-       :width "400px"
-       :justify :center
-       :children [[:label "Username"
-                   [input username username-errors "Username"]]
-                  [:label "Password"
-                   [input-password password password-errors]]
-                  [re-com/gap :size "10px"]
-                  [re-com/button
-                   :on-click #(dispatch [:login/submit-login
-                                         {:username @username
-                                          :password @password}])
-                   :style {:width "100%"
-                           :font-size "22px"
-                           :font-weight "300"
-                           :border "1px solid black"
-                           :border-radius "0px"
-                           :padding "20px 26px"}
-                   :label "Log In!"]]])))
+      [re-com/box
+       :child
+       [:form {:on-submit #(do (submit) (.preventDefault %))}
+        [re-com/v-box
+         :width "400px"
+         :justify :center
+         :children [[:label "Username"
+                     [input username username-errors "Username"]]
+                    [:label "Password"
+                     [input-password password password-errors]]
+                    [re-com/gap :size "10px"]
+                    [:input {:type  :submit
+                             :style {:display :none}}]
+                    [re-com/button
+                     :on-click submit
+                     :style {:width         "100%"
+                             :font-size     "22px"
+                             :font-weight   "300"
+                             :border        "1px solid black"
+                             :border-radius "0px"
+                             :padding       "20px 26px"}
+                     :label "Log In!"]]]]])))
 
 
 

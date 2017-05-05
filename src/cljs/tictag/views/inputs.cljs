@@ -8,6 +8,7 @@
    :placeholder label
    :model temp
    :on-change #(reset! temp %)
+   :change-on-blur? false
    :status (when @errs :error)])
 
 (defn input-password [temp errs]
@@ -17,6 +18,7 @@
    :placeholder "Password"
    :model temp
    :on-change #(reset! temp %)
+   :change-on-blur? false
    :status (when @errs :error)])
 
 (defn input-timezone [temp allowed-timezones]
