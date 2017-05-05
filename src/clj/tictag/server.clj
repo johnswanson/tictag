@@ -202,15 +202,17 @@
 
 (defn sanitize [user]
   (-> user
-      (select-keys [:username :email :tz :beeminder :slack])
-      (update :beeminder #(select-keys % [:username :enabled? :token]))
-      (update :slack #(select-keys % [:username]))
+      (select-keys [:username :email :tz :beeminder :slack :id])
+      (update :beeminder #(select-keys % [:username :enabled? :token :goals :id]))
+      (update :slack #(select-keys % [:username :id]))
       (update :beeminder #(if (seq %) % nil))
       (update :slack #(if (seq %) % nil))))
 
 (defn my-user [{:keys [db]} {:keys [user-id]}]
   (if user-id
-    (response (sanitize (db/get-user-by-id db user-id)))
+    (let [user (db/get-user-by-id db user-id)
+          goals (db/get-goals db (:beeminder user))]
+      (response (sanitize (assoc-in user [:beeminder :goals] goals))))
     {:status 401 :headers {"Content-Type" "text/plain"} :body "unauthorized"}))
 
 (defn delete-beeminder [{:keys [db]} {:keys [user-id]}]

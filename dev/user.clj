@@ -19,7 +19,12 @@
             [honeysql-postgres.helpers :refer :all]
             [clojure.java.jdbc :as j]
             [tictag.crypto :as crypto]
-            [environ.core :refer [env]]))
+            [environ.core :refer [env]]
+            [figwheel-sidecar.repl-api]))
+
+(defn cljs-lein-repl []
+  (do (figwheel-sidecar.repl-api/start-figwheel!)
+      (figwheel-sidecar.repl-api/cljs-repl)))
 
 (defn migrate! [] (migrate ragtime/config))
 (defn rollback! [] (rollback ragtime/config))

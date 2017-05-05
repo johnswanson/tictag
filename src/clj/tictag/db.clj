@@ -307,7 +307,7 @@
    #(clojure.core/update % :tags edn/read-string)
    (j/query
     (:db db)
-    (-> (select :goal :tags)
+    (-> (select :goal :tags :id)
         (from :beeminder_goals)
         (where [:= (:id beeminder-user) :beeminder_id])
         sql/format))))

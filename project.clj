@@ -52,6 +52,7 @@
                  [org.clojure/tools.cli "0.3.5"]
                  [org.clojure/java.jdbc "0.7.0-alpha1"]
                  [org.clojars.jds02006/tictagapi "0.1.0-SNAPSHOT"]
+                 [instaparse "1.4.5"]
                  [org.clojure/data.codec "0.1.0"]
                  [juxt/dirwatch "0.2.3"]
                  [oauth-clj "0.1.15"]

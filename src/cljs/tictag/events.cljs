@@ -207,7 +207,7 @@
 
 (def logging-out
   {:pushy-replace-token! :login
-   :db {:auth-token nil}
+   :db {:auth-token nil :authorized-user nil}
    :delete-cookie :auth-token})
 
 (def not-logged-in-but-at-auth-page

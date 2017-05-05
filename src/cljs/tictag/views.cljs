@@ -9,27 +9,13 @@
             [tictag.dates :refer [days-since-epoch seconds-since-midnight]]
             [tictag.views.settings]
             [tictag.views.signup]
+            [tictag.views.login]
             [tictag.views.common :refer [page]]
             [cljs-time.core :as t]
             [cljs-time.format :as f]
             [goog.string :as gstring]
             [goog.string.format])
   (:import [goog.date.Interval]))
-
-(defn input [type]
-  (fn [& {:keys [value change submit]}]
-    [:input
-     {:value       value
-      :type        type
-      :on-change   #(change (.. % -target -value))
-      :on-key-down #(condp = (.. % -which)
-                      ENTER (submit)
-                      nil)}]))
-
-(def username-input (input :text))
-(def email-input (input :text))
-(def password-input (input :password))
-(def tz-input (input :text))
 
 (defn datapoint [ping]
   (let [active? (subscribe [:ping-active? ping])
@@ -88,41 +74,7 @@
            [tag-table-row tag])]]
        [:button {:on-click #(dispatch [:logout])} "Logout"]])))
 
-(defn login-button [f]
-  [:button {:on-click f} "Login"])
 
-(defn login-form [& {:keys [username password login-fn ch-username ch-password]}]
-  [:div
-   [:div
-    [:div
-     [:label "Username"
-      [username-input
-       :value username
-       :change ch-username
-       :submit login-fn]]]
-    [:div
-     [:label "Password"
-      [password-input
-       :value password
-       :change ch-password
-       :submit login-fn]]]]
-   [login-button login-fn]
-   [:a {:href (route-for :signup)} "Signup"]])
-
-(defn login []
-  (let [temp-username (reagent/atom nil)
-        temp-password (reagent/atom nil)
-        login-fn      #(dispatch [:login/submit-login {:username @temp-username
-                                                       :password @temp-password}])
-        ch-password   #(reset! temp-password %)
-        ch-username   #(reset! temp-username %)]
-    (fn []
-      [login-form
-       :username @temp-username
-       :password @temp-password
-       :login-fn login-fn
-       :ch-username ch-username
-       :ch-password ch-password])))
 
 (defn app
   []
@@ -131,7 +83,7 @@
       [page
        (case @active-panel
          :signup    [tictag.views.signup/signup]
-         :login     [login]
+         :login     [tictag.views.login/login]
          :dashboard [logged-in-app]
          :settings  [tictag.views.settings/settings]
          ;; if :active-panel not set yet, just wait for pushy to initialize

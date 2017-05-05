@@ -1,6 +1,6 @@
 (ns tictag.views.common
   (:require [re-frame.core :refer [dispatch subscribe]]
-            [re-com.core :refer [h-box box v-box]]
+            [re-com.core :as re-com :refer [h-box box v-box hyperlink]]
             [tictag.nav :refer [route-for]]
             [goog.string :as str]))
 
@@ -9,8 +9,9 @@
     :class (if (= current-page route-name)
              "ttvc-link inactive"
              "ttvc-link active")
-    :child [:a {:href (route-for route-name)}
-            (str/capitalize (name route-name))]])
+    :child [re-com/hyperlink-href
+            :href (route-for route-name)
+            :label (str/capitalize (name route-name))]])
 
 (defn nav-for-user [user current-page]
   [h-box
@@ -30,8 +31,20 @@
         current-page (subscribe [:active-panel])]
     [nav-for-user @user @current-page]))
 
+(defn footer [] [h-box
+                 :justify :center
+                 :children [[box
+                             :child ""]]])
+
 (defn page
   [& content]
   [v-box
+   :class "page"
+   :gap "50px"
+   :height "100%"
+   :justify :between
    :children [[nav]
-              content]])
+              [h-box
+               :justify :center
+               :children [content]]
+              [footer]]])
