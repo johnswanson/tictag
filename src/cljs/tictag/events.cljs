@@ -254,3 +254,21 @@
  :redirect-to-page
  (fn [_ [_ page]]
    {:pushy-replace-token! page}))
+
+(reg-event-fx
+ :save-goal
+ (fn [{:keys [db]} [_ goal]]
+   (let [[errs? params](schemas/validate goal schemas/+goal-schema+)]
+     (js/console.log errs? params)
+     (if-not errs?
+       {:db         db
+        :http-xhrio (authenticated-xhrio {:method          (if (:id goal) :put :post)
+                                          :uri             (str "/api/user/me/goals/" (:id goal))
+                                          :params          goal
+                                          :timeout         8000
+                                          :format          (transit-request-format {})
+                                          :response-format (transit-response-format {})
+                                          :on-success      [:good-goal-update-result]
+                                          :on-failure      [:bad-goal-update-result]}
+                                         (:auth-token db))}
+       {}))))

@@ -4,7 +4,8 @@
             [reagent.core :as reagent]
             [tictag.constants :refer [ENTER]]
             [tictag.beeminder :as beeminder]
-            [goog.string :as str]))
+            [goog.string :as str]
+            [cljs.reader :as edn]))
 
 
 (defn slack-authorize []
@@ -33,52 +34,80 @@
   (let [goals (get-in user [:beeminder :goals])]
     [:pre (pr-str goals)]))
 
+(defn rule-box [& {:keys [model on-change]}]
+  [:label "Goal rules"
+   [re-com/input-text
+    :model model
+    :placeholder "[:or :work [:and :coding :concentrating]]"
+    :on-change #(reset! model %)
+    :change-on-blur? false]])
+
+(defn goal-box [& {:keys [model on-change]}]
+  [:label "Goal Name (as it appears in URL)"
+   [re-com/input-text
+    :model model
+    :placeholder "workhard"
+    :change-on-blur? false
+    :on-change #(reset! model %)]])
+
+(defn test-box [& {:keys [model on-change status]}]
+  [:label "Example ping response (optional)"
+   [re-com/input-text
+    :model model
+    :placeholder "work coding"
+    :on-change #(reset! model %)
+    :status (status)
+    :change-on-blur? false]])
+
+(defn save-button [original-goal new-goal save]
+  (if (= original-goal new-goal)
+    [:div]
+    [re-com/md-circle-icon-button
+     :md-icon-name "zmdi-refresh-sync"
+     :on-click #(save new-goal)
+     :size :larger
+     :emphasise? true]))
+
 (defn beeminder-goal-editor [& {:keys [goal tags id save]}]
   (let [goal! (reagent/atom goal)
         tags! (reagent/atom (pr-str tags))
         test! (reagent/atom "")]
     (fn [& {:keys [goal tags id save]}]
-      (let [parsed (beeminder/str->parsed @tags!)
-            matched? (match? parsed @test!)]
-        [re-com/h-box
-         :align :center
-         :children [[re-com/v-box
-                     :children [[:pre {:style {:border-color (if matched?
-                                                               "green" "black")}}
-                                 (pr-str parsed)]
-                                [re-com/h-box
-                                 :children [[:label "Goal Name (as it appears in URL)"
-                                             [re-com/input-text
-                                              :model goal!
-                                              :placeholder "workhard"
-                                              :on-change #(reset! goal! %)]]
-                                            [:label "Goal rules"
-                                             [re-com/input-text
-                                              :model tags!
-                                              :placeholder "work or (coding and concentrating)"
-                                              :on-change #(reset! tags! %)
-                                              :change-on-blur? false]]
-                                            [:label "Example ping response (optional)"
-                                             [re-com/input-text
-                                              :model test!
-                                              :placeholder "work coding"
-                                              :on-change #(reset! test! %)
-                                              :status (cond
-                                                        (not (seq @tags!)) nil
-                                                        matched? :success
-                                                        :default :error)
-                                              :change-on-blur? false]]]]]]
-                    [re-com/md-circle-icon-button
-                     :md-icon-name "zmdi-refresh-sync-alert"
-                     :on-click #(save @goal! @tags!)
-                     :size :larger
-                     :emphasise? true]]]))))
+      [re-com/v-box
+       :align :center
+       :style {:border  "1px solid black"
+               :padding "8px"}
+       :children [[save-button
+                   {:goal goal :tags tags :id id}
+                   {:goal @goal! :tags (try (edn/read-string @tags!) (catch js/Error _ nil)) :id id}
+                   save]
+                  [re-com/h-box
+                   :gap "10px"
+                   :children [[goal-box
+                               :model goal!
+                               :on-change #(reset! goal! %)]
+                              [rule-box
+                               :model tags!
+                               :on-change #(reset! tags! %)]
+                              [test-box
+                               :model test!
+                               :on-change #(reset! test! %)
+                               :status (fn []
+                                         (let [parsed-tags (try (edn/read-string @tags!) (catch js/Error _ nil))]
+                                           (cond
+                                             (not (seq @test!))                                                                nil
+                                             (beeminder/match? parsed-tags (set (map keyword (str/splitLimit @test! " " 10)))) :success
+                                             :else                                                                             :error)))]]]]])))
 
 (defn beeminder [& {:keys [save delete user model]}]
   [:div
    (for [g (get-in user [:beeminder :goals])]
      ^{:key (:goal g)}
-     [beeminder-goal-editor :goal (:goal g) :tags (:tags g) :save #(js/console.log %)])
+     [beeminder-goal-editor
+      :goal (:goal g)
+      :tags (:tags g)
+      :id   (:id g)
+      :save #(dispatch [:save-goal %])])
    [:label "Beeminder Token"
     (if-let [current-token (get-in user [:beeminder :token])]
       [:div
