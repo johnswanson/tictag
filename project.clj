@@ -44,11 +44,11 @@
   :repl-options {:init-ns user :nrepl-middleware [cemerick.piggieback/wrap-cljs-repl]}
   :target-path "target/%s"
   :uberjar-name "tictag.jar"
-  :dependencies [[org.clojure/clojure "1.8.0"]
+  :dependencies [[org.clojure/clojure "1.9.0-alpha16"]
                  [org.clojure/clojurescript "1.9.456"]
                  [org.clojure/data.csv "0.1.3"]
                  [org.clojure/tools.nrepl "0.2.12"]
-                 [org.clojure/core.async "0.2.395"]
+                 [org.clojure/core.async "0.3.442"]
                  [org.clojure/tools.cli "0.3.5"]
                  [org.clojure/java.jdbc "0.7.0-alpha1"]
                  [org.clojars.jds02006/tictagapi "0.1.0-SNAPSHOT"]
@@ -72,7 +72,7 @@
                  [re-com "2.0.0"]
                  [day8.re-frame/async-flow-fx "0.0.6"]
                  [day8.re-frame/http-fx "0.1.3"]
-                 [org.postgresql/postgresql "9.4.1212"]
+                 [org.postgresql/postgresql "42.1.1"]
                  [org.xerial/sqlite-jdbc "3.16.1"]
                  [ragtime "0.6.3"]
                  [hiccup "1.0.5"]
