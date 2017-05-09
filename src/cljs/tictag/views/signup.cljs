@@ -37,11 +37,7 @@
                      [input-timezone timezone allowed-timezones]]
                     [re-com/gap :size "10px"]
                     [re-com/button
-                     :on-click #(dispatch [:login/submit-signup
-                                           {:username @username
-                                            :password @password
-                                            :email    @email
-                                            :tz       @timezone}])
+                     :on-click submit
                      :style {:width         "100%"
                              :font-size     "22px"
                              :font-weight   "300"
