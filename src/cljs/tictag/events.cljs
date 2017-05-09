@@ -7,11 +7,14 @@
             [tictag.schemas :as schemas]
             [goog.net.cookies]))
 
+(def interceptors [(when ^boolean goog.DEBUG re-frame.core/debug)])
+
 (defn authenticated-xhrio [m token]
   (merge m {:headers {"Authorization" token}}))
 
 (reg-event-fx
  :login/submit-login
+ [interceptors]
  (fn [{:keys [db]} [_ params]]
    ;; TODO edit DB to say we're pending login and add UI
    {:http-xhrio {:method          :post
@@ -29,6 +32,7 @@
 
 (reg-event-fx
  :login/submit-signup
+ [interceptors]
  (fn [{:keys [db]} [_ params]]
    (let [[errs? params] (schemas/validate params
                                           (schemas/+new-user-schema+
@@ -46,15 +50,18 @@
 
 (reg-event-fx
  :login/successful
+ [interceptors]
  (fn [{:keys [db]} [_ result]]
    {:db             (-> db
                         (assoc :auth-token (:token result))
                         (dissoc :signup))
+    :dispatch-n [[:fetch-pings] [:fetch-user-info]]
     :pushy-navigate :dashboard
     :set-cookie     {:auth-token (:token result)}}))
 
 (reg-event-db
  :login/failed
+ [interceptors]
  (fn [db [_ result]]
    ; TODO add handling of failure here
    db))
@@ -62,6 +69,7 @@
 
 (reg-event-fx
  :fetch-pings
+ [interceptors]
  (fn [{:keys [db]} _]
    {:db         (assoc db :fetching true)
     :http-xhrio (authenticated-xhrio
@@ -75,6 +83,7 @@
 
 (reg-event-fx
  :fetch-user-info
+ [interceptors]
  (fn [{:keys [db]} _]
    {:http-xhrio (authenticated-xhrio
                  {:method :get
@@ -86,6 +95,7 @@
 
 (reg-event-db
  :user-me-success
+ [interceptors]
  (fn [db [_ user]]
    (-> db
        (assoc :authorized-user user)
@@ -93,22 +103,26 @@
 
 (reg-event-db
  :user-me-failure
+ [interceptors]
  (fn [{:keys [db]} _]
    ;; TODO
    db))
 
 (reg-event-db
  :good-pings-result
+ [interceptors]
  (fn [db [_ result]]
    (assoc db :pings result)))
 
 (reg-event-db
  :bad-pings-result
+ [interceptors]
  (fn [db [_ result]]
    (timbre/errorf "BAD RESULT: %s" (pr-str (keys result)))))
 
 (reg-event-db
  :update-ping-query
+ [interceptors]
  (fn [db [_ v]]
    (if (seq v)
      (assoc db :ping-query v)
@@ -121,11 +135,13 @@
 
 (reg-event-db
  :edit-beeminder-token
+ [interceptors]
  (fn [db [_ v]]
    (assoc-in db [:settings :temp :beeminder :token] v)))
 
 (reg-event-fx
  :save-beeminder-token
+ [interceptors]
  (fn [{:keys [db]} _]
    {:http-xhrio (authenticated-xhrio
                  {:method          :post
@@ -141,6 +157,7 @@
 
 (reg-event-fx
  :delete-slack
+ [interceptors]
  (fn [{:keys [db]} _]
    {:http-xhrio (authenticated-xhrio
                  {:method          :delete
@@ -155,6 +172,7 @@
 
 (reg-event-fx
  :delete-beeminder
+ [interceptors]
  (fn [{:keys [db]} _]
    {:http-xhrio (authenticated-xhrio
                  {:method          :delete
@@ -187,7 +205,7 @@
 
 (reg-event-fx
  :initialize
- [(inject-cofx :cookie :auth-token)]
+ [(inject-cofx :cookie :auth-token) interceptors]
  (fn [{:keys [cookies]} _]
    (merge {:pushy-init true
            :http-xhrio {:method          :get
@@ -202,6 +220,7 @@
 
 (reg-event-db
  :success-timezones
+ [interceptors]
  (fn [db [_ timezones]]
    (assoc db :allowed-timezones timezones)))
 
@@ -216,22 +235,15 @@
 (def logged-in-and-at-slack-callback
   {:pushy-replace-token! :dashboard})
 
-(def logged-in-and-at-auth-page
-  {:dispatch-n [[:fetch-pings] [:fetch-user-info]]})
-
 (reg-event-fx
  :set-current-page
+ [interceptors]
  (fn [{:keys [db]} [_ match]]
-   (js/console.log db match)
    (merge-with
     merge
     {:db (assoc db :nav match)}
     (when (and (= (:handler match) :slack-callback) (:auth-token db))
       logged-in-and-at-slack-callback)
-    (when (and (= (:handler match) :dashboard) (:auth-token db))
-      logged-in-and-at-auth-page)
-    (when (and (= (:handler match) :settings) (:auth-token db))
-      logged-in-and-at-auth-page)
     (when (and (= (:handler match) :dashboard) (not (:auth-token db)))
       not-logged-in-but-at-auth-page)
     (when (and (= (:handler match) :settings) (not (:auth-token db)))
@@ -252,14 +264,15 @@
 
 (reg-event-fx
  :redirect-to-page
+ [interceptors]
  (fn [_ [_ page]]
    {:pushy-replace-token! page}))
 
 (reg-event-fx
  :save-goal
+ [interceptors]
  (fn [{:keys [db]} [_ goal]]
    (let [[errs? params](schemas/validate goal schemas/+goal-schema+)]
-     (js/console.log errs? params)
      (if-not errs?
        {:db         db
         :http-xhrio (authenticated-xhrio {:method          (if (:id goal) :put :post)
@@ -272,3 +285,9 @@
                                           :on-failure      [:bad-goal-update-result]}
                                          (:auth-token db))}
        {}))))
+
+(reg-event-db
+ :good-goal-update-result
+ [interceptors]
+ (fn [db [_ goal]]
+   db))
