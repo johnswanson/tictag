@@ -22,8 +22,9 @@
             [environ.core :refer [env]]
             [figwheel-sidecar.repl-api]))
 
-(defn cljs-lein-repl []
-  (do (figwheel-sidecar.repl-api/start-figwheel!)
+(defn cljs-repl []
+  (do (figwheel-sidecar.repl-api/stop-figwheel!)
+      (figwheel-sidecar.repl-api/start-figwheel!)
       (figwheel-sidecar.repl-api/cljs-repl)))
 
 (defn migrate! [] (migrate ragtime/config))
