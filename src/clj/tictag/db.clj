@@ -312,6 +312,37 @@
         (where [:= (:id beeminder-user) :beeminder_id])
         sql/format))))
 
+(defn add-goal [db user-id goal]
+  (j/execute!
+   (:db db)
+   (-> (insert-into [[:beeminder-goals [:goal :tags :beeminder-id]]
+                     (-> (select (:goal goal) (pr-str (:tags goal)) :id)
+                         (from :beeminder)
+                         (where [:= :beeminder.user-id user-id]))])
+       sql/format))
+  (j/query
+   (:db db)
+   (-> (select :id)
+       (from :beeminder-goals)
+       (where [:= :goal (:goal goal)]
+              [:= :tags (pr-str (:tags goal))]
+              [:= :beeminder-id (-> (select :beeminder.id)
+                                    (from :beeminder)
+                                    (where [:= :beeminder.user-id user-id]))])
+       sql/format)))
+
+(defn update-goal [db user-id goal]
+  (j/execute!
+   (:db db)
+   (-> (update :beeminder-goals)
+       (sset {:goal (:goal goal)
+              :tags (pr-str (:tags goal))})
+       (where [:= (:id goal) :id]
+              [:= :beeminder-id (-> (select :beeminder.id)
+                                    (from :beeminder)
+                                    (join :users [:= :users.id user-id]))])
+       sql/format)))
+
 (defn test-query! [db]
   (try (j/query (:db db) (sql/format (select 1)))
        (catch Exception e nil)))
