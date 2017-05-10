@@ -41,7 +41,8 @@
 
 (defn slack-user [db slack-message]
   (timbre/tracef "Validating slack message: %s" slack-message)
-  (db/get-user-from-slack-id db (get-in slack-message [:event :user])))
+  (when-let [uid (get-in slack-message [:event :user])]
+    (db/get-user-from-slack-id db uid)))
 
 (defn api-user [db {:keys [username password]}]
   (db/authenticated-user db username password))
