@@ -26,10 +26,11 @@
               (when user [link :settings current-page])
               (when user [link :logout current-page])]])
 
-(defn- nav [& {:keys [children]}]
+(defn- nav []
   (let [user         (subscribe [:authorized-user])
         current-page (subscribe [:active-panel])]
-    [nav-for-user @user @current-page]))
+    (fn []
+      [nav-for-user @user @current-page])))
 
 (defn footer [] [h-box
                  :justify :center

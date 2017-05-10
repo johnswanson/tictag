@@ -82,8 +82,8 @@
       (timbre/tracef "goals are %s, getting rows" goals)
       (let [rows (db/get-pings-by-user (:db db) user)]
         (timbre/tracef "Rows: %s" rows)
-        (doseq [{:keys [tags goal]} goals]
-          (timbre/debugf "Syncing goal: %s with tags %s" goal tags)
+        (doseq [{:keys [goal/name goal/tags]} goals]
+          (timbre/debugf "Syncing goal: %s with tags %s" name tags)
           (let [{:keys [username token]} (:beeminder user)
                 days                     (days-matching-tag tags rows)
                 existing-datapoints      (datapoints
@@ -91,7 +91,7 @@
                                            user
                                            [:beeminder :token])
                                           username
-                                          goal)
+                                          name)
                 existing-map             (group-by :daystamp existing-datapoints)
                 to-save                  (filter :value
                                                  (for [[daystamp value] days
@@ -111,8 +111,8 @@
                                           (flatten
                                            (remove nil?
                                                    (map rest (vals existing-map)))))
-                save-futures             (doall (map #(save-datapoint! token username goal %) to-save))
-                delete-futures           (doall (map #(delete-datapoint! token username goal %) to-delete))]
+                save-futures             (doall (map #(save-datapoint! token username name %) to-save))
+                delete-futures           (doall (map #(delete-datapoint! token username name %) to-delete))]
             (doseq [resp (concat save-futures delete-futures)]
               (timbre/debugf "result %s %s: %s"
                              (-> @resp :opts :url)

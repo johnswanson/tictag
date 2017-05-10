@@ -5,7 +5,8 @@
             [ajax.core :refer [transit-response-format transit-request-format]]
             [tictag.nav :as nav]
             [tictag.schemas :as schemas]
-            [goog.net.cookies]))
+            [goog.net.cookies]
+            [cljs.spec :as s]))
 
 (def interceptors [(when ^boolean goog.DEBUG re-frame.core/debug)])
 
@@ -55,7 +56,6 @@
    {:db             (-> db
                         (assoc :auth-token (:token result))
                         (dissoc :signup))
-    :dispatch-n [[:fetch-pings] [:fetch-user-info]]
     :pushy-navigate :dashboard
     :set-cookie     {:auth-token (:token result)}}))
 
@@ -93,18 +93,58 @@
                   :on-failure [:user-me-failure]}
                  (:auth-token db))}))
 
+(defn ref-to-goal [goal]
+  [:goal/by-id (:goal/id goal)])
+
+(defn ref-to-beeminder [beeminder]
+  [:beeminder/by-id (:id beeminder)])
+
+(defn ref-to-slack [slack]
+  [:slack/by-id (:id slack)])
+
+(defn ref-to-user [user]
+  [:user/by-id (:id user)])
+
+(defn normalize-beeminder [user beeminder]
+  (-> beeminder
+      (update :goals #(map ref-to-goal %))
+      (update :goals vec)
+      (assoc :user (ref-to-user user))))
+
+(defn normalize-slack [user slack]
+  (-> slack
+      (assoc :user (ref-to-user user))))
+
+(defn normalize-user [user]
+  (-> user
+      (update :beeminder ref-to-beeminder)
+      (update :slack ref-to-slack)))
+
+(defn normalize-goals [user beeminder goals]
+  (into {} (for [g goals]
+             [(:goal/id g) (-> g
+                               (assoc :user (ref-to-user user))
+                               (assoc :beeminder (ref-to-beeminder beeminder)))])))
+
+(defn normalize-user-to-db [user]
+  (let [slack     (:slack user)
+        beeminder (:beeminder user)]
+    {:slack/by-id           (when slack {(:id slack) (normalize-slack user slack)})
+     :beeminder/by-id       (when beeminder {(:id beeminder) (normalize-beeminder user beeminder)})
+     :user/by-id            (when user {(:id user) (normalize-user user)})
+     :goal/by-id            (normalize-goals user beeminder (get-in user [:beeminder :goals]))
+     :db/authenticated-user (ref-to-user user)}))
+
 (reg-event-db
  :user-me-success
  [interceptors]
  (fn [db [_ user]]
-   (-> db
-       (assoc :authorized-user user)
-       (assoc-in [:settings :temp] user))))
+   (merge db (normalize-user-to-db user))))
 
 (reg-event-db
  :user-me-failure
  [interceptors]
- (fn [{:keys [db]} _]
+ (fn [db _]
    ;; TODO
    db))
 
@@ -215,6 +255,7 @@
                         :response-format (transit-response-format {})
                         :on-success      [:success-timezones]
                         :on-failure      [:failed-timezones]}
+           :dispatch-n [[:fetch-user-info]]
            :db {:auth-token (:auth-token cookies)}})))
 
 
@@ -268,26 +309,80 @@
  (fn [_ [_ page]]
    {:pushy-replace-token! page}))
 
-(reg-event-fx
- :save-goal
+(reg-event-db
+ :goal/new
  [interceptors]
- (fn [{:keys [db]} [_ goal]]
-   (let [[errs? params](schemas/validate goal schemas/+goal-schema+)]
-     (if-not errs?
-       {:db         db
-        :http-xhrio (authenticated-xhrio {:method          (if (:id goal) :put :post)
-                                          :uri             (str "/api/user/me/goals/" (:id goal))
-                                          :params          goal
-                                          :timeout         8000
-                                          :format          (transit-request-format {})
-                                          :response-format (transit-response-format {})
-                                          :on-success      [:good-goal-update-result]
-                                          :on-failure      [:bad-goal-update-result]}
-                                         (:auth-token db))}
+ (fn [db _]
+   (let [user      (:db/authenticated-user db)
+         beeminder (:beeminder (get-in db user))]
+     (assoc-in db [:goal/by-id :temp] {:user user :beeminder beeminder :goal/id :temp}))))
+
+(reg-event-db
+ :goal/edit
+ [interceptors]
+ (fn [db [_ path new]]
+   (assoc-in db path new)))
+
+(reg-event-fx
+ :goal/delete
+ [interceptors]
+ (fn [{:keys [db]} [_ path]]
+   (let [goal           (get-in db path {})
+         beeminder-path (:beeminder goal)
+         beeminder      (get-in db beeminder-path {})
+         id             (:goal/id goal)]
+     (if (= :temp id)
+       {:db (assoc-in db path nil)}
+       {:http-xhrio (authenticated-xhrio
+                     {:uri             (str "/api/user/me/goals/" id)
+                      :method          :delete
+                      :timeout         8000
+                      :format          (transit-request-format {})
+                      :response-format (transit-response-format {})
+                      :on-success      [:good-goal-delete-result (:goal/id goal)]
+                      :on-failure      [:bad-goal-delete-result (:goal/id goal)]}
+                     (:auth-token db))
+        :db         (-> db
+                        (assoc-in path nil)
+                        (update-in (conj beeminder-path :goals)
+                                   (fn [goals]
+                                     (remove #(= path %) goals))))}))))
+
+(reg-event-fx
+ :goal/save
+ [interceptors]
+ (fn [{:keys [db]} [_ path]]
+   (let [goal (get-in db path {})
+         base (if (= :temp (:goal/id goal))
+                {:method :post
+                 :uri "/api/user/me/goals/"}
+                {:method :put
+                 :uri (str "/api/user/me/goals/" (:goal/id goal))})]
+     (if (s/valid? :tictag.schemas/goal goal)
+       {:http-xhrio (authenticated-xhrio
+                     (merge {:params          goal
+                             :timeout         8000
+                             :format          (transit-request-format {})
+                             :response-format (transit-response-format {})
+                             :on-success      [:good-goal-update-result (:goal/id goal)]
+                             :on-failure      [:bad-goal-update-result (:goal/id goal)]}
+                            base)
+                     (:auth-token db))}
        {}))))
 
 (reg-event-db
  :good-goal-update-result
  [interceptors]
- (fn [db [_ goal]]
-   db))
+ (fn [db [_ old-id to-merge]]
+   (js/console.log old-id to-merge)
+   (if (= old-id :temp)
+     (-> db
+         ;; three parts:
+         ;; - add the new goal (by id) to my beeminder goals
+         ;; - add the new goal to the {:goal-id goal} map
+         ;; - remove the old :temp goal
+         (update-in (conj (:beeminder to-merge) :goals)
+                    conj [:goal/by-id (:goal/id to-merge)])
+         (assoc-in [:goal/by-id :temp] nil)
+         (assoc-in [:goal/by-id (:goal/id to-merge)] to-merge))
+     (assoc-in db [:goal/by-id (:goal/id to-merge)] to-merge))))

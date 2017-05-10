@@ -202,7 +202,7 @@
 
 (defn sanitize [user]
   (-> user
-      (select-keys [:username :email :tz :beeminder :slack :id])
+      (select-keys [:username :email :tz :beeminder :slack :id :pings])
       (update :beeminder #(select-keys % [:username :enabled? :token :goals :id]))
       (update :slack #(select-keys % [:username :id]))
       (update :beeminder #(if (seq %) % nil))
@@ -210,9 +210,13 @@
 
 (defn my-user [{:keys [db]} {:keys [user-id]}]
   (if user-id
-    (let [user (db/get-user-by-id db user-id)
-          goals (db/get-goals db (:beeminder user))]
-      (response (sanitize (assoc-in user [:beeminder :goals] goals))))
+    (let [user  (db/get-user-by-id db user-id)
+          goals (db/get-goals-raw db (:beeminder user))
+          pings (unjoda (db/get-pings-by-user-id (:db db) user-id))]
+      (timbre/debugf "Goals: %s" (pr-str goals))
+      (response (sanitize (-> user
+                              (assoc-in [:beeminder :goals] goals)
+                              (assoc :pings pings)))))
     {:status 401 :headers {"Content-Type" "text/plain"} :body "unauthorized"}))
 
 (defn delete-beeminder [{:keys [db]} {:keys [user-id]}]
@@ -245,12 +249,20 @@
     {:status 401 :body "unauthorized"}))
 
 (defn add-goal [{:keys [db]} {:keys [params user-id]}]
-  (db/add-goal db user-id params))
+  (let [new-id (:id (db/add-goal db user-id params))]
+    (response (assoc params :goal/id new-id))))
 
 (defn update-goal [{:keys [db]} {:keys [params user-id]}]
   (when-let [int-id (try (Integer. (:id params))
                          (catch Exception _ nil))]
-    (db/update-goal db user-id (assoc params :id int-id))))
+    (db/update-goal db user-id (assoc params :goal/id int-id))
+    (response {})))
+
+(defn delete-goal [{:keys [db]} {:keys [params user-id]}]
+  (when-let [int-id (try (Integer. (:id params))
+                         (catch Exception _ nil))]
+    (db/delete-goal db user-id int-id)
+    (response {})))
 
 (defn routes [component]
   (compojure.core/routes
@@ -272,7 +284,8 @@
             (DELETE "/user/me/beeminder" _ (partial delete-beeminder component))
             (DELETE "/user/me/slack" _ (partial delete-slack component))
             (POST "/user/me/goals/" _ (partial add-goal component))
-            (PUT "/user/me/goals/:id" _ (partial update-goal component)))
+            (PUT "/user/me/goals/:id" _ (partial update-goal component))
+            (DELETE "/user/me/goals/:id" _ (partial delete-goal component)))
    (POST "/signup" _ (partial signup component))
    (GET "/healthcheck" _ (health-check component))))
 

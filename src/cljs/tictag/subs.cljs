@@ -17,10 +17,17 @@
        (tags (keyword ping-query)))
      (constantly false))))
 
+(defn unnormalize [db thing & [other]]
+  (if (not (vector? thing))
+    (js/console.error "unnormalize: " thing))
+  (if thing
+    (get-in db thing other)
+    other))
+
 (reg-sub
  :pings
  (fn [db _]
-   (:pings db [])))
+   (:pings (unnormalize db (:db/authenticated-user db)))))
 
 (reg-sub
  :ping-active?
@@ -244,7 +251,22 @@
 (reg-sub
  :authorized-user
  (fn [db _]
-   (:authorized-user db)))
+   (unnormalize db (:db/authenticated-user db))))
+
+(reg-sub
+ :beeminder
+ (fn [db [_ path]]
+   (unnormalize db path)))
+
+(reg-sub
+ :slack
+ (fn [db [_ path]]
+   (unnormalize db path)))
+
+(reg-sub
+ :goal/by-id
+ (fn [db path]
+   (when path (get-in db path))))
 
 (reg-sub
  :temp-beeminder-token
@@ -266,3 +288,8 @@
  (fn [db _]
    (map :name (:allowed-timezones db))))
 
+
+(reg-sub
+ :db
+ (fn [db _]
+   db))

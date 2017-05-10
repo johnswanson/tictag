@@ -302,9 +302,12 @@
     (when (check password (:pass user))
       user)))
 
-(defn get-goals [db beeminder-user]
+(defn get-goals-raw [db beeminder-user]
   (map
-   #(clojure.core/update % :tags edn/read-string)
+   (fn [{:keys [goal tags id]}]
+     {:goal/name goal
+      :goal/tags tags
+      :goal/id id})
    (j/query
     (:db db)
     (-> (select :goal :tags :id)
@@ -312,35 +315,65 @@
         (where [:= (:id beeminder-user) :beeminder_id])
         sql/format))))
 
+(defn get-goal-raw [db user-id goal]
+  (first
+   (j/query
+    (:db db)
+    (-> (select :id)
+        (from :beeminder-goals)
+        (where [:= :id (:goal/id goal)]
+               [:= :beeminder-id (-> (select :beeminder.id)
+                                     (from :beeminder)
+                                     (where [:= :beeminder.user-id user-id]))])
+        sql/format))))
+
+(defn get-goals [db beeminder-user]
+  (map
+   #(clojure.core/update % :goal/tags edn/read-string)
+   (get-goals-raw db beeminder-user)))
+
+(defn beeminder-id [user-id]
+  (-> (select :beeminder.id)
+      (from :beeminder)
+      (where [:= :beeminder.user-id user-id])))
+
 (defn add-goal [db user-id goal]
   (j/execute!
    (:db db)
    (-> (insert-into [[:beeminder-goals [:goal :tags :beeminder-id]]
-                     (-> (select (:goal goal) (pr-str (:tags goal)) :id)
-                         (from :beeminder)
-                         (where [:= :beeminder.user-id user-id]))])
+                     (select (beeminder-id user-id)
+                             (:goal/name goal)
+                             (:goal/tags goal)
+                             :beeminder.id)])
        sql/format))
-  (j/query
-   (:db db)
-   (-> (select :id)
-       (from :beeminder-goals)
-       (where [:= :goal (:goal goal)]
-              [:= :tags (pr-str (:tags goal))]
-              [:= :beeminder-id (-> (select :beeminder.id)
-                                    (from :beeminder)
-                                    (where [:= :beeminder.user-id user-id]))])
-       sql/format)))
+  (first
+   (j/query
+    (:db db)
+    (-> (select :id)
+        (from :beeminder-goals)
+        (where [:= :goal (:goal/name goal)]
+               [:= :tags (:goal/tags goal)]
+               [:= :beeminder-id (beeminder-id user-id)])
+        sql/format))))
+
 
 (defn update-goal [db user-id goal]
   (j/execute!
    (:db db)
    (-> (update :beeminder-goals)
-       (sset {:goal (:goal goal)
-              :tags (pr-str (:tags goal))})
-       (where [:= (:id goal) :id]
-              [:= :beeminder-id (-> (select :beeminder.id)
-                                    (from :beeminder)
-                                    (join :users [:= :users.id user-id]))])
+       (sset {:goal (:goal/name goal)
+              :tags (:goal/tags goal)})
+       (where [:= (:goal/id goal) :id]
+              [:= :beeminder-id (beeminder-id user-id)])
+       sql/format)))
+
+
+(defn delete-goal [db user-id goal-id]
+  (j/execute!
+   (:db db)
+   (-> (delete-from :beeminder-goals)
+       (where [:= :id goal-id]
+              [:= :beeminder-id (beeminder-id user-id)])
        sql/format)))
 
 (defn test-query! [db]

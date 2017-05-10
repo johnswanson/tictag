@@ -17,123 +17,60 @@
            :src     "https://platform.slack-edge.com/img/add_to_slack.png"
            :src-set "https://platform.slack-edge.com/img/add_to_slack.png 1x, https://platform.slack-edge.com/img/add_to_slack@2x.png 2x"}]]])
 
-(defn slack-auth-button [& {:keys [delete user]}]
+(defn slack-auth-button [path]
   [:label "Slack Authorization"
-   (if-let [slack (:slack user)]
-     [:div
-      [re-com/hyperlink
-       :on-click #(delete)
-       :tooltip "Click to delete"
-       :label [re-com/label :label (:username slack)]]]
-     [slack-authorize])])
+   (let [sub (subscribe [:slack path])]
+     (js/console.log "SUB: " @sub)
+     (if-let [slack @sub]
+       [:div
+        [re-com/hyperlink
+         :on-click #(dispatch [:slack/delete path])
+         :tooltip "Click to delete"
+         :label [re-com/label :label (:username slack)]]]
+       [slack-authorize]))])
 
-(defn match? [parsed text]
-  (beeminder/match? parsed (set (map keyword (str/splitLimit text " " 10)))))
+(defn beeminder-goal-editor [goal-path]
+  (let [goal (subscribe goal-path)]
+    [re-com/h-box
+     :children [[re-com/input-text
+                 :model (or (:goal/name @goal) "")
+                 :on-change #(dispatch [:goal/edit (conj goal-path :goal/name) %])]
+                [re-com/input-text
+                 :model (or (:goal/tags @goal) "")
+                 :on-change #(dispatch [:goal/edit (conj goal-path :goal/tags) %])]
+                [re-com/button
+                 :on-click #(dispatch [:goal/save goal-path])
+                 :label "Save"]
+                [re-com/button
+                 :on-click #(dispatch [:goal/delete goal-path])
+                 :label "Delete"]]]))
 
-(defn beeminder-goals-editor [user]
-  (let [goals (get-in user [:beeminder :goals])]
-    [:pre (pr-str goals)]))
+(defn beeminder-goals [goals]
+  (when goals
+    [re-com/v-box
+     :children (for [[_ id :as goal] goals]
+                 ^{:key id}
+                 [beeminder-goal-editor goal])]))
 
-(defn rule-box [& {:keys [model on-change]}]
-  [:label "Goal rules"
-   [re-com/input-text
-    :model model
-    :placeholder "[:or :work [:and :coding :concentrating]]"
-    :on-change #(reset! model %)
-    :change-on-blur? false]])
+(defn add-beeminder-goal-button []
+  (let [path [:goal/by-id :temp]
+        goal (subscribe path)]
+    (if @goal
+      [beeminder-goal-editor path]
+      [re-com/button
+       :on-click #(dispatch [:goal/new])
+       :label "Add Goal"])))
 
-(defn goal-box [& {:keys [model on-change]}]
-  [:label "Goal Name (as it appears in URL)"
-   [re-com/input-text
-    :model model
-    :placeholder "workhard"
-    :change-on-blur? false
-    :on-change #(reset! model %)]])
-
-(defn test-box [& {:keys [model on-change status]}]
-  [:label "Example ping response (optional)"
-   [re-com/input-text
-    :model model
-    :placeholder "work coding"
-    :on-change #(reset! model %)
-    :status (status)
-    :change-on-blur? false]])
-
-(defn save-button [original-goal new-goal save]
-  (if (= original-goal new-goal)
-    [:div]
-    [re-com/md-circle-icon-button
-     :md-icon-name "zmdi-refresh-sync"
-     :on-click #(save new-goal)
-     :size :larger
-     :emphasise? true]))
-
-(defn beeminder-goal-editor [& {:keys [goal tags id save]}]
-  (let [goal! (reagent/atom goal)
-        tags! (reagent/atom (pr-str tags))
-        test! (reagent/atom "")]
-    (fn [& {:keys [goal tags id save]}]
-      [re-com/v-box
-       :align :center
-       :style {:border  "1px solid black"
-               :padding "8px"}
-       :children [[save-button
-                   {:goal goal :tags tags :id id}
-                   {:goal @goal! :tags (try (edn/read-string @tags!) (catch js/Error _ nil)) :id id}
-                   save]
-                  [re-com/h-box
-                   :gap "10px"
-                   :children [[goal-box
-                               :model goal!
-                               :on-change #(reset! goal! %)]
-                              [rule-box
-                               :model tags!
-                               :on-change #(reset! tags! %)]
-                              [test-box
-                               :model test!
-                               :on-change #(reset! test! %)
-                               :status (fn []
-                                         (let [parsed-tags (try (edn/read-string @tags!) (catch js/Error _ nil))]
-                                           (cond
-                                             (not (seq @test!))                                                                nil
-                                             (beeminder/match? parsed-tags (set (map keyword (str/splitLimit @test! " " 10)))) :success
-                                             :else                                                                             :error)))]]]]])))
-
-(defn beeminder [& {:keys [save delete user model]}]
-  [:div
-   (for [g (get-in user [:beeminder :goals])]
-     ^{:key (:goal g)}
-     [beeminder-goal-editor
-      :goal (:goal g)
-      :tags (:tags g)
-      :id   (:id g)
-      :save #(dispatch [:save-goal %])])
-   [:label "Beeminder Token"
-    (if-let [current-token (get-in user [:beeminder :token])]
-      [:div
-       [re-com/hyperlink
-        :on-click #(delete)
-        :tooltip "Click to delete"
-        :label [re-com/label :label current-token]]]
-      [re-com/input-text
-       :placeholder "Beeminder Token"
-       :style {:border-radius "0px"}
-       :width "100%"
-       :model model
-       :on-change #(reset! model %)])]])
+(defn beeminder [path]
+  (let [beeminder-sub (subscribe [:beeminder path])]
+    [re-com/v-box
+     :children [[beeminder-goals (:goals @beeminder-sub)]
+                [add-beeminder-goal-button]]]))
 
 (defn settings []
-  (let [auth-user (subscribe [:authorized-user])
-        beeminder-model (reagent/atom "")]
-    (fn []
-      [re-com/v-box
-       :children [[beeminder
-                   :save #(dispatch [:save-beeminder-token] @beeminder-model)
-                   :delete #(dispatch [:delete-beeminder])
-                   :user @auth-user
-                   :model beeminder-model]
-                  [slack-auth-button
-                   :user @auth-user
-                   :delete #(dispatch [:delete-slack])]]])))
+  (let [auth-user (subscribe [:authorized-user])]
+    [re-com/v-box
+     :children [[beeminder (:beeminder @auth-user)]
+                [slack-auth-button (:slack @auth-user)]]]))
 
 
