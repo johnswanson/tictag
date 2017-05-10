@@ -57,7 +57,7 @@
    {:db             (-> db
                         (assoc :auth-token (:token result))
                         (dissoc :signup))
-    :dispatch-n [[:fetch-user-info]]
+    :dispatch       [:fetch-user-info]
     :pushy-navigate :dashboard
     :set-cookie     {:auth-token (:token result)}}))
 
@@ -67,21 +67,6 @@
  (fn [db [_ result]]
    ; TODO add handling of failure here
    db))
-
-
-(reg-event-fx
- :fetch-pings
- [interceptors]
- (fn [{:keys [db]} _]
-   {:db         (assoc db :fetching true)
-    :http-xhrio (authenticated-xhrio
-                 {:method          :get
-                  :uri             "/pings"
-                  :timeout         8000
-                  :response-format (transit-response-format {})
-                  :on-success      [:good-pings-result]
-                  :on-failure      [:bad-pings-result]}
-                 (:auth-token db))}))
 
 (reg-event-fx
  :fetch-user-info
@@ -107,10 +92,14 @@
 (defn ref-to-user [user]
   [:user/by-id (:id user)])
 
+(defn normalize-goal [user beeminder goal]
+  (-> goal
+      (assoc :beeminder (ref-to-beeminder beeminder))
+      (assoc :user (ref-to-user user))))
+
 (defn normalize-beeminder [user beeminder]
   (-> beeminder
-      (update :goals #(map ref-to-goal %))
-      (update :goals vec)
+      (dissoc :goals)
       (assoc :user (ref-to-user user))))
 
 (defn normalize-slack [user slack]
@@ -119,21 +108,33 @@
 
 (defn normalize-user [user]
   (-> user
-      (update :beeminder ref-to-beeminder)
-      (update :slack ref-to-slack)))
+      (dissoc :beeminder)
+      (dissoc :slack)
+      (dissoc :pings)))
 
 (defn normalize-goals [user beeminder goals]
   (into {} (for [g goals]
-             [(:goal/id g) (-> g
-                               (assoc :user (ref-to-user user))
-                               (assoc :beeminder (ref-to-beeminder beeminder)))])))
+             [(:goal/id g) (normalize-goal user beeminder g)])))
+
+(defn normalize-ping [user ping]
+  (assoc ping :user (ref-to-user user)))
+
+(defn normalize-pings [user pings]
+  (into {} (for [p pings]
+             [(:timestamp p) (normalize-ping user p)])))
 
 (defn normalize-user-to-db [user]
-  (let [slack     (:slack user)
-        beeminder (:beeminder user)]
+  (let [slack                (:slack user)
+        beeminder            (:beeminder user)
+        pings                (:pings user)
+        normalized-slack     (normalize-slack user slack)
+        normalized-beeminder (normalize-beeminder user beeminder)
+        normalized-goals     (normalize-goals user beeminder (:goals beeminder))
+        normalized-pings     (normalize-pings user pings)]
     {:slack/by-id           (when slack {(:id slack) (normalize-slack user slack)})
      :beeminder/by-id       (when beeminder {(:id beeminder) (normalize-beeminder user beeminder)})
      :user/by-id            (when user {(:id user) (normalize-user user)})
+     :pings/by-timestamp    normalized-pings
      :goal/by-id            (normalize-goals user beeminder (get-in user [:beeminder :goals]))
      :db/authenticated-user (ref-to-user user)}))
 
@@ -151,18 +152,6 @@
    db))
 
 (reg-event-db
- :good-pings-result
- [interceptors]
- (fn [db [_ result]]
-   (assoc db :pings result)))
-
-(reg-event-db
- :bad-pings-result
- [interceptors]
- (fn [db [_ result]]
-   (timbre/errorf "BAD RESULT: %s" (pr-str (keys result)))))
-
-(reg-event-db
  :update-ping-query
  [interceptors]
  (fn [db [_ v]]
@@ -178,7 +167,7 @@
 (reg-event-fx
  :beeminder-token/add
  [interceptors]
- (fn [{:keys [db]} [_ path val]]
+ (fn [{:keys [db]} [_ val]]
    {:http-xhrio (authenticated-xhrio
                  {:method          :post
                   :uri             "/api/user/me/beeminder"
@@ -188,28 +177,29 @@
                   :on-success      [:beeminder-token/add-succeed]
                   :on-failure      [:beeminder-token/add-fail]}
                  (:auth-token db))
-    :db (assoc-in db (conj path :token) val)}))
+    :db (update-in db
+                   [:beeminder/by-id :temp]
+                   assoc
+                   :token val
+                   :user (:db/authenticated-user db))}))
 
 (reg-event-db
  :beeminder-token/add-fail
  [interceptors]
  (fn [db [_ val]]
-   (-> db
-       (assoc-in (conj (:db/authenticated-user db) :beeminder) nil))))
+   (assoc-in db [:beeminder/by-id :temp] nil)))
 
 (reg-event-db
  :beeminder-token/add-succeed
  [interceptors]
  (fn [db [_ val]]
    (let [{:keys [id]} val]
-     (let [user (descend db [:db/authenticated-user])]
-       (-> db
-           (assoc-in [:beeminder/by-id id] val)
-           (assoc-in (conj (:db/authenticated-user db) :beeminder)
-                     [:beeminder/by-id id]))))))
+     (-> db
+         (update-in [:beeminder/by-id :temp] dissoc :user)
+         (assoc-in [:beeminder/by-id id] (assoc val :user (:db/authenticated-user db)))))))
 
 (reg-event-fx
- :delete-slack
+ :slack/delete
  [interceptors]
  (fn [{:keys [db]} _]
    {:http-xhrio (authenticated-xhrio
@@ -221,22 +211,28 @@
                   :on-success      [:slack/delete-succeed]
                   :on-failure      [:slack/delete-fail]}
                  (:auth-token db))
-    :db (update db :db/authenticated-user dissoc :slack)}))
+    :db (assoc db :slack/by-id nil)}))
+
+(defn goals [db]
+  (let [user (:db/authenticated-user db)]
+    (filter #(= (:user %) user) (vals (:goal/by-id db)))))
 
 (reg-event-fx
  :beeminder-token/delete
  [interceptors]
  (fn [{:keys [db]} [_ path]]
-   {:http-xhrio (authenticated-xhrio
-                 {:method          :delete
-                  :uri             "/api/user/me/beeminder"
-                  :timeout         8000
-                  :format          (transit-request-format {})
-                  :response-format (transit-response-format {})
-                  :on-success      [:beeminder-token/delete-succeed]
-                  :on-failure      [:beeminder-token/delete-fail path]}
-                 (:auth-token db))
-    :db (assoc-in db (conj (:db/authenticated-user db) :beeminder) nil)}))
+   (if-not (seq (goals db))
+     {:http-xhrio (authenticated-xhrio
+                   {:method          :delete
+                    :uri             "/api/user/me/beeminder"
+                    :timeout         8000
+                    :format          (transit-request-format {})
+                    :response-format (transit-response-format {})
+                    :on-success      [:beeminder-token/delete-succeed]
+                    :on-failure      [:beeminder-token/delete-fail path]}
+                   (:auth-token db))
+      :db (assoc db :beeminder/by-id nil)}
+     {})))
 
 (reg-event-db
  :beeminder-token/delete-fail
@@ -333,58 +329,75 @@
  [interceptors]
  (fn [db _]
    (let [user      (:db/authenticated-user db)
-         beeminder (:beeminder (get-in db user))]
-     (assoc-in db [:goal/by-id :temp] {:user user :beeminder beeminder :goal/id :temp}))))
+         beeminder [:beeminder/by-id
+                    (:id
+                     (first (filter #(= user (:user %))
+                                    (vals (:beeminder/by-id db)))))]]
+     (assoc-in db
+               [:goal/by-id :temp]
+               {:user user
+                :beeminder beeminder
+                :goal/id :temp}))))
 
 (reg-event-db
  :goal/edit
  [interceptors]
- (fn [db [_ path new]]
-   (assoc-in db path new)))
+ (fn [db [_ id k new]]
+   (assoc-in db [:goal/by-id id k] new)))
 
 (reg-event-fx
  :goal/delete
  [interceptors]
- (fn [{:keys [db]} [_ path]]
-   (let [goal           (get-in db path {})
-         beeminder-path (:beeminder goal)
-         beeminder      (get-in db beeminder-path {})
-         id             (:goal/id goal)]
-     (if (= :temp id)
-       {:db (assoc-in db path nil)}
-       {:http-xhrio (authenticated-xhrio
-                     {:uri             (str "/api/user/me/goals/" id)
-                      :method          :delete
-                      :timeout         8000
-                      :format          (transit-request-format {})
-                      :response-format (transit-response-format {})
-                      :on-success      [:good-goal-delete-result (:goal/id goal)]
-                      :on-failure      [:bad-goal-delete-result (:goal/id goal)]}
-                     (:auth-token db))
-        :db         (-> db
-                        (assoc-in path nil)
-                        (update-in (conj beeminder-path :goals)
-                                   (fn [goals]
-                                     (remove #(= path %) goals))))}))))
+ (fn [{:keys [db]} [_ id]]
+   (merge
+    {:db (let [{:keys [user beeminder]} (get-in db [:goal/by-id id])]
+           (-> db
+               (assoc-in [:goal/by-id id :_old-user] user)
+               (assoc-in [:goal/by-id id :_old-beeminder] beeminder)
+               (assoc-in [:goal/by-id id :user] nil)
+               (assoc-in [:goal/by-id id :beeminder] nil)))}
+    (when (not= :temp id)
+      {:http-xhrio (authenticated-xhrio
+                    {:uri             (str "/api/user/me/goals/" id)
+                     :method          :delete
+                     :timeout         8000
+                     :format          (transit-request-format {})
+                     :response-format (transit-response-format {})
+                     :on-success      [:goal/delete-succeed]
+                     :on-failure      [:goal/delete-fail id]}
+                    (:auth-token db))}))))
+
+(reg-event-db
+ :goal/delete-fail
+ [interceptors]
+ (fn [db [_ id result]]
+   (update-in db [:goal/by-id id]
+              (fn [{:keys [_old-user _old-beeminder] :as goal}]
+                (assoc goal :user _old-user :beeminder _old-beeminder)))))
 
 (reg-event-fx
  :goal/save
  [interceptors]
- (fn [{:keys [db]} [_ path]]
-   (let [goal (get-in db path {})
-         base (if (= :temp (:goal/id goal))
+ (fn [{:keys [db]} [_ id]]
+   (let [goal (get-in db [:goal/by-id id] {})
+         base (if (= :temp id)
                 {:method :post
                  :uri "/api/user/me/goals/"}
                 {:method :put
-                 :uri (str "/api/user/me/goals/" (:goal/id goal))})]
-     (if (s/valid? :tictag.schemas/goal goal)
+                 :uri (str "/api/user/me/goals/" id)})]
+     (js/console.log (s/explain :tictag.schemas/goal goal))
+     (if (and (s/valid? :tictag.schemas/goal goal)
+              (= (count (filter #(= (:goal/name goal)
+                                    (:goal/name %))
+                                (vals (:goal/by-id db))))
+                 1))
        {:http-xhrio (authenticated-xhrio
                      (merge {:params          goal
                              :timeout         8000
                              :format          (transit-request-format {})
                              :response-format (transit-response-format {})
-                             :on-success      [:good-goal-update-result (:goal/id goal)]
-                             :on-failure      [:bad-goal-update-result (:goal/id goal)]}
+                             :on-success      [:good-goal-update-result id]
+                             :on-failure      [:bad-goal-update-result id]}
                             base)
                      (:auth-token db))}
        {}))))

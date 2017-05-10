@@ -33,8 +33,12 @@
    :tags [st/required rule]
    :id   [st/integer]})
 
+(defn valid-edn? [s]
+  (try (read-string s)
+       (catch #?(:clj Exception :cljs js/Error) _ nil)))
+
 (s/def :goal/name string?)
-(s/def :goal/tags string?)
+(s/def :goal/tags (s/and string? valid-edn?))
 (s/def :goal/id (s/or :goal/id integer? :goal/id #{:temp}))
 (s/def ::goal (s/keys :req [:goal/name :goal/tags :goal/id]))
 
@@ -52,10 +56,12 @@
 
 (s/def :db/user (s/keys :opt [:user/beeminder :user/slack] :req [:user/username :user/timezone :user/email]))
 
-
 (s/def ::db
   (s/keys :req
-          [:db/user
-           :db/goals
-           :db/pings]))
+          [:user/by-id
+           :goal/by-id
+           :ping/by-timestamp
+           :beeminder-token/by-id
+           :slack/by-id
+           :db/authenticated-user]))
 

@@ -17,51 +17,50 @@
            :src     "https://platform.slack-edge.com/img/add_to_slack.png"
            :src-set "https://platform.slack-edge.com/img/add_to_slack.png 1x, https://platform.slack-edge.com/img/add_to_slack@2x.png 2x"}]]])
 
-(defn slack-auth-button [path]
-  [:label "Slack Authorization"
-   (let [sub (subscribe [:slack path])]
-     (js/console.log "SUB: " @sub)
-     (if-let [slack @sub]
-       [:div
-        [re-com/hyperlink
-         :on-click #(dispatch [:slack/delete path])
-         :tooltip "Click to delete"
-         :label [re-com/label :label (:username slack)]]]
-       [slack-authorize]))])
+(defn slack []
+  (let [slack (subscribe [:slack])]
+    (js/console.log @slack)
+    [re-com/v-box
+     :children [[re-com/title :level :level1 :label "Slack"]
+                (if (:username @slack)
+                  [re-com/button
+                   :label (str "Delete slack (authed as " (:username @slack) ")")
+                   :on-click #(dispatch [:slack/delete])]
+                  [slack-authorize])]]))
 
-(defn beeminder-goal-editor [goal-path]
-  (let [goal (subscribe goal-path)]
-    [re-com/h-box
-     :children [[re-com/input-text
-                 :model (or (:goal/name @goal) "")
-                 :on-change #(dispatch [:goal/edit (conj goal-path :goal/name) %])]
-                [re-com/input-text
-                 :model (or (:goal/tags @goal) "")
-                 :on-change #(dispatch [:goal/edit (conj goal-path :goal/tags) %])]
-                [re-com/button
-                 :on-click #(dispatch [:goal/save goal-path])
-                 :label "Save"]
-                [re-com/button
-                 :on-click #(dispatch [:goal/delete goal-path])
-                 :label "Delete"]]]))
+(defn beeminder-goal-editor [goal]
+  [re-com/h-box
+   :children [[re-com/input-text
+               :model (or (:goal/name goal) "")
+               :on-change #(dispatch [:goal/edit (:goal/id goal) :goal/name %])]
+              [re-com/input-text
+               :model (or (:goal/tags goal) "")
+               :on-change #(dispatch [:goal/edit (:goal/id goal) :goal/tags %])]
+              [re-com/button
+               :on-click #(dispatch [:goal/save (:goal/id goal)])
+               :label "Save"]
+              [re-com/button
+               :on-click #(dispatch [:goal/delete (:goal/id goal)])
+               :label "Delete"]]])
 
 (defn beeminder-goals [goals]
   (when goals
     [re-com/v-box
-     :children (for [[_ id :as goal] goals]
-                 ^{:key id}
+     :children (for [goal goals]
+                 ^{:key (:goal/id goal)}
                  [beeminder-goal-editor goal])]))
 
 (defn add-beeminder-goal-button []
   (let [path [:goal/by-id :temp]
         goal (subscribe path)]
+    (js/console.error "TEMP GOAL!!!!! " @goal)
     (if @goal
-      [beeminder-goal-editor path]
+      [beeminder-goal-editor @goal]
       [re-com/button
        :on-click #(dispatch [:goal/new])
        :label "Add Goal"])))
 
-(defn beeminder-token-input [path]
+(defn beeminder-token-input []
   (let [val (reagent/atom "")]
     [re-com/v-box
      :children [[re-com/label :label [:span
@@ -77,16 +76,17 @@
                              :placeholder "Beeminder Token"
                              :on-change #(reset! val %)]
                             [re-com/button
-                             :on-click #(dispatch [:beeminder-token/add path @val])
+                             :on-click #(dispatch [:beeminder-token/add @val])
                              :label "Save"]]]]]))
 
-(defn delete-beeminder-button [path]
+(defn delete-beeminder-button []
   [re-com/button
-   :on-click #(dispatch [:beeminder-token/delete path])
+   :on-click #(dispatch [:beeminder-token/delete])
    :label "Delete Beeminder"])
 
-(defn beeminder [path]
-  (let [beeminder-sub (subscribe [:beeminder path])]
+(defn beeminder []
+  (let [beeminder-sub (subscribe [:beeminder])
+        goals         (subscribe [:beeminder-goals])]
     [re-com/v-box
      :children [[re-com/title
                  :level :level1
@@ -95,15 +95,15 @@
                   [re-com/v-box
                    :children [[re-com/label
                                :label [:span "Beeminder user: " (:username @beeminder-sub)]]
-                              [beeminder-goals (:goals @beeminder-sub)]
+                              [beeminder-goals @goals]
                               [add-beeminder-goal-button]
-                              [delete-beeminder-button path]]]
-                  [beeminder-token-input path])]]))
+                              [delete-beeminder-button]]]
+                  [beeminder-token-input])]]))
 
 (defn settings []
   (let [auth-user (subscribe [:authorized-user])]
     [re-com/v-box
-     :children [[beeminder (:beeminder @auth-user)]
-                [slack-auth-button (:slack @auth-user)]]]))
+     :children [[beeminder]
+                [slack]]]))
 
 

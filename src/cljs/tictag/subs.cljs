@@ -28,7 +28,10 @@
 (reg-sub
  :pings
  (fn [db _]
-   (:pings (unnormalize db (:db/authenticated-user db)))))
+   (let [user (:db/authenticated-user db)]
+     (js/console.log user (:pings/by-timestamp db))
+     (filter #(= (:user %) user)
+             (vals (:pings/by-timestamp db))))))
 
 (reg-sub
  :ping-active?
@@ -241,43 +244,39 @@
                                     [(get tag-counts key1) key1])))
           tag-counts))))
 
-(defn auth-token [db]
-  (:auth-token db))
-
-(reg-sub
- :auth-token
- (fn [db _]
-   (auth-token db)))
-
 (reg-sub
  :authorized-user
  (fn [db _]
    (unnormalize db (:db/authenticated-user db))))
 
 (reg-sub
- :auth-user-beeminder
+ :beeminder
  (fn [db _]
-   (descend db [:db/authenticated-user :beeminder])))
+   (let [user (:db/authenticated-user db)]
+     (first
+      (filter #(= (:user %) user)
+              (vals (:beeminder/by-id db)))))))
 
 (reg-sub
- :beeminder
- (fn [db [_ path]]
-   (unnormalize db path)))
+ :beeminder-goals
+ (fn [db _]
+   (let [user (:db/authenticated-user db)]
+     (filter #(and (= (:user %) user)
+                   (not= (:goal/id %) :temp))
+             (vals (:goal/by-id db))))))
 
 (reg-sub
  :slack
- (fn [db [_ path]]
-   (unnormalize db path)))
+ (fn [db _]
+   (let [user (:db/authenticated-user db)]
+     (first
+      (filter #(= (:user %) user)
+              (vals (:slack/by-id db)))))))
 
 (reg-sub
  :goal/by-id
  (fn [db path]
    (when path (get-in db path))))
-
-(reg-sub
- :temp-beeminder-token
- (fn [db _]
-   (get-in db [:settings :temp :beeminder :token])))
 
 (reg-sub
  :active-panel
@@ -294,8 +293,3 @@
  (fn [db _]
    (map :name (:allowed-timezones db))))
 
-
-(reg-sub
- :db
- (fn [db _]
-   db))
