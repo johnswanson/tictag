@@ -61,11 +61,44 @@
        :on-click #(dispatch [:goal/new])
        :label "Add Goal"])))
 
+(defn beeminder-token-input [path]
+  (let [val (reagent/atom "")]
+    [re-com/v-box
+     :children [[re-com/label :label [:span
+                                      "Add your Beeminder token here! (get your token "
+                                      [re-com/hyperlink-href
+                                       :href "https://www.beeminder.com/api/v1/auth_token.json"
+                                       :label "here"
+                                       :target "_blank"]
+                                      ")"]]
+                [re-com/h-box
+                 :children [[re-com/input-text
+                             :model val
+                             :placeholder "Beeminder Token"
+                             :on-change #(reset! val %)]
+                            [re-com/button
+                             :on-click #(dispatch [:beeminder-token/add path @val])
+                             :label "Save"]]]]]))
+
+(defn delete-beeminder-button [path]
+  [re-com/button
+   :on-click #(dispatch [:beeminder-token/delete path])
+   :label "Delete Beeminder"])
+
 (defn beeminder [path]
   (let [beeminder-sub (subscribe [:beeminder path])]
     [re-com/v-box
-     :children [[beeminder-goals (:goals @beeminder-sub)]
-                [add-beeminder-goal-button]]]))
+     :children [[re-com/title
+                 :level :level1
+                 :label "Beeminder"]
+                (if (:token @beeminder-sub)
+                  [re-com/v-box
+                   :children [[re-com/label
+                               :label [:span "Beeminder user: " (:username @beeminder-sub)]]
+                              [beeminder-goals (:goals @beeminder-sub)]
+                              [add-beeminder-goal-button]
+                              [delete-beeminder-button path]]]
+                  [beeminder-token-input path])]]))
 
 (defn settings []
   (let [auth-user (subscribe [:authorized-user])]

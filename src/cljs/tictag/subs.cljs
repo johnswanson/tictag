@@ -2,7 +2,8 @@
   (:require [re-frame.core :refer [reg-sub subscribe]]
             [cljs-time.format :as f]
             [cljs-time.core :as t]
-            [tictag.dates :refer [seconds-since-midnight days-since-epoch]]))
+            [tictag.dates :refer [seconds-since-midnight days-since-epoch]]
+            [tictag.utils :refer [descend]]))
 
 (def formatter (f/formatters :basic-date-time))
 
@@ -252,6 +253,11 @@
  :authorized-user
  (fn [db _]
    (unnormalize db (:db/authenticated-user db))))
+
+(reg-sub
+ :auth-user-beeminder
+ (fn [db _]
+   (descend db [:db/authenticated-user :beeminder])))
 
 (reg-sub
  :beeminder

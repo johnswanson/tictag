@@ -5,6 +5,7 @@
             [ajax.core :refer [transit-response-format transit-request-format]]
             [tictag.nav :as nav]
             [tictag.schemas :as schemas]
+            [tictag.utils :refer [descend]]
             [goog.net.cookies]
             [cljs.spec :as s]))
 
@@ -56,6 +57,7 @@
    {:db             (-> db
                         (assoc :auth-token (:token result))
                         (dissoc :signup))
+    :dispatch-n [[:fetch-user-info]]
     :pushy-navigate :dashboard
     :set-cookie     {:auth-token (:token result)}}))
 
@@ -173,27 +175,38 @@
  (fn [_]
    (nav/start!)))
 
-(reg-event-db
- :edit-beeminder-token
- [interceptors]
- (fn [db [_ v]]
-   (assoc-in db [:settings :temp :beeminder :token] v)))
-
 (reg-event-fx
- :save-beeminder-token
+ :beeminder-token/add
  [interceptors]
- (fn [{:keys [db]} _]
+ (fn [{:keys [db]} [_ path val]]
    {:http-xhrio (authenticated-xhrio
                  {:method          :post
                   :uri             "/api/user/me/beeminder"
-                  :params          (-> db
-                                       (get-in [:settings :temp :beeminder])
-                                       (select-keys [:token]))
+                  :params          {:token val}
                   :format          (transit-request-format {})
-                  :response-format (transit-request-format {})
-                  :on-success      [:beeminder/token-succeed]
-                  :on-failure      [:beeminder/token-fail]}
-                 (:auth-token db))}))
+                  :response-format (transit-response-format {})
+                  :on-success      [:beeminder-token/add-succeed]
+                  :on-failure      [:beeminder-token/add-fail]}
+                 (:auth-token db))
+    :db (assoc-in db (conj path :token) val)}))
+
+(reg-event-db
+ :beeminder-token/add-fail
+ [interceptors]
+ (fn [db [_ val]]
+   (-> db
+       (assoc-in (conj (:db/authenticated-user db) :beeminder) nil))))
+
+(reg-event-db
+ :beeminder-token/add-succeed
+ [interceptors]
+ (fn [db [_ val]]
+   (let [{:keys [id]} val]
+     (let [user (descend db [:db/authenticated-user])]
+       (-> db
+           (assoc-in [:beeminder/by-id id] val)
+           (assoc-in (conj (:db/authenticated-user db) :beeminder)
+                     [:beeminder/by-id id]))))))
 
 (reg-event-fx
  :delete-slack
@@ -208,22 +221,28 @@
                   :on-success      [:slack/delete-succeed]
                   :on-failure      [:slack/delete-fail]}
                  (:auth-token db))
-    :db (update db :authorized-user dissoc :slack)}))
+    :db (update db :db/authenticated-user dissoc :slack)}))
 
 (reg-event-fx
- :delete-beeminder
+ :beeminder-token/delete
  [interceptors]
- (fn [{:keys [db]} _]
+ (fn [{:keys [db]} [_ path]]
    {:http-xhrio (authenticated-xhrio
                  {:method          :delete
                   :uri             "/api/user/me/beeminder"
                   :timeout         8000
                   :format          (transit-request-format {})
                   :response-format (transit-response-format {})
-                  :on-success      [:beeminder/delete-succeed]
-                  :on-failure      [:beeminder/delete-fail]}
+                  :on-success      [:beeminder-token/delete-succeed]
+                  :on-failure      [:beeminder-token/delete-fail path]}
                  (:auth-token db))
-    :db (update db :authorized-user dissoc :beeminder)}))
+    :db (assoc-in db (conj (:db/authenticated-user db) :beeminder) nil)}))
+
+(reg-event-db
+ :beeminder-token/delete-fail
+ [interceptors]
+ (fn [db [_ path val]]
+   (assoc-in db (conj (:db/authenticated-user db) :beeminder) path)))
 
 (reg-fx
  :set-cookie
@@ -267,7 +286,7 @@
 
 (def logging-out
   {:pushy-replace-token! :login
-   :db {:auth-token nil :authorized-user nil}
+   :db {:auth-token nil :db/authenticated-user nil}
    :delete-cookie :auth-token})
 
 (def not-logged-in-but-at-auth-page

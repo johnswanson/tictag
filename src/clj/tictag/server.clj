@@ -235,16 +235,13 @@
 (defn add-beeminder [{:keys [db]} {:keys [params user-id]}]
   (if-let [bm-user (beeminder/user-for (:token params))]
     (try
-      (do
-        (db/write-beeminder
-         db
-         {:id user-id}
-         (:username bm-user)
-         (:token params)
-         false)
-        (response {:username (:username bm-user)
-                   :enabled? false
-                   :token    (:token params)}))
+      (response
+       (db/write-beeminder
+        db
+        {:id user-id}
+        (:username bm-user)
+        (:token params)
+        false))
       (catch Exception e {:status 401 :body "unauthorized"}))
     {:status 401 :body "unauthorized"}))
 

@@ -20,6 +20,11 @@
             [hikari-cp.core :as hikari]
             [tictag.utils :as utils]))
 
+(defn beeminder-id [user-id]
+  (-> (select :beeminder.id)
+      (from :beeminder)
+      (where [:= :beeminder.user-id user-id])))
+
 (def ping-select (-> (select :ts
                              [(sql/call :+ :tz_offset :ts) :local_time]
                              :tags
@@ -185,7 +190,16 @@
   (let [{:keys [encrypted iv]} (crypto/encrypt token (:crypto-key db))]
     (j/execute!
      (:db db)
-     (sql/format (write-beeminder-sql (:crypto-key db) user username token enabled?)))))
+     (sql/format (write-beeminder-sql (:crypto-key db) user username token enabled?)))
+    (assoc
+     (first
+      (j/query
+       (:db db)
+       (sql/format
+        (select (beeminder-id (:id user))
+                :beeminder.id :beeminder.username))))
+     :token
+     token)))
 
 (defn slack-record [crypto-key user username token channel-id slack-user-id]
   (let [{:keys [encrypted iv]} (crypto/encrypt token crypto-key)]
@@ -331,11 +345,6 @@
   (map
    #(clojure.core/update % :goal/tags edn/read-string)
    (get-goals-raw db beeminder-user)))
-
-(defn beeminder-id [user-id]
-  (-> (select :beeminder.id)
-      (from :beeminder)
-      (where [:= :beeminder.user-id user-id])))
 
 (defn add-goal [db user-id goal]
   (j/execute!
