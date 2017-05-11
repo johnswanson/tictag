@@ -71,9 +71,10 @@
   (debugf "Sending slack message to %s" (pr-str (:username user)))
   (slack/send-message! user (apply format body-fmt)))
 
+(def wtf (f/formatter "yyyy-MM-dd HH:MM:SS"))
 (defn report-changed-ping [old-ping new-ping]
   (format "Changing Ping @ `%s`\nOld: `%s`\nNew: `%s`"
-          (:local-time new-ping)
+          (f/unparse wtf (:local-time new-ping))
           (:tags old-ping)
           (:tags new-ping)))
 
@@ -93,13 +94,13 @@
                   (:local-time (first sleepy-pings))])))
 
 (defmethod apply-command! :tag-ping-by-id [db user _ {:keys [id tags]}]
-  (tag-ping db user (db/ping-from-id db user id) tags))
+  (tag-ping db user (db/ping-from-id db user id) (set tags)))
 
 (defmethod apply-command! :tag-ping-by-long-time [db user _ {:keys [tags long-time]}]
-  (tag-ping db user (db/ping-from-long-time db user long-time) tags))
+  (tag-ping db user (db/ping-from-long-time db user long-time) (set tags)))
 
 (defmethod apply-command! :tag-last-ping [db user _ {:keys [tags]}]
-  (tag-ping db user (db/last-ping db user) tags))
+  (tag-ping db user (db/last-ping db user) (set tags)))
 
 (defmethod apply-command! :ditto [db user _ _]
   (let [[last-ping second-to-last-ping] (db/last-pings db user 2)]
@@ -126,9 +127,9 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
     valid?))
 
 (defn slack [{:keys [db] :as component} {:keys [params]}]
-  (future
+  (taoensso.timbre/logged-future
     (when-let [user (and (valid-slack? component params)
-                       (slack-user db params))]
+                         (slack-user db params))]
       (apply-command db user (slack-text params))))
   {:status 200 :body ""})
 
