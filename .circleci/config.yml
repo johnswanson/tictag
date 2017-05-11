@@ -1,7 +1,7 @@
 version: 2
 jobs:
   build:
-    working_directory: /root/tictag
+    working_directory: ~/tictag
     docker:
       - image: clojure:lein-2.7.1
     environment:
@@ -9,13 +9,13 @@ jobs:
     steps:
       - checkout
       - restore_cache:
-          key: << checksum "project.clj" >>
+          key: deps-<< checksum "project.clj" >>
       - run: lein deps
       - save_cache:
           paths:
-            - /root/.m2
-            - /root/.lein
-          key: << checksum "project.clj" >>
+            - ~/.m2
+            - ~/.lein
+          key: deps-<< checksum "project.clj" >>
       - run: lein do test, uberjar
       - store_artifacts:
           path: target/uberjar/tictag.jar
