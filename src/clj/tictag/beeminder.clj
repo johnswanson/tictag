@@ -74,7 +74,6 @@
                    :query-params {:auth_token auth-token}})))
 
 (defn days-matching-tag [tags rows]
-  (timbre/tracef "Matching tags %s, rows %s" tags rows)
   (->> rows
        (filter #(match? tags (:tags %)))
        (map :local-day)
@@ -86,7 +85,6 @@
     (when-let [goals (seq (db/get-goals db (:beeminder user)))]
       (timbre/tracef "goals are %s, getting rows" goals)
       (let [rows (db/get-pings-by-user (:db db) user)]
-        (timbre/tracef "Rows: %s" rows)
         (doseq [{:keys [goal/name goal/tags]} goals]
           (timbre/debugf "Syncing goal: %s with tags %s" name tags)
           (let [{:keys [username token]} (:beeminder user)
