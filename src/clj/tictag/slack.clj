@@ -3,7 +3,10 @@
             [com.stuartsierra.component :as component]
             [cheshire.core :as json]
             [clojure.string :as str]
-            [oauth.v2 :as v2]))
+            [oauth.v2 :as v2]
+            [taoensso.timbre :as timbre]))
+
+(timbre/refer-timbre)
 
 (def oauth-access-token-url "https://slack.com/api/oauth.access")
 (def oauth-authorization-url "https://slack.com/oauth/authorize")
@@ -34,6 +37,7 @@
 
 (defn send-message! [user body]
   (when-let [{:keys [channel-id bot-access-token]} (:slack user)]
+    (tracef "tictag.slack/send-message! %s %s" (:username user) body)
     (slack-call! "chat.postMessage"
                  {:token   bot-access-token
                   :channel channel-id
