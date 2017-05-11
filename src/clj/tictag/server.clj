@@ -68,7 +68,6 @@
   (beeminder/sync! db user))
 
 (defn slack! [user body-fmt]
-  (debugf "Sending slack message to %s" (pr-str (:username user)))
   (slack/send-message! user (apply format body-fmt)))
 
 (def wtf (f/formatter "yyyy-MM-dd HH:MM:SS"))
@@ -85,7 +84,7 @@
 
 (defmulti apply-command! (fn [db user cmd args] cmd))
 
-(defmethod apply-command! :make-pings-sleepy [db user _ args]
+(defmethod apply-command! :sleep [db user _ args]
   (let [sleepy-pings (db/sleepy-pings db user)]
     (debugf "Making pings sleepy: %s" (pr-str sleepy-pings))
     (update-pings! db user (map #(assoc % :tags #{"sleep"}) sleepy-pings))

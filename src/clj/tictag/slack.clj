@@ -37,7 +37,7 @@
 
 (defn send-message! [user body]
   (when-let [{:keys [channel-id bot-access-token]} (:slack user)]
-    (tracef "tictag.slack/send-message! %s %s" (:username user) body)
+    (tracef "tictag.slack/send-message! %s" (:username user))
     (slack-call! "chat.postMessage"
                  {:token   bot-access-token
                   :channel channel-id
