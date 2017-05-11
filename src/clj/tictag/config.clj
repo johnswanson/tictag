@@ -22,6 +22,5 @@
    :slack         {:verification-token (env :slack-verification-token)}
    :tagtime       {:seed (or (some-> env :tagtime-seed Integer.) 666)
                    :gap  (or (some-> env :tagtime-gap Integer.) (* 60 45))}
-   :run-scss?     (env :tictag-run-scss)
    :run-tests?    (env :tictag-run-tests)})
 

@@ -1,0 +1,24 @@
+body {
+    display: grid;
+}
+table {
+    border-collapse: collapse;
+}
+
+td,th {
+    border: 1px solid black;
+    padding: 10px;
+    text-align: center;
+}
+
+.ttvc-navbar {
+    font-size: 2em;
+    background-color: #444;
+    color: #fff;
+}
+div.ttvc-link.active > a {
+    color: #777;
+}
+div.ttvc-link.inactive > a {
+    color: #fff;
+}

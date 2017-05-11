@@ -5,8 +5,7 @@
             [tictag.server :as server]
             [tictag.server-chimer :as server-chimer]
             [tictag.db :as db]
-            [tictag.repl :as repl]
-            [tictag.scss :as scss]))
+            [tictag.repl :as repl]))
 
 (defn system [config]
   (component/system-map
@@ -27,10 +26,6 @@
    :chimer (component/using
             (server-chimer/map->ServerChimer {})
             [:db])
-
-   :scss (scss/->SCSSBuilder (:run-scss? config)
-                             "resources/scss/app.scss"
-                             "resources/public/css/app.css")
 
    :tester (tester/->Tester (:run-tests? config))))
 

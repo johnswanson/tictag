@@ -32,7 +32,9 @@
              :rel "stylesheet"
              :type "text/css"}]
      [:link {:rel "stylesheet" :href "//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap.css"}]
-     [:link {:rel "stylesheet" :href "/css/app.css"}]]
+     [:link {:rel "stylesheet" :href "/css/re-com.css"}]
+     [:link {:rel "stylesheet" :href "/css/material-design-iconic-font.min"}]
+     [:link {:rel "stylesheet" :href "/css/main.css"}]]
     [:body
      [:div#app]
      [:script {} (format "var slack_client_id='%s'" (-> component :config :slack-client-id))]
@@ -214,7 +216,6 @@
     (let [user  (db/get-user-by-id db user-id)
           goals (db/get-goals-raw db (:beeminder user))
           pings (unjoda (db/get-pings-by-user-id (:db db) user-id))]
-      (timbre/debugf "Goals: %s" (pr-str goals))
       (response (sanitize (-> user
                               (assoc-in [:beeminder :goals] goals)
                               (assoc :pings pings)))))
