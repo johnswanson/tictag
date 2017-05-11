@@ -4,7 +4,10 @@
             [tictag.config :refer [config]]
             [clojure.core.async :as a :refer [<! go-loop]]
             [com.stuartsierra.component :as component]
-            [reloaded.repl :refer [system]]))
+            [reloaded.repl :refer [system]]
+            [taoensso.timbre :as timbre]))
+
+(timbre/merge-config! {:ns-blacklist ["com.zaxxer.hikari.*"]})
 
 (defn do-not-exit! []
   (a/<!!

@@ -69,14 +69,6 @@
   (timbre/debugf "Sending slack message to %s" (pr-str (:username user)))
   (slack/send-message! user (apply format body-fmt)))
 
-(defn make-pings-sleepy [db user args]
-  (let [sleepy-pings (db/sleepy-pings db user)]
-    (timbre/debugf "Making pings sleepy: %s" (pr-str sleepy-pings))
-    (update-pings! db user (map #(assoc % :tags #{"sleep"}) sleepy-pings))
-    (slack! user ["sleepings pings: %s to %s"
-                  (:local-time (last sleepy-pings))
-                  (:local-time (first sleepy-pings))])))
-
 (defn report-changed-ping [old-ping new-ping]
   (format "Changing Ping @ `%s`\nOld: `%s`\nNew: `%s`"
           (:local-time new-ping)
@@ -88,30 +80,42 @@
     (update-pings! db user [new-ping])
     (slack! user [(report-changed-ping old-ping new-ping)])))
 
-(defn tag-ping-by-id [db user {:keys [id tags]}]
+(defmulti apply-command! (fn [db user cmd args] cmd))
+
+(defmethod apply-command! :make-pings-sleepy [db user _ args]
+  (let [sleepy-pings (db/sleepy-pings db user)]
+    (timbre/debugf "Making pings sleepy: %s" (pr-str sleepy-pings))
+    (update-pings! db user (map #(assoc % :tags #{"sleep"}) sleepy-pings))
+    (slack! user ["sleepings pings: %s to %s"
+                  (:local-time (last sleepy-pings))
+                  (:local-time (first sleepy-pings))])))
+
+(defmethod apply-command! :tag-ping-by-id [db user _ {:keys [id tags]}]
   (tag-ping db user (db/ping-from-id db user id) tags))
 
-(defn tag-ping-by-long-time [db user {:keys [tags long-time]}]
+(defmethod apply-command! :tag-ping-by-long-time [db user _ {:keys [tags long-time]}]
   (tag-ping db user (db/ping-from-long-time db user long-time) tags))
 
-(defn tag-last-ping [db user {:keys [tags]}]
+(defmethod apply-command! :tag-last-ping [db user _ {:keys [tags]}]
   (tag-ping db user (db/last-ping db user) tags))
 
-(defn ditto [db user _]
+(defmethod apply-command! :ditto [db user _ _]
   (let [[last-ping second-to-last-ping] (db/last-pings db user 2)]
     (tag-ping db user last-ping (:tags second-to-last-ping))))
 
+(defmethod apply-command! :help [_ user _ _]
+  (slack! user ["Tag the most recent ping (e.g. by saying `ttc`)
+Tag a ping by its id (e.g. by saying `113 ttc`)
+Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
+`sleep` command: tag the most recent set of contiguous pings as `sleep`
+`\"` command: tags the last ping with whatever the second-to-last ping had
+"]))
+
 (defn apply-command [db user cmd]
   (timbre/debugf "Applying command: %s" (pr-str cmd))
-  (let [{:keys [command args]} (cli/parse-body cmd)
-        f                      (case command
-                                 :sleep                 make-pings-sleepy
-                                 :ditto                 ditto
-                                 :tag-ping-by-id        tag-ping-by-id
-                                 :tag-ping-by-long-time tag-ping-by-long-time
-                                 :tag-last-ping         tag-last-ping)]
+  (let [{:keys [command args]} (cli/parse-body cmd)]
     (timbre/debugf "Command parsed as: %s, args %s" (pr-str command) (pr-str args))
-    (f db user args)))
+    (apply-command! db user command args)))
 
 (defn valid-slack? [params] true)
 (defn valid-timestamp? [params] true)

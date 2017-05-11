@@ -13,15 +13,16 @@
     (if (str-number? cmd?)
       (if (> (count cmd?) 3)
         {:command :tag-ping-by-long-time
-         :args {:tags args
-                :long-time (Long. cmd?)}}
+         :args    {:tags      args
+                   :long-time (Long. cmd?)}}
         {:command :tag-ping-by-id
-         :args {:tags args
-                :id cmd?}})
+         :args    {:tags args
+                   :id   cmd?}})
 
       (case cmd?
         "sleep" {:command :sleep :args {}}
-        "\"" {:command :ditto :args {}}
+        "\""    {:command :ditto :args {}}
+        "help"  {:command :help :args {}}
         {:command :tag-last-ping
-         :args {:tags all-args}}))))
+         :args    {:tags all-args}}))))
 
