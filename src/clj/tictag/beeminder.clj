@@ -15,6 +15,10 @@
 
 (defmulti match? (fn [a _] (class a)))
 
+(defmethod match? java.lang.String
+  [a b]
+  (b a))
+
 (defmethod match? clojure.lang.Keyword
   [a b]
   (b a))
