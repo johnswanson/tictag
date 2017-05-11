@@ -39,6 +39,3 @@
                   :channel channel-id
                   :text    body})))
 
-(defn valid-event? [{:keys [config]} outer-event]
-  (= (:verification-token config) (:token outer-event)))
-

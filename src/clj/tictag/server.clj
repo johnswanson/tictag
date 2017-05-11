@@ -4,7 +4,7 @@
             [com.stuartsierra.component :as component]
             [org.httpkit.server :as http]
             [compojure.core :refer [GET PUT POST DELETE context]]
-            [taoensso.timbre :as timbre]
+            [taoensso.timbre]
             [ring.util.response :refer [response]]
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
             [ring.middleware.format :refer [wrap-restful-format]]
@@ -19,6 +19,12 @@
             [tictag.jwt :as jwt]
             [tictag.schemas :as schemas]))
 
+(taoensso.timbre/refer-timbre)
+
+(def UNAUTHORIZED
+  {:status 401
+   :headers {"Content-Type" "text/plain"}
+   :body "unauthorized"})
 
 (defn index [component]
   (html5
@@ -42,12 +48,8 @@
      [:script {:src "https://use.fontawesome.com/efa7507d6f.js"}]]]))
 
 (defn slack-user [db slack-message]
-  (timbre/tracef "Validating slack message: %s" slack-message)
   (when-let [uid (get-in slack-message [:event :user])]
     (db/get-user-from-slack-id db uid)))
-
-(defn api-user [db {:keys [username password]}]
-  (db/authenticated-user db username password))
 
 (defn unjoda [pings]
   (map #(update % :local-time
@@ -66,7 +68,7 @@
   (beeminder/sync! db user))
 
 (defn slack! [user body-fmt]
-  (timbre/debugf "Sending slack message to %s" (pr-str (:username user)))
+  (debugf "Sending slack message to %s" (pr-str (:username user)))
   (slack/send-message! user (apply format body-fmt)))
 
 (defn report-changed-ping [old-ping new-ping]
@@ -84,7 +86,7 @@
 
 (defmethod apply-command! :make-pings-sleepy [db user _ args]
   (let [sleepy-pings (db/sleepy-pings db user)]
-    (timbre/debugf "Making pings sleepy: %s" (pr-str sleepy-pings))
+    (debugf "Making pings sleepy: %s" (pr-str sleepy-pings))
     (update-pings! db user (map #(assoc % :tags #{"sleep"}) sleepy-pings))
     (slack! user ["sleepings pings: %s to %s"
                   (:local-time (last sleepy-pings))
@@ -112,36 +114,34 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
 "]))
 
 (defn apply-command [db user cmd]
-  (timbre/debugf "Applying command: %s" (pr-str cmd))
+  (debugf "COMMAND %s: %s" (pr-str (:username user)) (pr-str cmd))
   (let [{:keys [command args]} (cli/parse-body cmd)]
-    (timbre/debugf "Command parsed as: %s, args %s" (pr-str command) (pr-str args))
+    (debugf "Command parsed as: %s, args %s" (pr-str command) (pr-str args))
     (apply-command! db user command args)))
 
-(defn valid-slack? [params] true)
-(defn valid-timestamp? [params] true)
+(defn valid-slack? [{:keys [config]} params]
+  (let [valid? (= (:token params) (:slack-verification-token config))]
+    (when (not valid?)
+      (warn "INVALID SLACK MESSAGE RECEIVED: %s" params))
+    valid?))
 
-(defn slack [{:keys [db]} {:keys [params]}]
+(defn slack [{:keys [db] :as component} {:keys [params]}]
   (future
-    (when (valid-slack? params)
-      (timbre/debug "Validation: looks good!")
-      (when-let [user (slack-user db params)]
-        (timbre/debugf "Received a slack message: %s, from %s"
-                       (pr-str (get-in params [:event :text]))
-                       (pr-str (:username user)))
-        (apply-command db user (slack-text params)))))
+    (when-let [user (and (valid-slack? component params)
+                       (slack-user db params))]
+      (apply-command db user (slack-text params))))
   {:status 200 :body ""})
 
 (defn timestamp [{:keys [db]} {:keys [params user-id]}]
-  (if (and (valid-timestamp? params) user-id)
-    (when-let [user (db/get-user-by-id db user-id)]
-      (timbre/debugf "Received a timestamp: %s"
-                     (pr-str params))
+  (if-let [user (db/get-user-by-id db user-id)]
+    (do
+      (debugf "Received a timestamp: %s" (pr-str params))
       (update-pings! db user [(-> params
                                   (assoc :user-id (:id user))
                                   (update :timestamp cli/str-number?)
                                   (dissoc :username :password))])
-      {:status 200 :body ""})
-    {:status 401 :body "unauthorized"}))
+      (response {:status :ok}))
+    UNAUTHORIZED))
 
 (defn health-check [component]
   (fn [request]
@@ -169,15 +169,14 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
      :status 200
      :body (pr-str {:tagtime-seed (-> component :tagtime :seed)
                     :tagtime-gap  (-> component :tagtime :gap)})}
-    {:status 401
-     :body "unauthorized"}))
+    UNAUTHORIZED))
 
 (defn signup [{:keys [db jwt]} {:keys [params]}]
   (let [[invalid? user] (schemas/validate
                          params
                          (schemas/+new-user-schema+ (set (map :name (db/timezones db)))))]
     (if invalid?
-      {:status 401 :body "unauthorized"}
+      UNAUTHORIZED
       (let [written? (db/write-user db user)
             [valid? token] (users/get-token
                             {:db db :jwt jwt}
@@ -204,8 +203,8 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
         (do
           (db/write-slack db {:id user-id} (:name user) bot-access-token (:id channel) slack-user-id)
           (index component))
-        {:status 401 :headers {"Content-Type" "text/plain"} :body "unauthorized"}))
-    {:status 401 :headers {"Content-Type" "text/plain"} :body "unauthorized"}))
+        UNAUTHORIZED))
+    UNAUTHORIZED))
 
 (defn sanitize [user]
   (-> user
@@ -223,20 +222,20 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
       (response (sanitize (-> user
                               (assoc-in [:beeminder :goals] goals)
                               (assoc :pings pings)))))
-    {:status 401 :headers {"Content-Type" "text/plain"} :body "unauthorized"}))
+    UNAUTHORIZED))
 
 (defn delete-beeminder [{:keys [db]} {:keys [user-id]}]
   (if user-id
     (do (db/delete-beeminder db user-id)
         (response {}))
-    {:status 401 :body {:error "unauthorized"}}))
+    UNAUTHORIZED))
 
 (defn delete-slack [{:keys [db]} {:keys [user-id]}]
   (if user-id
     (do
       (db/delete-slack db user-id)
       (response {}))
-    {:status 401 :body {:error "unauthorized"}}))
+    UNAUTHORIZED))
 
 (defn add-beeminder [{:keys [db]} {:keys [params user-id]}]
   (if-let [bm-user (beeminder/user-for (:token params))]
@@ -248,8 +247,8 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
         (:username bm-user)
         (:token params)
         false))
-      (catch Exception e {:status 401 :body "unauthorized"}))
-    {:status 401 :body "unauthorized"}))
+      (catch Exception e UNAUTHORIZED))
+    UNAUTHORIZED))
 
 (defn add-goal [{:keys [db]} {:keys [params user-id]}]
   (let [new-id (:id (db/add-goal db user-id params))]
@@ -309,7 +308,7 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
 (defrecord Server [db config tagtime]
   component/Lifecycle
   (start [component]
-    (timbre/debug "Starting server")
+    (debug "Starting server")
     (let [stop (http/run-server
                 (-> (routes component)
                     (wrap-session-auth (:jwt component))
@@ -319,10 +318,10 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
                                        (assoc-in [:static :resources] "/public")
                                        (assoc :cookies true))))
                 config)]
-      (timbre/debug "Server created")
+      (debug "Server created")
       (assoc component :stop stop)))
   (stop [component]
-    (timbre/debug "Stopping server")
+    (debug "Stopping server")
     (when-let [stop (:stop component)]
       (stop))
     (dissoc component :stop)))
