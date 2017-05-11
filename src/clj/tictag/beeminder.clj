@@ -15,6 +15,10 @@
 
 (defmulti match? (fn [a _] (class a)))
 
+(defmethod match? java.util.regex.Pattern
+  [a b]
+  (some #(re-find a %) b))
+
 (defmethod match? java.lang.String
   [a b]
   (b a))
