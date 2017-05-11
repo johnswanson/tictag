@@ -43,14 +43,14 @@
 (defrecord Database [db-spec tagtime]
   component/Lifecycle
   (start [component]
-    (timbre/debugf "Starting database, config: %s" (pr-str db-spec))
+    (timbre/debug "Starting database pool")
     (assoc component
            :db {:datasource (hikari/make-datasource (datasource-options db-spec))
                 :crypto-key (:crypto-key db-spec)}
            :pends (atom (ring-buffer 16))))
   (stop [component]
     (when-let [ds (get-in component [:db :datasource])]
-      (timbre/debugf "Closing database pool: %s" ds)
+      (timbre/debug "Closing database pool.")
       (hikari/close-datasource ds))
     (dissoc component :db)))
 
@@ -288,12 +288,13 @@
                  :beeminder [:= :beeminder.user_id :users.id])))
 
 (defn get-user-from-slack-id [db slack-id]
-  (to-user
-   db
-   (first
-    (j/query (:db db)
-             (sql/format
-              (where user-query [:= :slack.slack_user_id slack-id]))))))
+  (when slack-id
+    (to-user
+     db
+     (first
+      (j/query (:db db)
+               (sql/format
+                (where user-query [:= :slack.slack_user_id slack-id])))))))
 
 (defn write-user [db {:keys [username password email tz] :as user}]
   (j/execute!
