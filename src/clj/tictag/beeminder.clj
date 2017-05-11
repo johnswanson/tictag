@@ -6,13 +6,6 @@
             [clojure.data :refer [diff]]
             [tictag.db :as db]))
 
-(defmacro functionize [macro]
-  `(fn [& args#] (eval (cons '~macro args#))))
-
-(def and* (functionize and))
-
-(def or* (functionize or))
-
 (defmulti match? (fn [a _] (class a)))
 
 (defmethod match? java.util.regex.Pattern
@@ -25,13 +18,17 @@
 
 (defmethod match? clojure.lang.Keyword
   [a b]
-  (b a))
+  (b (name a)))
+
+(defmethod match? clojure.lang.PersistentList
+  [a b]
+  (match? (vec a) b))
 
 (defmethod match? clojure.lang.PersistentVector
   [[pred & args] b]
-  (case pred
-    :and (apply and* (for [a args] (match? a b)))
-    :or  (apply or* (for [a args] (match? a b)))))
+  (case (name pred)
+    "and" (every? #(match? % b) args)
+    "or"  (some #(match? % b) args)))
 
 (defn goal-url [user goal]
   (format "https://www.beeminder.com/api/v1/users/%s/goals/%s.json" user goal))
