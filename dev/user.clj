@@ -13,6 +13,7 @@
             [tictag.ragtime :as ragtime]
             [tictag.tagtime :as tt]
             [ragtime.repl :refer [migrate rollback]]
+            [clojure.repl :refer [doc]]
             [honeysql.core :as sql]
             [honeysql.helpers :refer :all]
             [honeysql-postgres.format :refer :all]
