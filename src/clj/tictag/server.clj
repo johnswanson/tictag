@@ -266,9 +266,17 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
     (db/delete-goal db user-id int-id)
     (response {})))
 
+(defn wrap-session-auth [handler jwt]
+  (fn [req]
+    (if (:user-id req)
+      (handler req)
+      (let [token (get-in req [:cookies "auth-token" :value])
+            user (jwt/unsign jwt token)]
+        (handler (assoc req :user-id (:user-id user)))))))
+
 (defn routes [component]
   (compojure.core/routes
-   (GET "/slack-callback" _ (partial slack-callback component))
+   (GET "/slack-callback" _ (wrap-session-auth (partial slack-callback component) (:jwt component)))
    (POST "/slack" _ (partial slack component))
    (PUT "/time/:timestamp" _ (partial timestamp component))
    (POST "/token" _ (partial token component))
@@ -291,14 +299,6 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
    (POST "/signup" _ (partial signup component))
    (GET "/healthcheck" _ (health-check component))))
 
-(defn wrap-session-auth [handler jwt]
-  (fn [req]
-    (if (:user-id req)
-      (handler req)
-      (let [token (get-in req [:cookies "auth-token" :value])
-             user (jwt/unsign jwt token)]
-        (handler (assoc req :user-id (:user-id user)))))))
-
 (defn wrap-user [handler jwt]
   (fn [req]
     (let [token (get-in req [:headers "authorization"])
@@ -311,7 +311,6 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
     (debug "Starting server")
     (let [stop (http/run-server
                 (-> (routes component)
-                    (wrap-session-auth (:jwt component))
                     (wrap-user (:jwt component))
                     (wrap-restful-format :formats [:json-kw :edn :transit-json :transit-msgpack])
                     (wrap-defaults (-> api-defaults
