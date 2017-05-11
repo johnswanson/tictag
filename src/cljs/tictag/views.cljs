@@ -49,7 +49,7 @@
         time-per-day (subscribe [:time-per-day-for-tag tag])]
     (fn [tag]
       [:tr
-       [:td (pr-str tag)]
+       [:td tag]
        [:td @my-count]
        [:td (gstring/format "%.1f%%" @tag-%)]
        [:td @time-per-day]])))

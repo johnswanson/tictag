@@ -96,7 +96,7 @@
 (defn local-day [local-time] (f/unparse ymd local-time))
 
 (defn to-ping [{:keys [local_time ts tags user_id]}]
-  {:tags              (set (map keyword (str/split tags #" ")))
+  {:tags              (set (str/split tags #" "))
    :user-id           user_id
    :local-time        local_time
    :local-day         (local-day local_time)
@@ -152,7 +152,7 @@
   (j/with-db-transaction [db db]
     (doseq [{:keys [tags user-id timestamp]} pings]
       (j/execute! db (-> (update :pings)
-                         (sset {:tags (str/join " " (map name tags))})
+                         (sset {:tags (str/join " " tags)})
                          (where [:= :ts (coerce/from-long timestamp)]
                                 [:= :user_id user-id])
                          sql/format)))))

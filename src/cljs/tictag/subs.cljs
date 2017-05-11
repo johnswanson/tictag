@@ -15,7 +15,7 @@
  (fn [ping-query]
    (if ping-query
      (fn [{:keys [tags]}]
-       (tags (keyword ping-query)))
+       (tags ping-query))
      (constantly false))))
 
 (defn unnormalize [db thing & [other]]
