@@ -337,6 +337,7 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
                     (wrap-restful-format :formats [:json-kw :edn :transit-json :transit-msgpack])
                     (wrap-defaults (-> api-defaults
                                        (assoc-in [:static :resources] "/public")
+                                       (assoc :proxy true)
                                        (assoc :cookies true))))
                 config)]
       (debug "Server created")
