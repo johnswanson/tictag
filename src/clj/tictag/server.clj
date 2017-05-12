@@ -319,7 +319,8 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
                                     :ERROR))]
       (trace resp)
       (if (or (= resp :ERROR)
-              (and (>= (:status resp) 500)
+              (and (number? (:status resp))
+                   (>= (:status resp) 500)
                    (< (:status resp) 600)))
         (do (error req resp)
             {:status 500
