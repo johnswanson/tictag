@@ -165,8 +165,8 @@
            (order-by [:ts :desc])
            (limit 100))
        (get-pings db)
-       (drop-while (comp not :afk :tags))
-       (take-while (comp :afk :tags))))
+       (drop-while #(-> % :tags (get "afk") not))
+       (take-while #(-> % :tags (get "afk" )))))
 
 (defn sleep [ping]
   (assoc ping :tags #{"sleep"}))

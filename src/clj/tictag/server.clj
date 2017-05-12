@@ -21,6 +21,7 @@
             [clojure.spec.alpha :as s]))
 
 (taoensso.timbre/refer-timbre)
+(def wtf (f/formatter "yyyy-MM-dd HH:MM:SS"))
 
 (def UNAUTHORIZED
   {:status 401
@@ -71,7 +72,6 @@
 (defn slack! [user body-fmt]
   (slack/send-message! user (apply format body-fmt)))
 
-(def wtf (f/formatter "yyyy-MM-dd HH:MM:SS"))
 (defn report-changed-ping [old-ping new-ping]
   (format "Changing Ping @ `%s`\nOld: `%s`\nNew: `%s`"
           (f/unparse wtf (:local-time new-ping))
@@ -90,8 +90,8 @@
     (debugf "Making pings sleepy: %s" (pr-str sleepy-pings))
     (update-pings! db user (map #(assoc % :tags #{"sleep"}) sleepy-pings))
     (slack! user ["sleepings pings: %s to %s"
-                  (:local-time (last sleepy-pings))
-                  (:local-time (first sleepy-pings))])))
+                  (f/unparse wtf (:local-time (last sleepy-pings)))
+                  (f/unparse wtf (:local-time (first sleepy-pings)))])))
 
 (defmethod apply-command! :tag-ping-by-id [db user _ {:keys [id tags]}]
   (tag-ping db user (db/ping-from-id db user id) (set tags)))
