@@ -350,12 +350,10 @@
  [interceptors]
  (fn [{:keys [db]} [_ id]]
    (merge
-    {:db (let [{:keys [user beeminder]} (get-in db [:goal/by-id id])]
+    {:db (let [old (get-in db [:goal/by-id id])]
            (-> db
-               (assoc-in [:goal/by-id id :_old-user] user)
-               (assoc-in [:goal/by-id id :_old-beeminder] beeminder)
-               (assoc-in [:goal/by-id id :user] nil)
-               (assoc-in [:goal/by-id id :beeminder] nil)))}
+               (assoc-in [:goal/by-id id] nil)
+               (assoc-in [:db/trash :goal/by-id id] old)))}
     (when (not= :temp id)
       {:http-xhrio (authenticated-xhrio
                     {:uri             (str "/api/user/me/goals/" id)
@@ -371,9 +369,8 @@
  :goal/delete-fail
  [interceptors]
  (fn [db [_ id result]]
-   (update-in db [:goal/by-id id]
-              (fn [{:keys [_old-user _old-beeminder] :as goal}]
-                (assoc goal :user _old-user :beeminder _old-beeminder)))))
+   (let [old (get-in db [:db/trash :goal/by-id id])]
+     (assoc-in db [:goal/by-id id] old))))
 
 (reg-event-fx
  :goal/save
