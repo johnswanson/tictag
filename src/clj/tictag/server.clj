@@ -21,7 +21,7 @@
             [clojure.spec.alpha :as s]))
 
 (taoensso.timbre/refer-timbre)
-(def wtf (f/formatter "yyyy-MM-dd HH:MM:SS"))
+(def wtf (f/formatter "yyyy-MM-dd HH:mm:SS"))
 
 (def UNAUTHORIZED
   {:status 401
