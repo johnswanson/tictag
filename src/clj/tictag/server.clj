@@ -17,7 +17,8 @@
             [tictag.beeminder :as beeminder]
             [tictag.slack :as slack]
             [tictag.jwt :as jwt]
-            [tictag.schemas :as schemas]))
+            [tictag.schemas :as schemas]
+            [clojure.spec.alpha :as s]))
 
 (taoensso.timbre/refer-timbre)
 
@@ -251,14 +252,17 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
     UNAUTHORIZED))
 
 (defn add-goal [{:keys [db]} {:keys [params user-id]}]
-  (let [new-id (:id (db/add-goal db user-id params))]
-    (response (assoc params :goal/id new-id))))
+  (if (spy (s/valid? :tictag.schemas/goal params))
+    (let [new-id (:id (db/add-goal db user-id params))]
+      (response (assoc params :goal/id new-id)))
+    {:status 400}))
 
 (defn update-goal [{:keys [db]} {:keys [params user-id]}]
-  (when-let [int-id (try (Integer. (:id params))
-                         (catch Exception _ nil))]
-    (db/update-goal db user-id (assoc params :goal/id int-id))
-    (response {})))
+  (if (spy (s/valid? :tictag.schemas/goal params))
+    (when-let [int-id (cli/str-number? (:id params))]
+      (db/update-goal db user-id (assoc params :goal/id int-id))
+      (response {}))
+    {:status 400}))
 
 (defn delete-goal [{:keys [db]} {:keys [params user-id]}]
   (when-let [int-id (try (Integer. (:id params))

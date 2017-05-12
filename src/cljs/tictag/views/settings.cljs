@@ -3,7 +3,6 @@
             [re-com.core :as re-com]
             [reagent.core :as reagent]
             [tictag.constants :refer [ENTER]]
-            [tictag.beeminder :as beeminder]
             [goog.string :as str]
             [cljs.reader :as edn]))
 
@@ -35,6 +34,8 @@
                :on-change #(dispatch [:goal/edit (:goal/id goal) :goal/name %])]
               [re-com/input-text
                :model (or (:goal/tags goal) "")
+               :status (if (:goal/tags-valid? goal) nil :error)
+               :placeholder "(and \"foo\" (or \"bar\" \"baz\" \"bin\"))"
                :on-change #(dispatch [:goal/edit (:goal/id goal) :goal/tags %])]
               [re-com/button
                :on-click #(dispatch [:goal/save (:goal/id goal)])

@@ -3,7 +3,9 @@
             [cljs-time.format :as f]
             [cljs-time.core :as t]
             [tictag.dates :refer [seconds-since-midnight days-since-epoch]]
-            [tictag.utils :refer [descend]]))
+            [tictag.utils :refer [descend]]
+            [tictag.beeminder-matching :as beeminder-matching]
+            [cljs.tools.reader.edn :as edn]))
 
 (def formatter (f/formatters :basic-date-time))
 
@@ -257,13 +259,24 @@
       (filter #(= (:user %) user)
               (vals (:beeminder/by-id db)))))))
 
+
+(defn valid-goal [{:keys [goal/tags] :as goal}]
+  (assoc goal
+         :goal/tags-valid?
+         (beeminder-matching/valid?
+          (try
+            (edn/read-string tags)
+            (catch js/Error _ nil)))))
+
 (reg-sub
  :beeminder-goals
  (fn [db _]
    (let [user (:db/authenticated-user db)]
-     (filter #(and (= (:user %) user)
-                   (not= (:goal/id %) :temp))
-             (vals (:goal/by-id db))))))
+     (->> (:goal/by-id db)
+          (vals)
+          (filter #(and (= (:user %) user)
+                        (not= (:goal/id %) :temp)))
+          (map valid-goal)))))
 
 (reg-sub
  :slack

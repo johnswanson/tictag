@@ -4,31 +4,10 @@
             [taoensso.timbre :as timbre]
             [clojure.string :as str]
             [clojure.data :refer [diff]]
-            [tictag.db :as db]))
+            [tictag.db :as db]
+            [tictag.beeminder-matching :refer [match?]]))
 
-(defmulti match? (fn [a _] (class a)))
-
-(defmethod match? java.util.regex.Pattern
-  [a b]
-  (some #(re-find a %) b))
-
-(defmethod match? java.lang.String
-  [a b]
-  (b a))
-
-(defmethod match? clojure.lang.Keyword
-  [a b]
-  (b (name a)))
-
-(defmethod match? clojure.lang.PersistentList
-  [a b]
-  (match? (vec a) b))
-
-(defmethod match? clojure.lang.PersistentVector
-  [[pred & args] b]
-  (case (name pred)
-    "and" (every? #(match? % b) args)
-    "or"  (some #(match? % b) args)))
+(timbre/refer-timbre)
 
 (defn goal-url [user goal]
   (format "https://www.beeminder.com/api/v1/users/%s/goals/%s.json" user goal))
@@ -80,13 +59,13 @@
        (frequencies)))
 
 (defn sync! [db user]
-  (timbre/debugf "Beginning beeminder sync: %s" (:enabled? (:beeminder user)))
+  (debugf "Beginning beeminder sync: %s" (:enabled? (:beeminder user)))
   (when (:enabled? (:beeminder user))
     (when-let [goals (seq (db/get-goals db (:beeminder user)))]
-      (timbre/tracef "goals are %s, getting rows" goals)
+      (tracef "goals are %s, getting rows" goals)
       (let [rows (db/get-pings-by-user (:db db) user)]
         (doseq [{:keys [goal/name goal/tags]} goals]
-          (timbre/debugf "Syncing goal: %s with tags %s" name tags)
+          (debugf "Syncing goal: %s with tags %s" name tags)
           (let [{:keys [username token]} (:beeminder user)
                 days                     (days-matching-tag tags rows)
                 existing-datapoints      (datapoints
@@ -117,7 +96,7 @@
                 save-futures             (doall (map #(save-datapoint! token username name %) to-save))
                 delete-futures           (doall (map #(delete-datapoint! token username name %) to-delete))]
             (doseq [resp (concat save-futures delete-futures)]
-              (timbre/debugf "result %s %s: %s"
+              (debugf "result %s %s: %s"
                              (-> @resp :opts :url)
                              (-> @resp :opts :method)
                              (:status @resp)))))))))

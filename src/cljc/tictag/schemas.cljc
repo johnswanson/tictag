@@ -5,7 +5,8 @@
                :cljs [cljs.spec :as s])
             #?(:clj [clojure.edn :refer [read-string]]
                :cljs [cljs.reader :refer [read-string]])
-            [struct.core :as st]))
+            [struct.core :as st]
+            [tictag.beeminder-matching :as bm]))
 
 (def timezone
   {:message  "must be a time zone, e.g. America/Los_Angeles"
@@ -33,12 +34,12 @@
    :tags [st/required rule]
    :id   [st/integer]})
 
-(defn valid-edn? [s]
-  (try (read-string s)
+(defn valid-bm-edn? [s]
+  (try (bm/valid? (read-string s))
        (catch #?(:clj Exception :cljs js/Error) _ nil)))
 
 (s/def :goal/name string?)
-(s/def :goal/tags (s/and string? valid-edn?))
+(s/def :goal/tags (s/and string? valid-bm-edn?))
 (s/def :goal/id (s/or :goal/id integer? :goal/id #{:temp}))
 (s/def ::goal (s/keys :req [:goal/name :goal/tags :goal/id]))
 
