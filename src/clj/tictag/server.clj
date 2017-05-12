@@ -309,12 +309,30 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
           user  (jwt/unsign jwt token)]
       (handler (assoc req :user-id (:user-id user))))))
 
+(defn wrap-log [handler]
+  (fn [req]
+    (trace req)
+    (debugf "REQ: [user: %s] [%s] [%s]" (:user-id req) (:uri req) (:remote-addr req))
+    (let [resp (try (handler req) (catch Exception e
+                                    (error e)
+                                    :ERROR))]
+      (trace resp)
+      (if (or (= resp :ERROR)
+              (and (>= (:status resp) 500)
+                   (< (:status resp) 600)))
+        (do (error req resp)
+            {:status 500
+             :headers {"Content-Type" "text/plain"}
+             :body "An unknown error occurred."})
+        resp))))
+
 (defrecord Server [db config tagtime]
   component/Lifecycle
   (start [component]
     (debug "Starting server")
     (let [stop (http/run-server
                 (-> (routes component)
+                    (wrap-log)
                     (wrap-user (:jwt component))
                     (wrap-restful-format :formats [:json-kw :edn :transit-json :transit-msgpack])
                     (wrap-defaults (-> api-defaults
