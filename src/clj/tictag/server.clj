@@ -312,7 +312,8 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
 (defn wrap-log [handler]
   (fn [req]
     (trace req)
-    (debugf "REQ: [user: %s] [%s] [%s]" (:user-id req) (:uri req) (:remote-addr req))
+    (when-not (= (:uri req) "/healthcheck")
+      (debugf "REQ: [user: %s] [%s] [%s]" (:user-id req) (:uri req) (:remote-addr req)))
     (let [resp (try (handler req) (catch Exception e
                                     (error e)
                                     :ERROR))]
