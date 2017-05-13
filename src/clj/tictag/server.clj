@@ -281,8 +281,9 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
 
 (defn tagtime-import [{:keys [db]} {:keys [params user-id]}]
   (taoensso.timbre/logged-future
-   (let [parsed (tagtime/parse user-id (:tagtime-log params))]
-     (db/insert-tagtime-data db parsed)))
+   (if-let [parsed (tagtime/parse user-id (:tagtime-log params))]
+     (db/insert-tagtime-data db parsed)
+     (debugf "Invalid tagtime data received from user-id %d" user-id)))
   (response {:accepted true}))
 
 (defn routes [component]
