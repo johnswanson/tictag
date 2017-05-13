@@ -15,14 +15,16 @@
             [cljs-time.core :as t]
             [cljs-time.format :as f]
             [goog.string :as gstring]
-            [goog.string.format])
+            [goog.string.format]
+            [taoensso.timbre :as timbre
+             :refer-macros [debug]])
   (:import [goog.date.Interval]))
 
 (defn datapoint [ping]
   (let [active? (subscribe [:ping-active? ping])
         pixel   (subscribe [:ping-pixel ping])]
     (fn [ping]
-      [:circle {:on-mouse-over #(js/console.log ping)
+      [:circle {:on-mouse-over #(timbre/debug ping)
                 :cx (:x @pixel)
                 :cy (:y @pixel)
                 :r 3

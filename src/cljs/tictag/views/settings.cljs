@@ -29,7 +29,6 @@
 
 (defn slack []
   (let [slack (subscribe [:slack])]
-    (js/console.log @slack)
     [re-com/v-box
      :children [[re-com/title :level :level1 :label "Slack"]
                 (if (:username @slack)
@@ -65,7 +64,6 @@
 (defn add-beeminder-goal-button []
   (let [path [:goal/by-id :temp]
         goal (subscribe path)]
-    (js/console.error "TEMP GOAL!!!!! " @goal)
     (if @goal
       [beeminder-goal-editor @goal]
       [re-com/button

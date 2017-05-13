@@ -27,7 +27,7 @@
 
 (defn unnormalize [db thing & [other]]
   (if (not (vector? thing))
-    (js/console.error "unnormalize: " thing))
+    (error "unnormalize: " thing))
   (if thing
     (get-in db thing other)
     other))

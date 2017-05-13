@@ -406,7 +406,6 @@
                  :uri "/api/user/me/goals/"}
                 {:method :put
                  :uri (str "/api/user/me/goals/" id)})]
-     (js/console.log (s/explain :tictag.schemas/goal goal))
      (if (and (s/valid? :tictag.schemas/goal goal)
               (= (count (filter #(= (:goal/name goal)
                                     (:goal/name %))
@@ -427,13 +426,8 @@
  :good-goal-update-result
  [interceptors]
  (fn [db [_ old-id to-merge]]
-   (js/console.log old-id to-merge)
    (if (= old-id :temp)
      (-> db
-         ;; three parts:
-         ;; - add the new goal (by id) to my beeminder goals
-         ;; - add the new goal to the {:goal-id goal} map
-         ;; - remove the old :temp goal
          (update-in (conj (:beeminder to-merge) :goals)
                     conj [:goal/by-id (:goal/id to-merge)])
          (assoc-in [:goal/by-id :temp] nil)
