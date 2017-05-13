@@ -18,7 +18,8 @@
             [tictag.slack :as slack]
             [tictag.jwt :as jwt]
             [tictag.schemas :as schemas]
-            [clojure.spec.alpha :as s]))
+            [clojure.spec.alpha :as s]
+            [tictag.tagtime :as tagtime]))
 
 (taoensso.timbre/refer-timbre)
 (def wtf (f/formatter "yyyy-MM-dd HH:mm:SS"))
@@ -278,6 +279,12 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
             user (jwt/unsign jwt token)]
         (handler (assoc req :user-id (:user-id user)))))))
 
+(defn tagtime-import [{:keys [db]} {:keys [params user-id]}]
+  (taoensso.timbre/logged-future
+   (let [parsed (tagtime/parse user-id (:tagtime-log params))]
+     (db/insert-tagtime-data db parsed)))
+  (response {:accepted true}))
+
 (defn routes [component]
   (compojure.core/routes
    (GET "/slack-callback" _ (wrap-session-auth (partial slack-callback component) (:jwt component)))
@@ -293,6 +300,7 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
    (GET "/about" _ (index component))
    (GET "/settings" _ (index component))
    (context "/api" []
+            (POST "/tagtime" _ (partial tagtime-import component))
             (GET "/timezones" _ (partial timezone-list component))
             (GET "/user/me" _ (partial my-user component))
             (POST "/user/me/beeminder" _ (partial add-beeminder component))

@@ -6,6 +6,17 @@
             [goog.string :as str]
             [cljs.reader :as edn]))
 
+(defn tagtime-import []
+  (let [model (reagent/atom "")]
+    [re-com/v-box
+     :children [[re-com/title :level :level1 :label "Import from TagTime"]
+                [re-com/input-textarea
+                 :model model
+                 :width "100%"
+                 :on-change #(reset! model %)]
+                [re-com/button
+                 :label "Submit"
+                 :on-click #(dispatch [:tagtime-import/send @model])]]]))
 
 (defn slack-authorize []
   [:div
@@ -104,7 +115,8 @@
 (defn settings []
   (let [auth-user (subscribe [:authorized-user])]
     [re-com/v-box
-     :children [[beeminder]
+     :children [[tagtime-import]
+                [beeminder]
                 [slack]]]))
 
 

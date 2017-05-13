@@ -415,3 +415,17 @@
          (assoc-in [:goal/by-id :temp] nil)
          (assoc-in [:goal/by-id (:goal/id to-merge)] to-merge))
      (assoc-in db [:goal/by-id (:goal/id to-merge)] to-merge))))
+
+(reg-event-fx
+ :tagtime-import/send
+ [interceptors]
+ (fn [{:keys [db]} [_ data]]
+   {:http-xhrio (authenticated-xhrio
+                 {:params          {:tagtime-log data}
+                  :method          :post
+                  :uri             "/api/tagtime"
+                  :format          (transit-request-format {})
+                  :response-format (transit-response-format {})
+                  :on-success      [:tagtime-import/success]
+                  :on-failure      [:tagtime-import/fail]}
+                 (:auth-token db))}))

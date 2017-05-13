@@ -400,3 +400,12 @@
    (-> (select :name)
        (from :pg-timezone-names)
        sql/format)))
+
+(defn insert-tagtime-data [db data]
+  (j/execute!
+   (:db db)
+   (-> (insert-into :pings)
+       (values data)
+       (upsert (-> (on-conflict :ts :user-id)
+                   (do-update-set :tags :tz_offset)))
+       sql/format)))

@@ -28,13 +28,12 @@
      :tags      (str/join #" " tags)
      :tz_offset {:select [(sql/call :-
                                     (sql/call :cast local-time :timestamptz)
-                                    (sql/call :cast timestamp :timestamptz))]}
-     :user_id   1}))
+                                    (sql/call :cast timestamp :timestamptz))]}}))
 
 (defn parse-lines [lines]
   (map parse-line (str/split lines #"\n")))
 
-(defn parse [user log]
+(defn parse [user-id log]
   (map
-   #(assoc :user_id (:id user))
+   #(assoc % :user-id user-id)
    (parse-lines log)))
