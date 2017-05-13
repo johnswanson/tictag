@@ -20,13 +20,13 @@
         (fn [time]
           (let [long-time (tc/to-long time)
                 id        (next!)]
-            (timbre/debugf "------ CHIME! (id %d) ------" id)
-            (timbre/debugf "CHIME %d: Adding 'afk' pings" id)
+            (timbre/debugf "------ CHIME! (id %s) ------" id)
+            (timbre/debugf "CHIME %s: Adding 'afk' pings" id)
             (db/add-pending! db time id)
-            (timbre/debug "CHIME %d: Sending slack messages" id)
+            (timbre/debugf "CHIME %s: Sending slack messages" id)
             (doseq [user (db/get-all-users db)]
-              (slack/send-message! user (format "PING! id: %s, long-time: %d" id long-time)))
-            (timbre/debug "CHIME %d: All done!" id)))))))
+              (slack/send-message! user (format "PING! id: %s, long-time: %s" id long-time)))
+            (timbre/debugf "CHIME %s: All done!" id)))))))
   (stop [component]
     (when-let [stop (:stop component)]
       (stop))
