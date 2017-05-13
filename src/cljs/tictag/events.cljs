@@ -7,7 +7,8 @@
             [tictag.schemas :as schemas]
             [tictag.utils :refer [descend]]
             [goog.net.cookies]
-            [cljs.spec :as s]))
+            [cljs.spec :as s]
+            [cljs-time.format :as f]))
 
 (def interceptors [(when ^boolean goog.DEBUG re-frame.core/debug)])
 
@@ -116,33 +117,56 @@
   (into {} (for [g goals]
              [(:goal/id g) (normalize-goal user beeminder g)])))
 
-(defn normalize-ping [user ping]
-  (assoc ping :user (ref-to-user user)))
+(defn normalize-ping [user-ref ping]
+  (assoc ping :user user-ref))
 
-(defn normalize-pings [user pings]
+(defn normalize-pings [user-ref pings]
   (into {} (for [p pings]
-             [(:timestamp p) (normalize-ping user p)])))
+             [(:timestamp p) (normalize-ping user-ref p)])))
 
 (defn normalize-user-to-db [user]
   (let [slack                (:slack user)
         beeminder            (:beeminder user)
-        pings                (:pings user)
         normalized-slack     (normalize-slack user slack)
         normalized-beeminder (normalize-beeminder user beeminder)
-        normalized-goals     (normalize-goals user beeminder (:goals beeminder))
-        normalized-pings     (normalize-pings user pings)]
+        normalized-goals     (normalize-goals user beeminder (:goals beeminder))]
     {:slack/by-id           (when slack {(:id slack) (normalize-slack user slack)})
      :beeminder/by-id       (when beeminder {(:id beeminder) (normalize-beeminder user beeminder)})
      :user/by-id            (when user {(:id user) (normalize-user user)})
-     :pings/by-timestamp    normalized-pings
      :goal/by-id            (normalize-goals user beeminder (get-in user [:beeminder :goals]))
      :db/authenticated-user (ref-to-user user)}))
 
-(reg-event-db
+(reg-event-fx
  :user-me-success
  [interceptors]
- (fn [db [_ user]]
-   (merge db (normalize-user-to-db user))))
+ (fn [{:keys [db]} [_ user]]
+   {:db (merge db (normalize-user-to-db user))
+    :dispatch-later [{:ms 2 :dispatch [:pings/receive
+                                       (ref-to-user user)
+                                       true
+                                       []
+                                       (partition-all 100 (:pings user))]}]}))
+
+(def formatter (f/formatters :basic-date-time))
+
+(defn process [pings]
+  (map #(assoc %
+               :parsed-time
+               (f/parse formatter (:local-time %)))
+       pings))
+
+(reg-event-fx
+ :pings/receive
+ [interceptors]
+ (fn [{db :db} [_ user first-time? processed to-process]]
+   (if first-time?
+     {:dispatch [:pings/receive user false processed to-process]}
+     (if-not (seq? to-process)
+       {:db (assoc db :pings/by-timestamp (normalize-pings user processed))}
+       (let [[n & rest] to-process]
+         {:dispatch-later [{:ms 2
+                            :dispatch [:pings/receive user false (concat (process n)
+                                                                                processed) rest]}]})))))
 
 (reg-event-db
  :user-me-failure

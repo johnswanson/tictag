@@ -5,7 +5,12 @@
             [tictag.dates :refer [seconds-since-midnight days-since-epoch]]
             [tictag.utils :refer [descend]]
             [tictag.beeminder-matching :as beeminder-matching]
-            [cljs.tools.reader.edn :as edn]))
+            [cljs.tools.reader.edn :as edn]
+            [taoensso.timbre :refer-macros
+             [trace debug info warn error fatal report
+              tracef debugf infof warnf errorf fatalf reportf
+              spy]]))
+
 
 (def formatter (f/formatters :basic-date-time))
 
@@ -31,7 +36,6 @@
  :pings
  (fn [db _]
    (let [user (:db/authenticated-user db)]
-     (js/console.log user (:pings/by-timestamp db))
      (filter #(= (:user %) user)
              (vals (:pings/by-timestamp db))))))
 
@@ -47,7 +51,7 @@
  (fn [_ _]
    (subscribe [:pings]))
  (fn parse-times [pings _]
-   (map #(f/parse formatter (:local-time %)) pings)))
+   (map :parsed-time pings)))
 
 (reg-sub
  :days-since-epoch
