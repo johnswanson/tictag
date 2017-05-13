@@ -15,15 +15,16 @@
         email-errors      (subscribe [:login-errors :email])
         timezone          (reagent/atom "America/Los_Angeles")
         allowed-timezones (subscribe [:allowed-timezones])
-        submit            #(dispatch [:login/submit-signup
-                                      {:username @username
-                                       :password @password
-                                       :email    @email
-                                       :tz       @timezone}])]
+        submit            #(do (dispatch [:login/submit-signup
+                                          {:username @username
+                                           :password @password
+                                           :email    @email
+                                           :tz       @timezone}])
+                               (.preventDefault %))]
     (fn []
       [re-com/box
        :child
-       [:form {:on-submit #(do (submit) (.preventDefault %))}
+       [:form {:on-submit submit}
         [re-com/v-box
          :width "400px"
          :justify :center

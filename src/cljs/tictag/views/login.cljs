@@ -9,13 +9,15 @@
         username-errors (subscribe [:login-errors :username])
         password        (reagent/atom "")
         password-errors (subscribe [:login-errors :password])
-        submit          #(dispatch [:login/submit-login
-                                    {:username @username
-                                     :password @password}])]
+        submit          #(do
+                           (dispatch [:login/submit-login
+                                      {:username @username
+                                       :password @password}])
+                           (.preventDefault %))]
     (fn []
       [re-com/box
        :child
-       [:form {:on-submit #(do (submit) (.preventDefault %))}
+       [:form {:on-submit submit}
         [re-com/v-box
          :width "400px"
          :justify :center
