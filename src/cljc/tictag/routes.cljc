@@ -6,4 +6,5 @@
         "settings"       :settings
         "logout"         :logout
         "slack-callback" :slack-callback
+        "about"          :about
         ""               :dashboard}])

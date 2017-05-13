@@ -10,6 +10,7 @@
             [tictag.views.settings]
             [tictag.views.signup]
             [tictag.views.login]
+            [tictag.views.about]
             [tictag.views.common :refer [page]]
             [cljs-time.core :as t]
             [cljs-time.format :as f]
@@ -86,6 +87,7 @@
          :login     [tictag.views.login/login]
          :dashboard [logged-in-app]
          :settings  [tictag.views.settings/settings]
+         :about     [tictag.views.about/about]
          ;; if :active-panel not set yet, just wait for pushy to initialize
          [:div])])))
 

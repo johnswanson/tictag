@@ -20,6 +20,7 @@
    :justify :around
    :align :center
    :children [[box :child [:span "TTC"]]
+              [link :about current-page]
               (when-not user [link :login current-page])
               (when-not user [link :signup current-page])
               (when user [link :dashboard current-page])

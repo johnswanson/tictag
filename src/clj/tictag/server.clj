@@ -290,6 +290,7 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
    (GET "/signup" _ (index component))
    (GET "/login" _ (index component))
    (GET "/logout" _ (index component))
+   (GET "/about" _ (index component))
    (GET "/settings" _ (index component))
    (context "/api" []
             (GET "/timezones" _ (partial timezone-list component))
