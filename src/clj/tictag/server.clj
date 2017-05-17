@@ -9,6 +9,7 @@
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
             [ring.middleware.format :refer [wrap-restful-format]]
             [tictag.db :as db]
+            [tictag.riemann :as r]
             [clojure.string :as str]
             [hiccup.core :refer [html]]
             [hiccup.page :refer [html5]]
@@ -338,7 +339,19 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
              :body "An unknown error occurred."})
         resp))))
 
-(defrecord Server [db config tagtime]
+(defmacro measure-latency [riemann & body]
+  `(let [t0# (System/nanoTime)
+         value# (do ~@body)
+         t1# (System/nanoTime)]
+     (r/send! ~riemann {:service "http latency"
+                        :metric (- t1# t0#)})
+     value#))
+
+(defn wrap-riemann [handler riemann]
+  (fn [req]
+    (measure-latency riemann (handler req))))
+
+(defrecord Server [db config tagtime riemann]
   component/Lifecycle
   (start [component]
     (debug "Starting server")
@@ -350,7 +363,8 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
                     (wrap-defaults (-> api-defaults
                                        (assoc-in [:static :resources] "/public")
                                        (assoc :proxy true)
-                                       (assoc :cookies true))))
+                                       (assoc :cookies true)))
+                    (wrap-riemann riemann))
                 config)]
       (debug "Server created")
       (assoc component :stop stop)))
