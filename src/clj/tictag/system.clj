@@ -13,7 +13,7 @@
    :server (component/using
             (server/map->Server
              {:config (:tictag-server config)})
-            [:db :tagtime :jwt :riemann :beeminder])
+            [:db :tagtime :jwt :riemann :beeminder :slack])
    :tagtime (tagtime/tagtime
              (get-in config [:tagtime :gap])
              (get-in config [:tagtime :seed]))
