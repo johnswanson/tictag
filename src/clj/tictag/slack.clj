@@ -36,14 +36,6 @@
 (defn users-info [token user-id]
   (slack-call! "users.info" {:token token :user user-id}))
 
-(defn send-message! [user body]
-  (when-let [{:keys [channel-id bot-access-token]} (:slack user)]
-    (tracef "tictag.slack/send-message! %s" (:username user))
-    (slack-call! "chat.postMessage"
-                 {:token   bot-access-token
-                  :channel channel-id
-                  :text    body})))
-
 (defn send-message [user body]
   (when-let [{:keys [channel-id bot-access-token]} (:slack user)]
     (tracef "tictag.slack/send-message! %s" (:username user))
@@ -52,17 +44,24 @@
                                   :channel channel-id
                                   :text body}}))))
 
+(defn record-response [riemann resp]
+  (let [r                @resp
+        {status :status} r]
+    (riemann/send! riemann {:service     "slack"
+                            :description (pr-str r)
+                            :state       (if (>= status 300)
+                                           "warning"
+                                           "ok")})))
+
+(defn send-message! [{riemann :riemann} user body]
+  (let [resp (send-message user body)]
+    (record-response riemann resp)))
+
 (defn send-messages [{riemann :riemann} users body]
   (let [messages (doall
                   (->> users
                        (map #(send-message % body))
                        (remove nil?)))]
     (doseq [resp messages]
-      (let [r                @resp
-            {status :status} r]
-        (riemann/send! riemann {:service     "slack"
-                                :description (pr-str r)
-                                :state       (if (>= status 300)
-                                               "warning"
-                                               "ok")})))))
+      (record-response riemann resp))))
 

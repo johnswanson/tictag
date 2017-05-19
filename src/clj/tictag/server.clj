@@ -71,8 +71,8 @@
   (db/update-tags! db pings)
   (beeminder/sync! bm user))
 
-(defn slack! [user body-fmt]
-  (slack/send-message! user (apply format body-fmt)))
+(defn slack! [slack user body-fmt]
+  (slack/send-message! slack user (apply format body-fmt)))
 
 (defn report-changed-ping [old-ping new-ping]
   (format "Changing Ping @ `%s`\nOld: `%s`\nNew: `%s`"
@@ -83,7 +83,7 @@
 (defn tag-ping [component user old-ping tags]
   (let [new-ping (assoc old-ping :tags tags)]
     (update-pings! component user [new-ping])
-    (slack! user [(report-changed-ping old-ping new-ping)])))
+    (slack! (:slack component) user [(report-changed-ping old-ping new-ping)])))
 
 (defmulti apply-command! (fn [component user cmd args] cmd))
 
