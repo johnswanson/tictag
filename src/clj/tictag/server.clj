@@ -325,19 +325,7 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
     (trace req)
     (when-not (= (:uri req) "/healthcheck")
       (debugf "REQ: [user: %s] [%s] [%s]" (:user-id req) (:uri req) (:remote-addr req)))
-    (let [resp (try (handler req) (catch Exception e
-                                    (error e)
-                                    :ERROR))]
-      (trace resp)
-      (if (or (= resp :ERROR)
-              (and (number? (:status resp))
-                   (>= (:status resp) 500)
-                   (< (:status resp) 600)))
-        (do (error req resp)
-            {:status 500
-             :headers {"Content-Type" "text/plain"}
-             :body "An unknown error occurred."})
-        resp))))
+    (handler req)))
 
 
 (defrecord Server [db config tagtime riemann]

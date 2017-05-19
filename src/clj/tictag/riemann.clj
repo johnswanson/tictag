@@ -34,16 +34,17 @@
       (r/close! c))
     (dissoc component :conn)))
 
-(defmacro measure-latency [riemann & body]
-  `(let [t0# (System/nanoTime)
-         value# (do ~@body)
-         t1# (System/nanoTime)]
-     (send! ~riemann {:service "http latency" :metric (- t1# t0#)})
-     value#))
-
 (defn wrap-riemann [handler riemann]
   (fn [req]
-    (let [response (measure-latency riemann (handler req))]
-      (send! riemann {:service (str "http status " (str/replace (:uri req) "/" "-"))
-                      :state (if (= (:status response) 500) "critical" "ok")})
+    (let [t0       (System/nanoTime)
+          response (try (handler req)
+                        (catch Exception e {:error e}))
+          t1       (System/nanoTime)
+          error?   (or (:error response)
+                       (and (number? (:status response))
+                            (>= (:status response) 500)
+                            (< (:status response) 600)))]
+      (send! riemann {:service "http latency"
+                      :state (if error? "warning" "ok")
+                      :metric (- t1 t0)})
       response)))
