@@ -54,7 +54,7 @@
                                            "ok")})))
 
 (defn send-message! [{riemann :riemann} user body]
-  (let [resp (send-message user body)]
+  (when-let [resp (send-message user body)]
     (record-response riemann resp)))
 
 (defn send-messages [{riemann :riemann} users body]
