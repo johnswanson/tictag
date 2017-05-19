@@ -67,9 +67,9 @@
 (defn slack-text [slack-message]
   (get-in slack-message [:event :text]))
 
-(defn update-pings! [db user pings]
+(defn update-pings! [{db :db bm :beeminder} user pings]
   (db/update-tags! db pings)
-  (beeminder/sync! db user))
+  (beeminder/sync! bm user))
 
 (defn slack! [user body-fmt]
   (slack/send-message! user (apply format body-fmt)))
@@ -80,33 +80,33 @@
           (:tags old-ping)
           (:tags new-ping)))
 
-(defn tag-ping [db user old-ping tags]
+(defn tag-ping [component user old-ping tags]
   (let [new-ping (assoc old-ping :tags tags)]
-    (update-pings! db user [new-ping])
+    (update-pings! component user [new-ping])
     (slack! user [(report-changed-ping old-ping new-ping)])))
 
-(defmulti apply-command! (fn [db user cmd args] cmd))
+(defmulti apply-command! (fn [component user cmd args] cmd))
 
-(defmethod apply-command! :sleep [db user _ args]
+(defmethod apply-command! :sleep [{db :db :as component} user _ args]
   (let [sleepy-pings (db/sleepy-pings db user)]
     (debugf "Making pings sleepy: %s" (pr-str sleepy-pings))
-    (update-pings! db user (map #(assoc % :tags #{"sleep"}) sleepy-pings))
-    (slack! user ["sleepings pings: %s to %s"
+    (update-pings! component user (map #(assoc % :tags #{"sleep"}) sleepy-pings))
+    (slack! component user ["sleepings pings: %s to %s"
                   (f/unparse wtf (:local-time (last sleepy-pings)))
                   (f/unparse wtf (:local-time (first sleepy-pings)))])))
 
-(defmethod apply-command! :tag-ping-by-id [db user _ {:keys [id tags]}]
-  (tag-ping db user (db/ping-from-id db user id) (set tags)))
+(defmethod apply-command! :tag-ping-by-id [{db :db :as component} user _ {:keys [id tags]}]
+  (tag-ping component user (db/ping-from-id db user id) (set tags)))
 
-(defmethod apply-command! :tag-ping-by-long-time [db user _ {:keys [tags long-time]}]
-  (tag-ping db user (db/ping-from-long-time db user long-time) (set tags)))
+(defmethod apply-command! :tag-ping-by-long-time [{db :db :as component} user _ {:keys [tags long-time]}]
+  (tag-ping component user (db/ping-from-long-time db user long-time) (set tags)))
 
-(defmethod apply-command! :tag-last-ping [db user _ {:keys [tags]}]
-  (tag-ping db user (db/last-ping db user) (set tags)))
+(defmethod apply-command! :tag-last-ping [{db :db :as component} user _ {:keys [tags]}]
+  (tag-ping component user (db/last-ping db user) (set tags)))
 
-(defmethod apply-command! :ditto [db user _ _]
+(defmethod apply-command! :ditto [{db :db :as component} user _ _]
   (let [[last-ping second-to-last-ping] (db/last-pings db user 2)]
-    (tag-ping db user last-ping (:tags second-to-last-ping))))
+    (tag-ping component user last-ping (:tags second-to-last-ping))))
 
 (defmethod apply-command! :help [_ user _ _]
   (slack! user ["Tag the most recent ping (e.g. by saying `ttc`)
@@ -116,11 +116,11 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
 `\"` command: tags the last ping with whatever the second-to-last ping had
 "]))
 
-(defn apply-command [db user cmd]
+(defn apply-command [component user cmd]
   (debugf "COMMAND %s: %s" (pr-str (:username user)) (pr-str cmd))
   (let [{:keys [command args]} (cli/parse-body cmd)]
     (debugf "Command parsed as: %s, args %s" (pr-str command) (pr-str args))
-    (apply-command! db user command args)))
+    (apply-command! component user command args)))
 
 (defn valid-slack? [{:keys [config]} params]
   (let [valid? (= (:token params) (:slack-verification-token config))]
@@ -132,14 +132,14 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
   (taoensso.timbre/logged-future
     (when-let [user (and (valid-slack? component params)
                          (slack-user db params))]
-      (apply-command db user (slack-text params))))
+      (apply-command component user (slack-text params))))
   {:status 200 :body ""})
 
-(defn timestamp [{:keys [db]} {:keys [params user-id]}]
+(defn timestamp [{:keys [db] :as component} {:keys [params user-id]}]
   (if-let [user (db/get-user-by-id db user-id)]
     (do
       (debugf "Received a timestamp: %s" (pr-str params))
-      (update-pings! db user [(-> params
+      (update-pings! component user [(-> params
                                   (assoc :user-id (:id user))
                                   (update :timestamp cli/str-number?)
                                   (dissoc :username :password))])
@@ -339,17 +339,6 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
              :body "An unknown error occurred."})
         resp))))
 
-(defmacro measure-latency [riemann & body]
-  `(let [t0# (System/nanoTime)
-         value# (do ~@body)
-         t1# (System/nanoTime)]
-     (r/send! ~riemann {:service "http latency"
-                        :metric (- t1# t0#)})
-     value#))
-
-(defn wrap-riemann [handler riemann]
-  (fn [req]
-    (measure-latency riemann (handler req))))
 
 (defrecord Server [db config tagtime riemann]
   component/Lifecycle
@@ -364,7 +353,7 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
                                        (assoc-in [:static :resources] "/public")
                                        (assoc :proxy true)
                                        (assoc :cookies true)))
-                    (wrap-riemann riemann))
+                    (r/wrap-riemann riemann))
                 config)]
       (debug "Server created")
       (assoc component :stop stop)))

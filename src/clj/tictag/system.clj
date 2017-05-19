@@ -13,21 +13,28 @@
    :server (component/using
             (server/map->Server
              {:config (:tictag-server config)})
-            [:db :tagtime :jwt :riemann])
+            [:db :tagtime :jwt :riemann :beeminder])
    :tagtime (tagtime/tagtime
              (get-in config [:tagtime :gap])
              (get-in config [:tagtime :seed]))
    :repl-server (repl/->REPL)
+
    :jwt (config :jwt)
+
    :db (component/using
         (db/map->Database {:db-spec    (:db config)
                            :crypto-key (:crypto-key config)})
         [:tagtime])
 
-   :riemann (riemann/->RiemannClient (:riemann config))
+   :riemann (component/using
+             (riemann/map->RiemannClient {:config (:riemann config)})
+             [:db])
    :chimer (component/using
             (server-chimer/map->ServerChimer {})
-            [:db])
+            [:db :slack])
+
+   :beeminder (component/using {} [:db :tagtime :riemann])
+   :slack (component/using {} [:riemann])
 
    :tester (tester/->Tester (:run-tests? config))))
 

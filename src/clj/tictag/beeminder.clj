@@ -5,7 +5,8 @@
             [clojure.string :as str]
             [clojure.data :refer [diff]]
             [tictag.db :as db]
-            [tictag.beeminder-matching :refer [match?]]))
+            [tictag.beeminder-matching :refer [match?]]
+            [tictag.riemann :as riemann]))
 
 (timbre/refer-timbre)
 
@@ -58,7 +59,7 @@
        (map :local-day)
        (frequencies)))
 
-(defn sync! [db user]
+(defn sync! [{:keys [db riemann tagtime]} user]
   (debugf "Beginning beeminder sync: %s" (:enabled? (:beeminder user)))
   (when (:enabled? (:beeminder user))
     (when-let [goals (seq (db/get-goals db (:beeminder user)))]
@@ -77,7 +78,7 @@
                 existing-map             (group-by :daystamp existing-datapoints)
                 to-save                  (filter :value
                                                  (for [[daystamp value] days
-                                                       :let             [hours (* (/ (:gap (:tagtime db)) 60 60) value)
+                                                       :let             [hours (* (/ (:gap tagtime) 60 60) value)
                                                                          {id :id old-value :value}
                                                                          (first
                                                                           (existing-map daystamp))]]
@@ -96,10 +97,15 @@
                 save-futures             (doall (map #(save-datapoint! token username name %) to-save))
                 delete-futures           (doall (map #(delete-datapoint! token username name %) to-delete))]
             (doseq [resp (concat save-futures delete-futures)]
-              (debugf "result %s %s: %s"
-                             (-> @resp :opts :url)
-                             (-> @resp :opts :method)
-                             (:status @resp)))))))))
+              (let [r                           @resp
+                    {status :status opts :opts} r
+                    {url :url method :method}   opts]
+                (riemann/send! riemann {:service "beeminder"
+                                        :description (pr-str
+                                                      {:status status :goal-name name :username username :user (:id user)})
+                                        :state (if (>= status 300)
+                                                 "warning"
+                                                 "ok")})))))))))
 
 (defn user-for [token]
   (let [resp (-> (http/request {:url         "https://www.beeminder.com/api/v1/users/me.json"

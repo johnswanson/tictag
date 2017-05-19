@@ -4,7 +4,8 @@
             [cheshire.core :as json]
             [clojure.string :as str]
             [oauth.v2 :as v2]
-            [taoensso.timbre :as timbre]))
+            [taoensso.timbre :as timbre]
+            [tictag.riemann :as riemann]))
 
 (timbre/refer-timbre)
 
@@ -42,4 +43,26 @@
                  {:token   bot-access-token
                   :channel channel-id
                   :text    body})))
+
+(defn send-message [user body]
+  (when-let [{:keys [channel-id bot-access-token]} (:slack user)]
+    (tracef "tictag.slack/send-message! %s" (:username user))
+    (-> (method-url "chat.postMessage")
+        (http/post {:form-params {:token bot-access-token
+                                  :channel channel-id
+                                  :text body}}))))
+
+(defn send-messages [{riemann :riemann} users body]
+  (let [messages (doall
+                  (->> users
+                       (map #(send-message % body))
+                       (remove nil?)))]
+    (doseq [resp messages]
+      (let [r                @resp
+            {status :status} r]
+        (riemann/send! riemann {:service     "slack"
+                                :description (pr-str r)
+                                :state       (if (>= status 300)
+                                               "warning"
+                                               "ok")})))))
 
