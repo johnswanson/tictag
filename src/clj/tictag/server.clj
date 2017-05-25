@@ -51,6 +51,26 @@
      [:script {:src "/js/compiled/app.js"}]
      [:script {:src "https://use.fontawesome.com/efa7507d6f.js"}]]]))
 
+(defn devcards [component]
+  (html5
+   [:html {:lang "en"}
+    [:head
+     [:meta {:charset "utf-8"}]
+     [:link {:href "https://fonts.googleapis.com/css?family=Roboto:300,400,500,700,400italic"
+             :rel "stylesheet"
+             :type "text/css"}]
+     [:link {:href "https://fonts.googleapis.com/css?family=Roboto+Condensed:300,400"
+             :rel "stylesheet"
+             :type "text/css"}]
+     [:link {:rel "stylesheet" :href "//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap.css"}]
+     [:link {:rel "stylesheet" :href "/css/re-com.css"}]
+     [:link {:rel "stylesheet" :href "/css/material-design-iconic-font.min.css"}]
+     [:link {:rel "stylesheet" :href "/css/main.css"}]]
+    [:body
+     [:div#app]
+     [:script {:src "/js/tictag_devcards.js"}]
+     [:script {:src "https://use.fontawesome.com/efa7507d6f.js"}]]]))
+
 (defn slack-user [db slack-message]
   (when-let [uid (get-in slack-message [:event :user])]
     (db/get-user-from-slack-id db uid)))
@@ -296,6 +316,7 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
    (GET "/pings" _ (partial pings component))
    (GET "/config" _ (partial config component))
    (GET "/" _ (index component))
+   (GET "/devcards" _ (devcards component))
    (GET "/signup" _ (index component))
    (GET "/login" _ (index component))
    (GET "/logout" _ (index component))

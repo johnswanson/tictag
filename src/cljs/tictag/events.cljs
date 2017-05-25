@@ -5,6 +5,7 @@
             [ajax.core :refer [transit-response-format transit-request-format]]
             [tictag.nav :as nav]
             [tictag.schemas :as schemas]
+            [tictag.dates]
             [tictag.utils :refer [descend]]
             [goog.net.cookies]
             [cljs.spec :as s]
@@ -73,13 +74,14 @@
  :fetch-user-info
  [interceptors]
  (fn [{:keys [db]} _]
-   {:http-xhrio (authenticated-xhrio
-                 {:method :get
-                  :uri "/api/user/me"
-                  :response-format (transit-response-format {})
-                  :on-success [:user-me-success]
-                  :on-failure [:user-me-failure]}
-                 (:auth-token db))}))
+   (when-not (:db/authenticated-user db)
+     {:http-xhrio (authenticated-xhrio
+                   {:method :get
+                    :uri "/api/user/me"
+                    :response-format (transit-response-format {})
+                    :on-success [:user-me-success]
+                    :on-failure [:user-me-failure]}
+                   (:auth-token db))})))
 
 (defn ref-to-goal [goal]
   [:goal/by-id (:goal/id goal)])
@@ -150,14 +152,14 @@
 (def formatter (f/formatters :basic-date-time))
 
 (defn process [pings]
-  (map #(assoc %
-               :parsed-time
-               (f/parse formatter (:local-time %)))
-       pings))
+  (->> pings
+       (map #(assoc % :parsed-time (f/parse formatter (:local-time %))))
+       (map #(assoc % :days-since-epoch (tictag.dates/days-since-epoch (:parsed-time %))))
+       (map #(assoc % :weeks-since-epoch (tictag.dates/weeks-since-epoch (:parsed-time %))))
+       (map #(assoc % :seconds-since-midnight (tictag.dates/seconds-since-midnight (:parsed-time %))))))
 
 (reg-event-fx
  :pings/receive
- [interceptors]
  (fn [{db :db} [_ user first-time? processed to-process]]
    (if first-time?
      {:dispatch [:pings/receive user false processed to-process]}
@@ -285,7 +287,7 @@
 (reg-event-fx
  :initialize
  [(inject-cofx :cookie :auth-token) interceptors]
- (fn [{:keys [cookies]} _]
+ (fn [{:keys [cookies db]} _]
    (merge {:pushy-init true
            :http-xhrio {:method          :get
                         :uri             "/api/timezones"
@@ -295,7 +297,7 @@
                         :on-success      [:success-timezones]
                         :on-failure      [:failed-timezones]}
            :dispatch-n [[:fetch-user-info]]
-           :db {:auth-token (:auth-token cookies)}})))
+           :db (merge db {:auth-token (:auth-token cookies)})})))
 
 
 (reg-event-db

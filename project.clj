@@ -5,7 +5,15 @@
   :license {:name "Eclipse Public License"
             :url  "http://www.eclipse.org/legal/epl-v10.html"}
   :figwheel {:css-dirs ["resources/public/css"]}
-  :cljsbuild {:builds [{:id           "dev"
+  :cljsbuild {:builds [{:id           "devcards"
+                        :figwheel     {:devcards true}
+                        :source-paths ["src/cljs" "src/cljc" "cards"]
+                        :compiler     {:main                 "cards.core"
+                                       :asset-path           "js/devcards_out"
+                                       :output-to            "resources/public/js/tictag_devcards.js"
+                                       :output-dir           "resources/public/js/devcards_out"
+                                       :source-map-timestamp true}}
+                       {:id           "dev"
                         :figwheel     true
                         :source-paths ["src/cljs" "src/cljc"]
                         :compiler     {:main          "tictag.dev"
@@ -18,17 +26,18 @@
                         :jar          true
                         :figwheel     false
                         :source-paths ["src/cljs" "src/cljc"]
-                        :compiler     {:main          "tictag.prod"
-                                       :asset-path    "/js/compiled"
-                                       :output-to     "resources/public/js/compiled/app.js"
-                                       :optimizations :advanced}}]}
+                        :compiler     {:main            "tictag.prod"
+                                       :closure-defines {goog.DEBUG false}
+                                       :asset-path      "/js/compiled"
+                                       :output-to       "resources/public/js/compiled/app.js"
+                                       :optimizations   :advanced}}]}
   :plugins [[lein-cljsbuild "1.1.5"]]
   :test-paths ["test/clj"]
-  :profiles {:uberjar {:aot             :all
-                       :prep-tasks      ["compile" ["cljsbuild" "once" "prod"]]
-                       :closure-defines {:goog.DEBUG false}}
+  :profiles {:uberjar {:aot        :all
+                       :prep-tasks ["compile" ["cljsbuild" "once" "prod"]]}
              :dev     [:dev-secrets {:source-paths ["dev" "test/clj"]
                                      :dependencies [[org.clojure/tools.namespace "0.2.11"]
+                                                    [devcards "0.2.1"]
                                                     [com.cemerick/piggieback "0.2.1"]]
                                      :plugins      [[lein-environ "1.1.0"]]}]}
   :source-paths ["src/clj" "src/cljc"]
@@ -45,6 +54,7 @@
                  [org.clojure/java.jdbc "0.7.0-alpha1"]
                  [org.clojars.jds02006/tictagapi "0.1.0-SNAPSHOT"]
                  [riemann-clojure-client "0.4.5"]
+                 [clj-iterate "0.96"]
                  [instaparse "1.4.5"]
                  [org.clojure/data.codec "0.1.0"]
                  [juxt/dirwatch "0.2.3"]

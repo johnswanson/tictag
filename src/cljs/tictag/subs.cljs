@@ -33,121 +33,38 @@
     other))
 
 (reg-sub
- :pings
+ :raw-pings
  (fn [db _]
    (let [user (:db/authenticated-user db)]
      (filter #(= (:user %) user)
-             (vals (:pings/by-timestamp db))))))
+              (vals (:pings/by-timestamp db))))))
 
 (reg-sub
- :ping-active?
- (fn [_ _]
-   (subscribe [:query-fn]))
- (fn [query-fn [_ ping]]
-   (query-fn ping)))
+ :sorted-pings
+ (fn [_ _] (subscribe [:raw-pings]))
+ (fn [pings _]
+   (sort #(t/after? (:parsed-time %1) (:parsed-time %2)) pings)))
 
 (reg-sub
- :parsed-times
- (fn [_ _]
-   (subscribe [:pings]))
- (fn parse-times [pings _]
-   (map :parsed-time pings)))
-
-(reg-sub
- :days-since-epoch
- (fn [_ _]
-   (subscribe [:parsed-times]))
- (fn [parsed-times _]
-   (map days-since-epoch parsed-times)))
-
-(reg-sub
- :min-days-since-epoch
- (fn [_ _]
-   (subscribe [:days-since-epoch]))
- (fn [days _]
-   (apply min days)))
-
-(reg-sub
- :max-days-since-epoch
- (fn [_ _] (subscribe [:days-since-epoch]))
- (fn [days _]
-   (apply max days)))
-
-(reg-sub
- :seconds-since-midnight
- (fn [_ _] (subscribe [:parsed-times]))
- (fn [parsed-times _]
-   (map seconds-since-midnight parsed-times)))
+ :pings
+ (fn [_ _] [(subscribe [:sorted-pings])
+            (subscribe [:query-fn])])
+ (fn [[pings query-fn] _]
+   (map #(assoc % :active? (query-fn %)) pings)))
 
 (reg-sub
  :matrix-plot-height
- (constantly 500))
+ (constantly 1300))
 (reg-sub
  :matrix-plot-width
- (constantly 500))
-
-(reg-sub
- :matrix-plot-domain-x
- (fn [_ _]
-   [(subscribe [:min-days-since-epoch])
-    (subscribe [:max-days-since-epoch])])
- (fn [[min max] _]
-   [min max]))
-
-(reg-sub
- :matrix-plot-domain-y
- (constantly [0 (* 24 60 60)]))
-
-(reg-sub
- :matrix-plot-range-x
- (fn [_ _] (subscribe [:matrix-plot-width]))
- (fn [width _] [0 (- width 10)]))
-
-(reg-sub
- :matrix-plot-range-y
- (fn [_ _] (subscribe [:matrix-plot-height]))
- (fn [height _] [50 (- height 10)]))
-
-(defn pixel [domain range x]
-  (let [max-domain  (apply max domain)
-        min-domain  (apply min domain)
-        domain-diff (- max-domain min-domain)
-
-        max-range  (apply max range)
-        min-range  (apply min range)
-        range-diff (- max-range min-range)]
-    (+ min-range (* range-diff (/ (- x min-domain) domain-diff)))))
-
-(reg-sub
- :ping-pixel
- (fn [_ _]
-   [(subscribe [:matrix-plot-range-x])
-    (subscribe [:matrix-plot-range-y])
-    (subscribe [:matrix-plot-domain-x])
-    (subscribe [:matrix-plot-domain-y])])
- (fn [[range-x range-y
-       domain-x domain-y] [_ {:keys [x y]}]]
-   {:x (pixel domain-x range-x x)
-    :y (pixel domain-y range-y y)}))
-
-(reg-sub
- :matrix-plot-pings
- (fn [_ _]
-   [(subscribe [:pings])
-    (subscribe [:seconds-since-midnight])
-    (subscribe [:days-since-epoch])])
- (fn [[pings seconds days] _]
-   (map (fn [d s p]
-          (assoc p :x d :y s))
-        days seconds pings)))
+ (constantly 1300))
 
 (reg-sub
  :count-meeting-query
  (fn [_ _]
-   [(subscribe [:query-fn])
-    (subscribe [:pings])])
- (fn [[query-fn pings] _]
-   (count (filter query-fn pings))))
+   (subscribe [:pings]))
+ (fn [pings _]
+   (count (filter :active? pings))))
 
 (reg-sub
  :minutes-for-tag

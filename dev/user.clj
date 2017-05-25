@@ -25,7 +25,7 @@
 
 (defn cljs-repl []
   (do (figwheel-sidecar.repl-api/stop-figwheel!)
-      (figwheel-sidecar.repl-api/start-figwheel!)
+      (figwheel-sidecar.repl-api/start-figwheel! "dev" "devcards")
       (figwheel-sidecar.repl-api/cljs-repl)))
 
 (defn migrate! [] (migrate ragtime/config))

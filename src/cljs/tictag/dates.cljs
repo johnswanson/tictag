@@ -10,8 +10,16 @@
    (/ (- d2 d1)
       (* 24 60 60 1000))))
 
+(defn weeks-since [d1 d2]
+  (Math/round
+   (/ (- d2 d1)
+      (* 7 24 60 60 1000))))
+
 (defn days-since-epoch [date]
   (days-since (t/epoch) date))
+
+(defn weeks-since-epoch [date]
+  (weeks-since (t/epoch) date))
 
 (defn seconds-since-midnight [date]
   (+ (seconds date)
