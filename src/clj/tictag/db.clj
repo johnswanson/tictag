@@ -296,6 +296,14 @@
                (sql/format
                 (where user-query [:= :slack.slack_user_id slack-id])))))))
 
+(defn update-timezone [db user-id tz]
+  (j/execute!
+   (:db db)
+   (-> (update :users)
+       (sset {:tz tz})
+       (where [:= user-id :users.id])
+       sql/format)))
+
 (defn write-user [db {:keys [username password email tz] :as user}]
   (j/execute!
    (:db db)

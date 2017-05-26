@@ -35,6 +35,36 @@
     (set (map :name tzs))))
 
 (reg-event-fx
+ :settings/changed-timezone
+ [interceptors]
+ (fn [{:keys [db]} [_ tz]]
+   (if ((allowed-timezones db) tz)
+     {:http-xhrio (authenticated-xhrio
+
+                   {:method          :post
+                    :params          {:tz tz}
+                    :uri             "/api/user/me/tz"
+                    :format          (transit-request-format {})
+                    :response-format (transit-response-format {})
+                    :on-success      [:change-tz-success]
+                    :on-failure      [:change-tz-failure]}
+                   (:auth-token db))}
+     {:db db})))
+
+(reg-event-db
+ :change-tz-success
+ [interceptors]
+ (fn [db [_ {:keys [tz]}]]
+   (assoc-in db (conj (:db/authenticated-user db) :tz) tz)))
+
+(reg-event-db
+ :change-tz-fail
+ [interceptors]
+ (fn [db _]
+   ;; TODO
+   db))
+
+(reg-event-fx
  :login/submit-signup
  [interceptors]
  (fn [{:keys [db]} [_ params]]

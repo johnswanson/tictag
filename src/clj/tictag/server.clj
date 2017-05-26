@@ -273,6 +273,16 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
       (catch Exception e UNAUTHORIZED))
     UNAUTHORIZED))
 
+(defn update-tz [{:keys [db]} {:keys [params user-id]}]
+  (if user-id
+    (try (response (do
+                     (db/update-timezone db user-id (:tz params))
+                     params))
+         (catch Exception e
+           (error e)
+           UNAUTHORIZED))
+    UNAUTHORIZED))
+
 (defn add-goal [{:keys [db]} {:keys [params user-id]}]
   (if (spy (s/valid? :tictag.schemas/goal params))
     (let [new-id (:id (db/add-goal db user-id params))]
@@ -327,6 +337,7 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
             (GET "/timezones" _ (partial timezone-list component))
             (GET "/user/me" _ (partial my-user component))
             (POST "/user/me/beeminder" _ (partial add-beeminder component))
+            (POST "/user/me/tz" _ (partial update-tz component))
             (DELETE "/user/me/beeminder" _ (partial delete-beeminder component))
             (DELETE "/user/me/slack" _ (partial delete-slack component))
             (POST "/user/me/goals/" _ (partial add-goal component))

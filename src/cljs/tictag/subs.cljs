@@ -180,6 +180,12 @@
       (filter #(= (:user %) user)
               (vals (:beeminder/by-id db)))))))
 
+(reg-sub
+ :timezone
+ (fn [_ _] (subscribe [:authorized-user]))
+ (fn [user _]
+   (:tz user)))
+
 
 (defn valid-goal [{:keys [goal/tags] :as goal}]
   (assoc goal

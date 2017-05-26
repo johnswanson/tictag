@@ -3,6 +3,7 @@
             [re-com.core :as re-com]
             [reagent.core :as reagent]
             [tictag.constants :refer [ENTER]]
+            [tictag.views.inputs :refer [input-timezone]]
             [goog.string :as str]
             [cljs.reader :as edn]))
 
@@ -110,10 +111,23 @@
                               [delete-beeminder-button]]]
                   [beeminder-token-input])]]))
 
+(defn timezone []
+  (let [timezone          (subscribe [:timezone])
+        allowed-timezones (subscribe [:allowed-timezones])]
+    [re-com/v-box
+     :children [[re-com/title :level :level1 :label "Change time zone"]
+                [re-com/single-dropdown
+                 :width "100%"
+                 :choices (map (fn [tz] {:id tz :label tz}) @allowed-timezones)
+                 :model @timezone
+                 :filter-box? true
+                 :on-change #(dispatch [:settings/changed-timezone %])]]]))
+
 (defn settings []
   (let [auth-user (subscribe [:authorized-user])]
     [re-com/v-box
-     :children [[tagtime-import]
+     :children [[timezone]
+                [tagtime-import]
                 [beeminder]
                 [slack]]]))
 
