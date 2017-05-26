@@ -125,8 +125,13 @@
   (let [my-count     (subscribe [:tag-count tag])
         tag-%        (subscribe [:tag-% tag])
         minutes      (subscribe [:minutes-for-tag tag])
+        active?      (subscribe [:tag-active? tag])
         time-per-day (subscribe [:time-per-day-for-tag tag])]
-    [:tr
+    [:tr (if @active?
+           {:style {:background-color "#333"
+                    :color            "#ddd"}}
+           {:style {:background-color "#ddd"
+                    :color            "#333"}})
      [:td tag]
      [:td @my-count]
      [:td (gstring/format "%.1f%%" @tag-%)]
@@ -135,27 +140,32 @@
 (defn logged-in-app
   []
   (let [meeting-query-per-day (subscribe [:meeting-query-per-day])
-        tag-counts            (subscribe [:sorted-tag-counts])]
-    [:div
-     [matrix-plot]
-     [:div
+        tag-counts            (subscribe [:sorted-tag-counts])
+        ping-query            (subscribe [:ping-query])]
+    [re-com/v-box
+     :align :center
+     :children
+     [[matrix-plot]
       [re-com/input-text
        :style {:border-radius "0px"}
        :width "100%"
        :placeholder "Query"
        :model (reagent/atom "")
        :change-on-blur? false
-       :on-change #(dispatch [:update-ping-query %])]]
-     [:div (.toFixed @meeting-query-per-day 1) " minutes per day"]
-     [:table
-      {:style {:border "1px solid black"}}
-      [:tbody
-       [:tr [:th "Tag"] [:th "Count"] [:th "Percent of Pings"] [:th "Time Per Day"]]
-       (for [tag @tag-counts]
-         ^{:key (pr-str tag)}
-         [tag-table-row tag])]]]))
-
-
+       :on-change #(dispatch [:debounced-update-ping-query %])]
+      [re-com/box
+       :child
+       [:div (.toFixed @meeting-query-per-day 1) " minutes per day"]]
+      [re-com/box
+       :child
+       [:table
+        {:style {:border "1px solid black"}}
+        [:tbody
+         [:tr [:th "Tag"] [:th "Count"] [:th "Percent of Pings"] [:th "Time Per Day"]]
+         (when @ping-query [tag-table-row @ping-query])
+         (for [tag @tag-counts]
+           ^{:key (pr-str tag)}
+           [tag-table-row tag])]]]]]))
 
 (defn app
   []

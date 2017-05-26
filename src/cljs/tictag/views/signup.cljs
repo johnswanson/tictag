@@ -21,31 +21,30 @@
                                            :email    @email
                                            :tz       @timezone}])
                                (.preventDefault %))]
-    (fn []
-      [re-com/box
-       :child
-       [:form {:on-submit submit}
-        [re-com/v-box
-         :width "400px"
-         :justify :center
-         :children [[:label "Username"
-                     [input username username-errors "Username"]]
-                    [:label "Password"
-                     [input-password password password-errors]]
-                    [:label "Email"
-                     [input email email-errors "Email"]]
-                    [:label "Timezone"
-                     [input-timezone timezone allowed-timezones]]
-                    [re-com/gap :size "10px"]
-                    [re-com/button
-                     :on-click submit
-                     :style {:width         "100%"
-                             :font-size     "22px"
-                             :font-weight   "300"
-                             :border        "1px solid black"
-                             :border-radius "0px"
-                             :padding       "20px 26px"}
-                     :label "Sign Up!"]]]]])))
+    [re-com/box
+     :child
+     [:form {:on-submit submit}
+      [re-com/v-box
+       :width "400px"
+       :justify :center
+       :children [[:label "Username"
+                   [input username username-errors "Username"]]
+                  [:label "Password"
+                   [input-password password password-errors]]
+                  [:label "Email"
+                   [input email email-errors "Email"]]
+                  [:label "Timezone"
+                   [input-timezone timezone allowed-timezones]]
+                  [re-com/gap :size "10px"]
+                  [re-com/button
+                   :on-click submit
+                   :style {:width         "100%"
+                           :font-size     "22px"
+                           :font-weight   "300"
+                           :border        "1px solid black"
+                           :border-radius "0px"
+                           :padding       "20px 26px"}
+                   :label "Sign Up!"]]]]]))
 
 
 

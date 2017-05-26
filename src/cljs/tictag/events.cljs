@@ -207,6 +207,12 @@
    ;; TODO
    db))
 
+(reg-event-fx
+ :debounced-update-ping-query
+ [interceptors]
+ (fn [_ [_ v]]
+   {:dispatch-debounce [:upq [:update-ping-query v] 500]}))
+
 (reg-event-db
  :update-ping-query
  [interceptors]
@@ -502,3 +508,20 @@
                   :on-success      [:tagtime-import/success]
                   :on-failure      [:tagtime-import/fail]}
                  (:auth-token db))}))
+
+(defonce timeouts
+  (atom {}))
+
+(reg-fx :dispatch-debounce
+        (fn [[id event-vec n]]
+          (js/clearTimeout (@timeouts id))
+          (swap! timeouts assoc id
+                 (js/setTimeout (fn []
+                                  (re-frame.core/dispatch event-vec)
+                                  (swap! timeouts dissoc id))
+                                n))))
+
+(reg-fx :stop-debounce
+        (fn [id]
+          (js/clearTimeout (@timeouts id))
+          (swap! timeouts dissoc id)))

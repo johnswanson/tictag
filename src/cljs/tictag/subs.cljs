@@ -178,6 +178,13 @@
    (get tag-counts tag 0)))
 
 (reg-sub
+ :tag-active?
+ (fn [_ _]
+   (subscribe [:query-fn]))
+ (fn [f? [_ tag]]
+   (f? {:tags #{tag}})))
+
+(reg-sub
  :total-ping-count
  (fn [_ _]
    (subscribe [:pings]))
