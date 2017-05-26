@@ -89,13 +89,15 @@
      (doall
       (for [[d freq] @day-totals]
         ^{:key d}
-        [:rect
-         {:x      (xscale d)
-          :y      (- (density-yscale freq) margin)
-          :height (- height (density-yscale freq))
-          :style  {:opacity "0.2"}
-          :fill   "#0000cc"
-          :width  5}]))]))
+        (let [hours  (* freq 0.75)
+              scaled (density-yscale hours)]
+          [:rect
+           {:x      (xscale d)
+            :y      scaled
+            :height (- height scaled margin)
+            :style  {:opacity "0.2"}
+            :fill   "#0000cc"
+            :width  5}])))]))
 
 (defn matrix [xscale yscale]
   (let [pings (subscribe [:pings])]
