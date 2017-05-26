@@ -25,37 +25,28 @@
             [re-com.core :as re-com])
   (:import [goog.date.Interval]))
 
-(defn total-by-day [times]
-  (into {} (map #(vector (key %) (* (val %) 0.75))
-                (frequencies (map days-since-epoch times)))))
-
 (def simple-formatter (f/formatter "MM-dd"))
 
 (defn format-day-to-time [day]
   (let [in-seconds (* day 24 60 60 1000)]
     (f/unparse simple-formatter (tc/from-long in-seconds))))
 
-(defn circle-for-ping [xscale yscale ping]
-  (let [time       (:parsed-time ping)
-        days       (:days-since-epoch ping)
-        secs       (:seconds-since-midnight ping)
-        is-active? (:active? ping)]
-    [:ellipse {:cx    (xscale days)
-               :cy    (yscale secs)
-               :rx    2
-               :ry    12
-               :style (if is-active?
-                        {:opacity "0.6"}
-                        {:opacity "0.1"})
-               :fill  (if is-active? "#cc0000" "black")}]))
+(defn circle-for-ping [{:keys [active?]}]
+  [:ellipse {:rx    2
+             :ry    12
+             :style (if active?
+                      {:opacity "0.6"}
+                      {:opacity "0.1"})
+             :fill  (if active? "#cc0000" "black")}])
 
 (declare matrix-plot-view)
 
 (defn matrix-plot []
-  (let [width          (subscribe [:matrix-plot-width])
-        height         (subscribe [:matrix-plot-height])
-        pings          (subscribe [:pings])]
-    (matrix-plot-view @width @height @pings)))
+  (let [width   (subscribe [:matrix-plot-width])
+        height  (subscribe [:matrix-plot-height])
+        min-day (subscribe [:min-ping-day])
+        max-day (subscribe [:max-ping-day])]
+    (matrix-plot-view @width @height @min-day @max-day)))
 
 (defn time-axis [yscale margin]
   [:g {:transform (c2.svg/translate [margin 0])}
@@ -82,80 +73,87 @@
     :formatter format-day-to-time
     :label "Day")])
 
-(defn matrix-plot-view [width height pings]
+(defn axes [xscale yscale density-yscale width height margin min-day max-day]
+  [:g {:style       {:stroke       "black"
+                     :stroke-width 1
+                     :font-weight  "100"}
+       :font-size   "14px"
+       :font-family "sans-serif"}
+   [time-axis yscale margin]
+   [hist-axis density-yscale width margin]
+   [days-axis xscale min-day max-day height margin]])
+
+(defn histogram [xscale density-yscale height margin]
+  (let [day-totals (subscribe [:day-totals])]
+    [:g
+     (doall
+      (for [[d freq] @day-totals]
+        ^{:key d}
+        [:rect
+         {:x      (xscale d)
+          :y      (- (density-yscale freq) margin)
+          :height (- height (density-yscale freq))
+          :style  {:opacity "0.2"}
+          :fill   "#0000cc"
+          :width  5}]))]))
+
+(defn matrix [xscale yscale]
+  (let [pings (subscribe [:pings])]
+    [:g
+     (doall
+      (for [ping @pings]
+        ^{:key (:timestamp ping)}
+        [:g {:transform (c2.svg/translate [(xscale (:days-since-epoch ping))
+                                           (yscale (:seconds-since-midnight ping))])}
+         [circle-for-ping ping]]))]))
+
+(defn matrix-plot-view [width height min-day max-day]
   (let [margin         50
-        times          (map :parsed-time pings)
-        min-day        (apply min (map :days-since-epoch pings))
-        max-day        (apply max (map :days-since-epoch pings))
-        xscale         (c2.scale/linear :domain [min-day
-                                                 max-day]
+        xscale         (c2.scale/linear :domain [min-day max-day]
                                         :range [margin (- width margin)])
         yscale         (c2.scale/linear :domain [0 (* 24 60 60)]
                                         :range [margin (- height margin)])
-        day-totals     (total-by-day (map :parsed-time (filter :active? pings)))
         density-yscale (c2.scale/linear :domain [0 24]
                                         :range [(- height margin) margin])]
     [:svg {:style {:width (str width "px") :height (str height "px")}}
-     [:g {:style       {:stroke       "black"
-                        :stroke-width 1
-                        :font-weight  "100"}
-          :font-size   "14px"
-          :font-family "sans-serif"}
-      [time-axis yscale margin]
-      [hist-axis density-yscale width margin]
-      [days-axis xscale min-day max-day height margin]]
+     [axes xscale yscale density-yscale width height margin min-day max-day]
      [:g
-      (doall
-       (for [[d freq] day-totals]
-         ^{:key d}
-         [:rect
-          {:x      (xscale d)
-           :y      (- (density-yscale freq) margin)
-           :height (- height (density-yscale freq))
-           :style  {:opacity "0.2"}
-           :fill   "#0000cc"
-           :width  5}]))
-      (doall
-       (for [ping pings]
-         ^{:key (:timestamp ping)}
-         [circle-for-ping xscale yscale ping]))]]))
+      [histogram xscale density-yscale height margin]
+      [matrix xscale yscale]]]))
 
 (defn tag-table-row [tag]
   (let [my-count     (subscribe [:tag-count tag])
         tag-%        (subscribe [:tag-% tag])
         minutes      (subscribe [:minutes-for-tag tag])
         time-per-day (subscribe [:time-per-day-for-tag tag])]
-    (fn [tag]
-      [:tr
-       [:td tag]
-       [:td @my-count]
-       [:td (gstring/format "%.1f%%" @tag-%)]
-       [:td @time-per-day]])))
+    [:tr
+     [:td tag]
+     [:td @my-count]
+     [:td (gstring/format "%.1f%%" @tag-%)]
+     [:td @time-per-day]]))
 
 (defn logged-in-app
   []
-  (let [temp                  (reagent/atom "")
-        meeting-query-per-day (subscribe [:meeting-query-per-day])
+  (let [meeting-query-per-day (subscribe [:meeting-query-per-day])
         tag-counts            (subscribe [:sorted-tag-counts])]
-    (fn []
-      [:div
-       [matrix-plot]
-       [:div
-        [re-com/input-text
-         :style {:border-radius "0px"}
-         :width "100%"
-         :placeholder "Query"
-         :model temp
-         :change-on-blur? false
-         :on-change #(dispatch [:update-ping-query %])]]
-       [:div (.toFixed @meeting-query-per-day 1) " minutes per day"]
-       [:table
-        {:style {:border "1px solid black"}}
-        [:tbody
-         [:tr [:th "Tag"] [:th "Count"] [:th "Percent of Pings"] [:th "Time Per Day"]]
-         (for [tag @tag-counts]
-           ^{:key (pr-str tag)}
-           [tag-table-row tag])]]])))
+    [:div
+     [matrix-plot]
+     [:div
+      [re-com/input-text
+       :style {:border-radius "0px"}
+       :width "100%"
+       :placeholder "Query"
+       :model (reagent/atom "")
+       :change-on-blur? false
+       :on-change #(dispatch [:update-ping-query %])]]
+     [:div (.toFixed @meeting-query-per-day 1) " minutes per day"]
+     [:table
+      {:style {:border "1px solid black"}}
+      [:tbody
+       [:tr [:th "Tag"] [:th "Count"] [:th "Percent of Pings"] [:th "Time Per Day"]]
+       (for [tag @tag-counts]
+         ^{:key (pr-str tag)}
+         [tag-table-row tag])]]]))
 
 
 

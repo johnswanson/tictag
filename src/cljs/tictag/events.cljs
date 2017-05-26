@@ -307,6 +307,13 @@
  (fn [k]
    (.remove goog.net.cookies (name k))))
 
+
+(reg-fx
+ :add-window-resize-event-listener
+ (fn [_]
+   (.addEventListener js/window "resize" #(re-frame.core/dispatch [:window-resize]))))
+
+
 (reg-cofx
  :cookie
  (fn [coeffects key]
@@ -314,21 +321,37 @@
              [:cookies key]
              (.get goog.net.cookies (name key)))))
 
+(reg-cofx
+ :window-dimensions
+ (fn [coeffects _]
+   (assoc coeffects :window-dimensions
+          {:width (.-innerWidth js/window)
+           :height (.-innerHeight js/window)})))
+
 (reg-event-fx
  :initialize
- [(inject-cofx :cookie :auth-token) interceptors]
- (fn [{:keys [cookies db]} _]
-   (merge {:pushy-init true
-           :http-xhrio {:method          :get
-                        :uri             "/api/timezones"
-                        :timeout         8000
-                        :format          (transit-request-format {})
-                        :response-format (transit-response-format {})
-                        :on-success      [:success-timezones]
-                        :on-failure      [:failed-timezones]}
-           :dispatch-n [[:fetch-user-info]]
-           :db (merge db {:auth-token (:auth-token cookies)})})))
+ [(inject-cofx :cookie :auth-token)
+  (inject-cofx :window-dimensions nil)
+  interceptors]
+ (fn [{:keys [cookies db window-dimensions]} _]
+   (merge {:pushy-init                       true
+           :http-xhrio                       {:method          :get
+                                              :uri             "/api/timezones"
+                                              :timeout         8000
+                                              :format          (transit-request-format {})
+                                              :response-format (transit-response-format {})
+                                              :on-success      [:success-timezones]
+                                              :on-failure      [:failed-timezones]}
+           :dispatch-n                       [[:fetch-user-info]]
+           :add-window-resize-event-listener nil
+           :db                               (merge db {:auth-token (:auth-token cookies)
+                                                        :db/window  window-dimensions})})))
 
+(reg-event-fx
+ :window-resize
+ [(inject-cofx :window-dimensions nil) interceptors]
+ (fn [{:keys [db window-dimensions]} _]
+   {:db (assoc db :db/window window-dimensions)}))
 
 (reg-event-db
  :success-timezones

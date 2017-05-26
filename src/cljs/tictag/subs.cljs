@@ -37,7 +37,22 @@
  (fn [db _]
    (let [user (:db/authenticated-user db)]
      (filter #(= (:user %) user)
-              (vals (:pings/by-timestamp db))))))
+             (vals (:pings/by-timestamp db))))))
+
+(reg-sub
+ :ping-days
+ (fn [_ _] (subscribe [:raw-pings]))
+ (fn [pings _] (map :days-since-epoch pings)))
+
+(reg-sub
+ :max-ping-day
+ (fn [_ _] (subscribe [:ping-days]))
+ (fn [days _] (apply max days)))
+
+(reg-sub
+ :min-ping-day
+ (fn [_ _] (subscribe [:ping-days]))
+ (fn [days _] (apply min days)))
 
 (reg-sub
  :sorted-pings
@@ -53,18 +68,39 @@
    (map #(assoc % :active? (query-fn %)) pings)))
 
 (reg-sub
+ :active-pings
+ (fn [_ _] (subscribe [:pings]))
+ (fn [pings _] (filter :active? pings)))
+
+(reg-sub
+ :window-size
+ (fn [db _] (:db/window db)))
+
+(reg-sub
  :matrix-plot-height
- (constantly 1300))
+ (fn [_ _] (subscribe [:window-size]))
+ (fn [{:keys [height]} _] (* 0.7 height)))
+
 (reg-sub
  :matrix-plot-width
- (constantly 1300))
+ (fn [_ _] (subscribe [:window-size]))
+ (fn [{:keys [width]} _] (* 0.7 width)))
 
 (reg-sub
  :count-meeting-query
  (fn [_ _]
-   (subscribe [:pings]))
+   (subscribe [:active-pings]))
  (fn [pings _]
-   (count (filter :active? pings))))
+   (count pings)))
+
+(reg-sub
+ :day-totals
+ (fn [_ _]
+   (subscribe [:active-pings]))
+ (fn [pings _]
+   (->> pings
+        (map :days-since-epoch)
+        (frequencies))))
 
 (reg-sub
  :minutes-for-tag
