@@ -1,7 +1,6 @@
 (ns cards.core
   (:require [re-frame.core :as re-frame]
             [tictag.views :as v]
-            [tictag.viz :as viz]
             [devtools.core :as devtools]
             [devcards.core :as dc]
             [c2.ticks]
@@ -29,9 +28,9 @@
    (let [{yticks :ticks} (c2.ticks/search (:domain Y))
          {xticks :ticks} (c2.ticks/search (:domain X))]
      [:g {:stroke-width 1 :stroke "black"}
-      (viz/axis Y yticks :orientation :left)
+      (c2.svg/axis Y yticks :orientation :left)
       [:g {:transform "translate(0, 800)"}
-       (viz/axis X xticks :text-margin -9 :orientation :bottom)]
+       (c2.svg/axis X xticks :text-margin -9 :orientation :bottom)]
       (for [x (take 1000 (repeatedly rand))
             :let [y (rand x)]]
         (circle {:x X :y Y} x y))])])
