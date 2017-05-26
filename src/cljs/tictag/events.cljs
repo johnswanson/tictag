@@ -509,6 +509,22 @@
                   :on-failure      [:tagtime-import/fail]}
                  (:auth-token db))}))
 
+(reg-event-fx
+ :tagtime-import/file
+ [interceptors]
+ (fn [{:keys [db]} [_ file]]
+   (js/console.log file)
+   {:http-xhrio (authenticated-xhrio
+                 {:body (doto (js/FormData.)
+                          (.append "tagtime-log" file))
+                  :method           :put
+                  :uri              "/api/tagtime"
+                  :format           (transit-request-format {})
+                  :response-format  (transit-response-format {})
+                  :on-success       [:tagtime-import/success]
+                  :on-failure       [:tagtime-import/fail]}
+                 (:auth-token db))}))
+
 (defonce timeouts
   (atom {}))
 

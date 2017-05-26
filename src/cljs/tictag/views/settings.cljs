@@ -11,13 +11,14 @@
   (let [model (reagent/atom "")]
     [re-com/v-box
      :children [[re-com/title :level :level1 :label "Import from TagTime"]
-                [re-com/input-textarea
-                 :model model
-                 :width "100%"
-                 :on-change #(reset! model %)]
-                [re-com/button
-                 :label "Submit"
-                 :on-click #(dispatch [:tagtime-import/send @model])]]]))
+                [re-com/box
+                 :child [:form {:on-submit #(.preventDefault %)}
+                         [:label {:for "upload"
+                                  :style {:cursor :pointer}}
+                          [:span.rc-button.btn.btn-default [:i.zmdi.zmdi-cloud-upload {:style {:margin-right "1em"}}] "Upload Log"]]
+                         [:input#upload
+                          {:type "file" :name "file" :style {:width "0px" :height "0px" :opacity 0 :overflow :hidden :position :absolute :z-index -1}
+                           :on-change #(dispatch [:tagtime-import/file (-> % .-target .-files (aget 0))])}]]]]]))
 
 (defn slack-authorize []
   [:div

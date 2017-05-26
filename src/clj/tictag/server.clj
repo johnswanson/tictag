@@ -317,6 +317,14 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
      (debugf "Invalid tagtime data received from user-id %d" user-id)))
   (response {:accepted true}))
 
+(defn tagtime-import-from-file [{:keys [db]} {:keys [multipart-params user-id]}]
+  (taoensso.timbre/logged-future
+   (debug multipart-params)
+   (if-let [parsed (tagtime/parse user-id (slurp (get-in multipart-params ["tagtime-log" :tempfile])))]
+     (db/insert-tagtime-data db parsed)
+     (debugf "Invalid tagtime data received from user-id %d" user-id)))
+  (response {:accepted true}))
+
 (defn routes [component]
   (compojure.core/routes
    (GET "/slack-callback" _ (wrap-session-auth (partial slack-callback component) (:jwt component)))
@@ -334,6 +342,7 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
    (GET "/settings" _ (index component))
    (context "/api" []
             (POST "/tagtime" _ (partial tagtime-import component))
+            (PUT "/tagtime" _ (partial tagtime-import-from-file component))
             (GET "/timezones" _ (partial timezone-list component))
             (GET "/user/me" _ (partial my-user component))
             (POST "/user/me/beeminder" _ (partial add-beeminder component))
@@ -370,6 +379,7 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
                     (wrap-user (:jwt component))
                     (wrap-restful-format :formats [:json-kw :edn :transit-json :transit-msgpack])
                     (wrap-defaults (-> api-defaults
+                                       (assoc-in [:params :multipart] true)
                                        (assoc-in [:static :resources] "/public")
                                        (assoc :proxy true)
                                        (assoc :cookies true)))
