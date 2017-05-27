@@ -104,8 +104,7 @@
 (defn daily-total [freqs]
   (fn [prev today]
     (let [[_ ytotal] (or (last prev) [0 0])]
-      (conj prev [today (+ (freqs today) ytotal)]))))
-
+      (conj prev [today (+ (* 0.75 (freqs today)) ytotal)]))))
 
 (reg-sub
  :day-cum-totals
