@@ -118,7 +118,8 @@
                               (filter :active?)
                               (map :days-since-epoch)
                               (frequencies))]
-     (reduce (daily-total freqs) [] (range first-day last-day)))))
+     (when (seq freqs)
+       (reduce (daily-total freqs) [] (range first-day last-day))))))
 
 
 (reg-sub

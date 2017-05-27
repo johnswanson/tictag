@@ -112,19 +112,20 @@
 (defn cumulative [xscale height margin]
   (let [totals          (subscribe [:day-cum-totals])]
     (fn [xscale height margin]
-      (let [[_ final-total] (last @totals)
+      (when @totals
+        (let [[_ final-total] (last @totals)
 
-            yscale (c2.scale/linear :domain [0 final-total]
-                                    :range [(- height margin) margin])]
-        [:g {:style {:fill :none
-                     :stroke "black"
-                     :stroke-width "3"
-                     :opacity "0.5"}}
-         (c2.svg/line
-          (map
-           (fn [[day total]]
-             [(xscale day) (yscale total)])
-           @totals))]))))
+              yscale (c2.scale/linear :domain [0 final-total]
+                                      :range [(- height margin) margin])]
+          [:g {:style {:fill :none
+                       :stroke "black"
+                       :stroke-width "3"
+                       :opacity "0.5"}}
+           (c2.svg/line
+            (map
+             (fn [[day total]]
+               [(xscale day) (yscale total)])
+             @totals))])))))
 
 (defn matrix-plot-view [width height min-day max-day]
   (let [margin         50
