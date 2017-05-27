@@ -101,9 +101,11 @@
  (fn [[pings query-fn] _]
   (map #(assoc % :active? (query-fn %)) pings)))
 
-(defn daily-total [prev [day freq]]
-  (let [[_ ytotal] (or (last prev) [nil 0])]
-    (conj prev [day (+ freq ytotal)])))
+(defn daily-total [freqs]
+  (fn [prev today]
+    (let [[_ ytotal] (or (last prev) [0 0])]
+      (conj prev [today (+ (freqs today) ytotal)]))))
+
 
 (reg-sub
  :day-cum-totals
@@ -115,11 +117,8 @@
          freqs           (->> pings
                               (filter :active?)
                               (map :days-since-epoch)
-                              (frequencies)
-                              (into (sorted-map)))
-         most            (reduce daily-total [[first-day 0]] freqs)
-         [_ final-total] (last most)]
-     (conj most [last-day final-total]))))
+                              (frequencies))]
+     (reduce (daily-total freqs) [] (range first-day last-day)))))
 
 
 (reg-sub
