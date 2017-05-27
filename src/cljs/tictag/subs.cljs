@@ -60,6 +60,7 @@
  (fn [pings _]
    (sort #(t/after? (:parsed-time %1) (:parsed-time %2)) pings)))
 
+
 (reg-sub
  :pings
  (fn [_ _] [(subscribe [:sorted-pings])
@@ -92,6 +93,34 @@
    (subscribe [:active-pings]))
  (fn [pings _]
    (count pings)))
+
+(reg-sub
+ :sorted-active-pings
+ (fn [_ _] [(subscribe [:sorted-pings])
+            (subscribe [:query-fn])])
+ (fn [[pings query-fn] _]
+  (map #(assoc % :active? (query-fn %)) pings)))
+
+(defn daily-total [prev [day freq]]
+  (let [[_ ytotal] (or (last prev) [nil 0])]
+    (conj prev [day (+ freq ytotal)])))
+
+(reg-sub
+ :day-cum-totals
+ (fn [_ _]
+   (subscribe [:sorted-active-pings]))
+ (fn [pings _]
+   (let [first-day       (:days-since-epoch (last pings))
+         last-day        (:days-since-epoch (first pings))
+         freqs           (->> pings
+                              (filter :active?)
+                              (map :days-since-epoch)
+                              (frequencies)
+                              (into (sorted-map)))
+         most            (reduce daily-total [[first-day 0]] freqs)
+         [_ final-total] (last most)]
+     (conj most [last-day final-total]))))
+
 
 (reg-sub
  :day-totals

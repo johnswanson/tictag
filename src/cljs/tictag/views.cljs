@@ -88,9 +88,9 @@
     [:g
      (doall
       (for [[d freq] @day-totals]
-        ^{:key d}
         (let [hours  (* freq 0.75)
               scaled (density-yscale hours)]
+          ^{:key d}
           [:rect
            {:x      (xscale d)
             :y      scaled
@@ -109,6 +109,23 @@
                                            (yscale (:seconds-since-midnight ping))])}
          [circle-for-ping ping]]))]))
 
+(defn cumulative [xscale height margin]
+  (let [totals          (subscribe [:day-cum-totals])]
+    (fn [xscale height margin]
+      (let [[_ final-total] (last @totals)
+
+            yscale (c2.scale/linear :domain [0 final-total]
+                                    :range [(- height margin) margin])]
+        [:g {:style {:fill :none
+                     :stroke "black"
+                     :stroke-width "3"
+                     :opacity "0.5"}}
+         (c2.svg/line
+          (map
+           (fn [[day total]]
+             [(xscale day) (yscale total)])
+           @totals))]))))
+
 (defn matrix-plot-view [width height min-day max-day]
   (let [margin         50
         xscale         (c2.scale/linear :domain [min-day max-day]
@@ -121,7 +138,8 @@
      [axes xscale yscale density-yscale width height margin min-day max-day]
      [:g
       [histogram xscale density-yscale height margin]
-      [matrix xscale yscale]]]))
+      [matrix xscale yscale]
+      [cumulative xscale height margin]]]))
 
 (defn tag-table-row [tag]
   (let [my-count     (subscribe [:tag-count tag])
