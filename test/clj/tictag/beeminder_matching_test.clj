@@ -17,11 +17,14 @@
          ['(or "foo" "bar") #{"foo" "bar"}]
          ['(and "foo" "bar") #{"foo" "bar"}]
          ['(or (and "foo" "bar" "burn" "boo")
-               (and "buzz" "bazz")) #{"foo" "bar" "burn" "boo"}]]
+               (and "buzz" "bazz")) #{"foo" "bar" "burn" "boo"}]
+         ['(not "foo") #{"bar"}]
+         ['(not "foo" "bar") #{"baz"}]]
    :no [[:foo #{"bar"}]
         ['(or "foo" "bar") #{"buzz"}]
         ['(and "foo" "bar") #{"foo"}]
-        ['(and (or "foo" "bar") (or "buzz" "bazz")) #{"foo" "bar"}]]})
+        ['(and (or "foo" "bar") (or "buzz" "bazz")) #{"foo" "bar"}]
+        ['(not "foo" "bar") #{"foo" "bang"}]]})
 
 (t/deftest matches
   (doseq [[tags ping] (:yes tests)]
