@@ -164,14 +164,14 @@
    [:td time-per-day]])
 
 (defn query-row [query]
-  (let [count (subscribe [:count-meeting-query])
-        tag-%    (subscribe [:query-%])
-        minutes  (subscribe [:minutes-meeting-query])
+  (let [count        (subscribe [:count-meeting-query])
+        tag-%        (subscribe [:query-%])
+        minutes      (subscribe [:minutes-meeting-query])
         time-per-day (subscribe [:meeting-query-per-day])]
     [tag-table-row-view query @count @tag-% @minutes true @time-per-day]))
 
 (defn tag-table-row [tag]
-  (let [count     (subscribe [:tag-count tag])
+  (let [count        (subscribe [:tag-count tag])
         tag-%        (subscribe [:tag-% tag])
         minutes      (subscribe [:minutes-for-tag tag])
         active?      (subscribe [:tag-active? tag])
@@ -180,8 +180,7 @@
 
 (defn logged-in-app
   []
-  (let [meeting-query-per-day (subscribe [:meeting-query-per-day])
-        tag-counts            (subscribe [:sorted-tag-counts])
+  (let [tag-counts            (subscribe [:sorted-tag-counts])
         ping-query            (subscribe [:ping-query])]
     [re-com/v-box
      :align :center
@@ -194,9 +193,6 @@
        :model (reagent/atom "")
        :change-on-blur? false
        :on-change #(dispatch [:debounced-update-ping-query %])]
-      [re-com/box
-       :child
-       [:div (.toFixed @meeting-query-per-day 1) " minutes per day"]]
       [re-com/box
        :child
        [:table

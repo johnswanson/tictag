@@ -191,7 +191,7 @@
    [(subscribe [:minutes-meeting-query])
     (subscribe [:total-time-in-days])])
  (fn [[minutes days] _]
-   (/ minutes days)))
+   (f/unparse-duration (t/minutes (/ minutes days)))))
 
 (reg-sub
  :tag-counts
