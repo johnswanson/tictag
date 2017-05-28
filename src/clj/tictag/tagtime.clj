@@ -13,9 +13,11 @@
        (catch Exception _ nil)))
 
 (defn parse-tags [tags]
-  (if (str/starts-with? tags "err [missed ping")
-    ["ERROR-MISSED-PING"]
-    (str/split tags #" ")))
+  (filter seq
+          (-> tags
+              (str/replace #"\([^\(\)]*\)" "")
+              (str/replace #"\[[^\[\]]*\]" "")
+              (str/split #" "))))
 
 (def formatter (f/formatter "yyyy.MM.dd HH:mm:ss"))
 
@@ -26,7 +28,7 @@
   (and ts tags local-time))
 
 (defn parse-line [line]
-  (let [result (when-let [regex-matched? (re-matches #"(\d+) (.+)\[(.+)\]" line)]
+  (let [result (when-let [regex-matched? (re-matches #"(\d+) (.+)\[(.+)\]$" line)]
                  (let [[_ ts tags local-time] regex-matched?
                        timestamp              (parse-timestamp ts)
                        tags                   (parse-tags tags)
