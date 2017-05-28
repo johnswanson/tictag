@@ -20,10 +20,15 @@
  :query-fn
  (fn [_ _] (subscribe [:ping-query]))
  (fn [ping-query]
-   (if ping-query
-     (fn [{:keys [tags]}]
-       (tags ping-query))
+   (if (seq ping-query)
+     (let [q (try
+               (edn/read-string ping-query)
+               (catch js/Error _ ping-query))]
+       (fn [{:keys [tags]}]
+         (beeminder-matching/match? q tags)))
+
      (constantly false))))
+
 
 (defn unnormalize [db thing & [other]]
   (if (not (vector? thing))
@@ -208,9 +213,9 @@
 (reg-sub
  :tag-active?
  (fn [_ _]
-   (subscribe [:query-fn]))
- (fn [f? [_ tag]]
-   (f? {:tags #{tag}})))
+   (subscribe [:ping-query]))
+ (fn [p [_ tag]]
+   (= p tag)))
 
 (reg-sub
  :total-ping-count
@@ -218,6 +223,14 @@
    (subscribe [:pings]))
  (fn [pings _]
    (count pings)))
+
+(reg-sub
+ :query-%
+ (fn [_ _]
+   [(subscribe [:count-meeting-query])
+    (subscribe [:total-ping-count])])
+ (fn [[q-count total] _]
+   (* 100 (/ q-count total))))
 
 (reg-sub
  :tag-%

@@ -152,21 +152,31 @@
       [matrix xscale yscale]
       [cumulative xscale count-scale width height margin]]]))
 
+(defn tag-table-row-view [tag count tag-% minutes active? time-per-day]
+  [:tr (if active?
+         {:style {:background-color "#333"
+                  :color            "#ddd"}}
+         {:style {:background-color "#ddd"
+                  :color            "#333"}})
+   [:td tag]
+   [:td count]
+   [:td (gstring/format "%.1f%%" tag-%)]
+   [:td time-per-day]])
+
+(defn query-row [query]
+  (let [count (subscribe [:count-meeting-query])
+        tag-%    (subscribe [:query-%])
+        minutes  (subscribe [:minutes-meeting-query])
+        time-per-day (subscribe [:meeting-query-per-day])]
+    [tag-table-row-view query @count @tag-% @minutes true @time-per-day]))
+
 (defn tag-table-row [tag]
-  (let [my-count     (subscribe [:tag-count tag])
+  (let [count     (subscribe [:tag-count tag])
         tag-%        (subscribe [:tag-% tag])
         minutes      (subscribe [:minutes-for-tag tag])
         active?      (subscribe [:tag-active? tag])
         time-per-day (subscribe [:time-per-day-for-tag tag])]
-    [:tr (if @active?
-           {:style {:background-color "#333"
-                    :color            "#ddd"}}
-           {:style {:background-color "#ddd"
-                    :color            "#333"}})
-     [:td tag]
-     [:td @my-count]
-     [:td (gstring/format "%.1f%%" @tag-%)]
-     [:td @time-per-day]]))
+    [tag-table-row-view tag @count @tag-% @minutes @active? @time-per-day]))
 
 (defn logged-in-app
   []
@@ -193,7 +203,7 @@
         {:style {:border "1px solid black"}}
         [:tbody
          [:tr [:th "Tag"] [:th "Count"] [:th "Percent of Pings"] [:th "Time Per Day"]]
-         (when @ping-query [tag-table-row @ping-query])
+         (when @ping-query [query-row @ping-query])
          (for [tag @tag-counts]
            ^{:key (pr-str tag)}
            [tag-table-row tag])]]]]]))

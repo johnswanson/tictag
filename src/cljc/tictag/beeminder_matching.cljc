@@ -17,4 +17,5 @@
                          (or :or)   (some #(match? % b) args)
                          false))
     (keyword? thing) (b (name thing))
+    (symbol? thing)  (b (name thing))
     (string? thing)  (b thing)))
