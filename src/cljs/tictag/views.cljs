@@ -84,12 +84,14 @@
                      :font-weight  "100"}
        :font-size   "14px"
        :font-family "sans-serif"}
-   [:g {:transform (c2.svg/translate [(- width margin) 0])}
-    (if (= (:domain count-scale) [0 0])
-      [time-axis yscale]
-      [cum-axis count-scale])]
-   [:g {:transform (c2.svg/translate [margin 0])}
-    [hist-axis density-yscale]]
+   (when-not (= (:domain count-scale) [0 0])
+     [:g
+      [:g {:transform (c2.svg/translate [(- width margin) 0])}
+       [cum-axis count-scale]]
+      [:g {:transform (c2.svg/translate [margin 0])}
+       [hist-axis density-yscale]]])
+   [:g {:transform (c2.svg/translate [(/ width 2) 0])}
+    [time-axis yscale]]
    [:g {:transform (c2.svg/translate [0 (- height margin)])}
     [days-axis xscale]]])
 
