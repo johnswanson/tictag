@@ -238,6 +238,13 @@
                            (where [:= :user-id user-id])
                            sql/format)))
 
+(defn enable-beeminder [db user-id enable?]
+  (j/execute! (:db db)
+              (-> (update :beeminder)
+                  (sset {:is-enabled enable?})
+                  (where [:= :user-id user-id])
+                  sql/format)))
+
 (defn beeminder-from-db
   [db {:as user :keys [beeminder_username
                        beeminder_encrypted_token

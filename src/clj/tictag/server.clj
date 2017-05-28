@@ -325,6 +325,10 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
      (debugf "Invalid tagtime data received from user-id %d" user-id)))
   (response {:accepted true}))
 
+(defn enable-beeminder [{:keys [db]} {:keys [params user-id]}]
+  (let [{:keys [enable?]} params]
+    (db/enable-beeminder db user-id enable?)))
+
 (defn routes [component]
   (compojure.core/routes
    (GET "/slack-callback" _ (wrap-session-auth (partial slack-callback component) (:jwt component)))
@@ -346,6 +350,7 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
             (GET "/timezones" _ (partial timezone-list component))
             (GET "/user/me" _ (partial my-user component))
             (POST "/user/me/beeminder" _ (partial add-beeminder component))
+            (POST "/user/me/beeminder/enable" _ (partial enable-beeminder component))
             (POST "/user/me/tz" _ (partial update-tz component))
             (DELETE "/user/me/beeminder" _ (partial delete-beeminder component))
             (DELETE "/user/me/slack" _ (partial delete-slack component))

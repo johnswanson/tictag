@@ -245,6 +245,36 @@
                    :token val
                    :user (:db/authenticated-user db))}))
 
+(reg-event-fx
+ :beeminder/enable?
+ [interceptors]
+ (fn [{:keys [db]} [_ enable?]]
+   (let [user      (:db/authenticated-user db)
+         beeminder [:beeminder/by-id
+                    (:id
+                     (first (filter #(= user (:user %))
+                                    (vals (:beeminder/by-id db)))))]]
+     {:http-xhrio (authenticated-xhrio
+                   {:method          :post
+                    :uri             "/api/user/me/beeminder/enable"
+                    :params          {:enable? enable?}
+                    :format          (transit-request-format {})
+                    :response-format (transit-response-format {})
+                    :on-success      [:beeminder/enable-succeed]
+                    :on-failure      [:beeminder/enable-fail]}
+                   (:auth-token db))
+      :db (assoc-in db (conj beeminder :enabled?) enable?)})))
+
+(reg-event-db
+ :beeminder/enable-succeed
+ [interceptors]
+ (fn [db _] db))
+
+(reg-event-db
+ :beeminder/enable-fail
+ [interceptors]
+ (fn [db _] db))
+
 (reg-event-db
  :beeminder-token/add-fail
  [interceptors]

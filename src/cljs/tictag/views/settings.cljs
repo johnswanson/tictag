@@ -37,7 +37,15 @@
                   [re-com/button
                    :label (str "Delete slack (authed as " (:username @slack) ")")
                    :on-click #(dispatch [:slack/delete])]
-                  [slack-authorize])]]))
+                  [slack-authorize])
+                [re-com/title :level :level2 :label "Slackbot instructions:"]
+                [re-com/p "Use the " [:code "help"] " command to see the available commands, like:"]
+                [:ol
+                 [:li [re-com/p "Just send something like " [:code "foo bar"] " to tag the most recent ping as " [:code (pr-str ["foo" "bar"])]]]
+                 [:li [re-com/p "Refer to a recent ping by its ID, like " [:code "123 foo bar"] ", to tag that ping as " [:code (pr-str ["foo" "bar"])]]]
+                 [:li [re-com/p "Refer to any ping by its ms-from-epoch timestamp, like " [:code "1495753682000 foo bar"] ", to tag that ping as " [:code (pr-str ["foo" "bar"])]]]
+                 [:li [re-com/p "The special command " [:code "sleep"] " will tag the last contiguous series of pings as " [:code (pr-str "sleep")]]]
+                 [:li [re-com/p "Send a single " [:code "\""] " to 'ditto'--just tag the last ping with the same tags as the second-to-last ping"]]]]]))
 
 (defn beeminder-goal-editor [goal]
   [re-com/h-box
@@ -105,8 +113,19 @@
                  :label "Beeminder"]
                 (if (:token @beeminder-sub)
                   [re-com/v-box
-                   :children [[re-com/label
-                               :label [:span "Beeminder user: " (:username @beeminder-sub)]]
+                   :children [[re-com/title :level :level2 :label "Warning!"]
+                              [re-com/p "DO NOT point TicTag at any Beeminder goal that already has data, unless you're okay losing it."]
+                              [re-com/p "TicTag assumes that it is the sole source of truth for your Beeminder data."]
+                              [re-com/p
+                               "This means we will delete any data points that don't have corresponding TicTag pings! "
+                               "(At some point soon we'll just sync data points within the past week. But this isn't done yet.)"]
+                              [re-com/checkbox
+                               :model (:enabled? @beeminder-sub)
+                               :on-change #(dispatch [:beeminder/enable? %])
+                               :label-style {:font-weight "bold"}
+                               :label "I have read the above and want to enable Beeminder sync."]
+                              [re-com/label
+                               :label [:span "Beeminder user: " [:b (:username @beeminder-sub)]]]
                               [beeminder-goals @goals]
                               [add-beeminder-goal-button]
                               [delete-beeminder-button]]]
