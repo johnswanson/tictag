@@ -35,8 +35,14 @@
 
 (defn footer [] [h-box
                  :justify :center
-                 :children [[box
-                             :child ""]]])
+                 :style {:background-color "#444"
+                         :color            "#fff"
+                         :padding          "50px"}
+                 :children [[re-com/p
+                             "Feel free to contact me at "
+                             [re-com/hyperlink-href :href "mailto:tictag@agh.io" :label "tictag@agh.io"]
+
+                             " with any suggestions, comments, or questions!"]]])
 
 (defn page
   [& content]
@@ -49,4 +55,5 @@
               [h-box
                :justify :center
                :children [content]]
+              [re-com/gap :size "50px"]
               [footer]]])
