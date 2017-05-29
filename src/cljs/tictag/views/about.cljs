@@ -46,7 +46,8 @@
                      "of methods like manual time tracking. You can zone out and forget all about time tracking (because it will call you!) but you also "
                      "can correctly classify time that RescueTime would get wrong: things like 'talking to a coworker while Reddit is open in my browser'"
                      "or 'drooling on my keyboard with vim open'."]
-                    [re-com/p "Because TicTag works on multiple clients, you can also track time that RescueTime and the like would miss entirely. I "
+                    [re-com/p "Because TicTag works on multiple clients and is tracking what " [:span.italic "you" ] " are doing (not your device), you can also "
+                     "track time that RescueTime and the like would miss entirely. I "
                      "probably spend too much of my time at the computer, but I don't spend " [:span.italic "all"] " of it here. I want to track time "
                      "spent with kids, biking, cooking, cleaning--everything! Just tracking the time I spend on the computer isn't nearly as useful to me."]
                     [re-com/p ""]
