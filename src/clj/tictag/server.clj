@@ -112,8 +112,8 @@
     (debugf "Making pings sleepy: %s" (pr-str sleepy-pings))
     (update-pings! component user (map #(assoc % :tags #{"sleep"}) sleepy-pings))
     (slack! component user ["sleepings pings: %s to %s"
-                  (f/unparse wtf (:local-time (last sleepy-pings)))
-                  (f/unparse wtf (:local-time (first sleepy-pings)))])))
+                            (f/unparse wtf (:local-time (last sleepy-pings)))
+                            (f/unparse wtf (:local-time (first sleepy-pings)))])))
 
 (defmethod apply-command! :tag-ping-by-id [{db :db :as component} user _ {:keys [id tags]}]
   (tag-ping component user (db/ping-from-id db user id) (set tags)))
@@ -128,12 +128,13 @@
   (let [[last-ping second-to-last-ping] (db/last-pings db user 2)]
     (tag-ping component user last-ping (:tags second-to-last-ping))))
 
-(defmethod apply-command! :help [_ user _ _]
-  (slack! user ["Tag the most recent ping (e.g. by saying `ttc`)
+(defmethod apply-command! :help [c user _ _]
+  (slack! c user ["Tag the most recent ping (e.g. by saying `ttc`)
 Tag a ping by its id (e.g. by saying `113 ttc`)
 Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
 `sleep` command: tag the most recent set of contiguous pings as `sleep`
 `\"` command: tags the last ping with whatever the second-to-last ping had
+Separate commands with a newline to apply multiple commands at once
 "]))
 
 (defn apply-command [component user cmd]
@@ -152,7 +153,8 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
   (taoensso.timbre/logged-future
     (when-let [user (and (valid-slack? component params)
                          (slack-user db params))]
-      (apply-command component user (slack-text params))))
+      (doseq [c (str/split (slack-text params) #"\n")]
+        (apply-command component user c))))
   {:status 200 :body ""})
 
 (defn timestamp [{:keys [db] :as component} {:keys [params user-id]}]
