@@ -162,10 +162,10 @@ Separate commands with a newline to apply multiple commands at once
     (do
       (debugf "Received a timestamp: %s" (pr-str params))
       (update-pings! component user [(-> params
-                                  (assoc :user-id (:id user))
-                                  (update :timestamp cli/str-number?)
-                                  (dissoc :username :password))])
-      (response {:status :ok}))
+                                         (assoc :user-id (:id user))
+                                         (update :timestamp cli/str-number?)
+                                         (dissoc :username :password))])
+      (response {:status 200}))
     UNAUTHORIZED))
 
 (defn health-check [component]
