@@ -45,7 +45,8 @@
                  [:li [re-com/p "Refer to a recent ping by its ID, like " [:code "123 foo bar"] ", to tag that ping as " [:code (pr-str ["foo" "bar"])]]]
                  [:li [re-com/p "Refer to any ping by its ms-from-epoch timestamp, like " [:code "1495753682000 foo bar"] ", to tag that ping as " [:code (pr-str ["foo" "bar"])]]]
                  [:li [re-com/p "The special command " [:code "sleep"] " will tag the last contiguous series of pings as " [:code (pr-str "sleep")]]]
-                 [:li [re-com/p "Send a single " [:code "\""] " to 'ditto'--just tag the last ping with the same tags as the second-to-last ping"]]]]]))
+                 [:li [re-com/p "Send a single " [:code "\""] " to 'ditto'--just tag the last ping with the same tags as the second-to-last ping"]]
+                 [:li [re-com/p "You can send multiple commands at once by separating them with newlines"]]]]]))
 
 (defn beeminder-goal-editor [goal]
   [re-com/h-box
@@ -114,11 +115,11 @@
                 (if (:token @beeminder-sub)
                   [re-com/v-box
                    :children [[re-com/title :level :level2 :label "Warning!"]
-                              [re-com/p "DO NOT point TicTag at any Beeminder goal that already has data, unless you're okay losing it."]
-                              [re-com/p "TicTag assumes that it is the sole source of truth for your Beeminder data."]
+                              [re-com/p "Pointing TicTag at an existing Beeminder goal is dangerous!"]
                               [re-com/p
-                               "This means we will delete any data points that don't have corresponding TicTag pings! "
-                               "(At some point soon we'll just sync data points within the past week. But this isn't done yet.)"]
+                               "TicTag assumes we're the only source of truth for data within the past week. "
+                               "This basically means that your last week's worth of Beeminder data (whatever its source) will be replaced "
+                               "with the last week's worth of TicTag's data."]
                               [re-com/checkbox
                                :model (:enabled? @beeminder-sub)
                                :on-change #(dispatch [:beeminder/enable? %])
