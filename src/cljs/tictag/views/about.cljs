@@ -18,7 +18,8 @@
                                                     "come 45 minutes apart, in reality you might have two pings within 5 minutes of each other, "
                                                     "then no ping for hours. Some examples: the odds of a ping occurring in any given hour is 73.64%. The odds "
                                                     "of a ping occurring in any given 5 minute period is 10.51%.")]
-                     "TicTag will contact you. "
+                     "TicTag will ping you (currently via slack, though someday I'll get around to implementing real clients). "
+
                      "You respond with what you're doing " [:i "right then"] "."
                      "You simply respond with tags (like \"work\" or \"coding\" or \"family\" or \"eat\" or \"cook\" or \"run\" or \"read\" or...)."]
                     [re-com/p "This random sampling of your time provides you with a statistically accurate picture of where your time "
