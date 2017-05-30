@@ -4,6 +4,8 @@
             [taoensso.timbre :as timbre]
             [clojure.string :as str]
             [clojure.data :refer [diff]]
+            [clj-time.core :as t]
+            [clj-time.periodic :as p]
             [tictag.db :as db]
             [tictag.beeminder-matching :refer [match?]]
             [tictag.riemann :as riemann]))
@@ -27,11 +29,11 @@
     true)))
 
 (defn update-datapoint! [auth-token user goal datapoint]
-  (http/request {:url (format "https://www.beeminder.com/api/v1/users/%s/goals/%s/datapoints/%s.json"
-                              user goal (:id datapoint))
-                 :method :put
+  (http/request {:url          (format "https://www.beeminder.com/api/v1/users/%s/goals/%s/datapoints/%s.json"
+                                       user goal (:id datapoint))
+                 :method       :put
                  :query-params {:auth_token auth-token
-                                :value (:value datapoint)}}))
+                                :value      (:value datapoint)}}))
 
 (defn create-datapoint! [auth-token user goal datapoint]
   (http/request {:url (format "https://www.beeminder.com/api/v1/users/%s/goals/%s/datapoints.json"
@@ -53,6 +55,9 @@
                    :method :delete
                    :query-params {:auth_token auth-token}})))
 
+(defn past-week-days []
+  (set (map db/local-day (take 7 (p/periodic-seq (t/now) (t/days -24))))))
+
 (defn days-matching-tag [tags rows]
   (->> rows
        (filter #(match? tags (:tags %)))
@@ -64,17 +69,21 @@
   (when (:enabled? (:beeminder user))
     (when-let [goals (seq (db/get-goals db (:beeminder user)))]
       (tracef "goals are %s, getting rows" goals)
-      (let [rows (db/get-pings-by-user (:db db) user)]
+      (let [in-past-week? (past-week-days)
+            rows          (filter #(in-past-week? (:local-day %))
+                                  (db/get-pings-by-user (:db db) user))]
         (doseq [{:keys [goal/name goal/tags]} goals]
           (debugf "Syncing goal: %s with tags %s" name tags)
           (let [{:keys [username token]} (:beeminder user)
                 days                     (days-matching-tag tags rows)
-                existing-datapoints      (datapoints
-                                          (get-in
-                                           user
-                                           [:beeminder :token])
-                                          username
-                                          name)
+                existing-datapoints      (filter
+                                          #(in-past-week? (:daystamp %))
+                                          (datapoints
+                                           (get-in
+                                            user
+                                            [:beeminder :token])
+                                           username
+                                           name))
                 existing-map             (group-by :daystamp existing-datapoints)
                 to-save                  (filter :value
                                                  (for [[daystamp value] days
@@ -100,12 +109,12 @@
               (let [r                           @resp
                     {status :status opts :opts} r
                     {url :url method :method}   opts]
-                (riemann/send! riemann {:service "beeminder"
+                (riemann/send! riemann {:service     "beeminder"
                                         :description (pr-str
                                                       {:status status :goal-name name :username username :user (:id user)})
-                                        :state (if (>= status 300)
-                                                 "warning"
-                                                 "ok")})))))))))
+                                        :state       (if (>= status 300)
+                                                       "warning"
+                                                       "ok")})))))))))
 
 (defn user-for [token]
   (let [resp (-> (http/request {:url         "https://www.beeminder.com/api/v1/users/me.json"
