@@ -123,7 +123,7 @@
                               (map :days-since-epoch)
                               (frequencies))]
      (when (seq freqs)
-       (reduce (daily-total freqs) [] (range first-day last-day))))))
+       (reduce (daily-total freqs) [] (range first-day (inc last-day)))))))
 
 
 (reg-sub
