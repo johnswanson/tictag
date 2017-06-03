@@ -20,7 +20,8 @@
             [tictag.jwt :as jwt]
             [tictag.schemas :as schemas]
             [clojure.spec.alpha :as s]
-            [tictag.tagtime :as tagtime]))
+            [tictag.tagtime :as tagtime]
+            [taoensso.timbre :as timbre]))
 
 (taoensso.timbre/refer-timbre)
 (def wtf (f/formatter "yyyy-MM-dd HH:mm:SS"))
@@ -312,18 +313,18 @@ Separate commands with a newline to apply multiple commands at once
             user (jwt/unsign jwt token)]
         (handler (assoc req :user-id (:user-id user)))))))
 
-(defn tagtime-import [{:keys [db]} {:keys [params user-id]}]
-  (taoensso.timbre/logged-future
-   (if-let [parsed (tagtime/parse user-id (:tagtime-log params))]
-     (db/insert-tagtime-data db parsed)
-     (debugf "Invalid tagtime data received from user-id %d" user-id)))
-  (response {:accepted true}))
-
 (defn tagtime-import-from-file [{:keys [db]} {:keys [multipart-params user-id]}]
   (taoensso.timbre/logged-future
    (debug multipart-params)
-   (if-let [parsed (tagtime/parse user-id (slurp (get-in multipart-params ["tagtime-log" :tempfile])))]
-     (db/insert-tagtime-data db parsed)
+   (if-let [parsed-all (seq (partition-all 1000
+                                           (tagtime/parse user-id
+                                                          (slurp
+                                                           (get-in multipart-params
+                                                                   ["tagtime-log" :tempfile])))))]
+     (doseq [parsed parsed-all]
+       (do
+         (timbre/debugf "adding %d pings to user %d" (count parsed) user-id)
+         (db/insert-tagtime-data db parsed)))
      (debugf "Invalid tagtime data received from user-id %d" user-id)))
   (response {:accepted true}))
 
@@ -347,7 +348,6 @@ Separate commands with a newline to apply multiple commands at once
    (GET "/about" _ (index component))
    (GET "/settings" _ (index component))
    (context "/api" []
-            (POST "/tagtime" _ (partial tagtime-import component))
             (PUT "/tagtime" _ (partial tagtime-import-from-file component))
             (GET "/timezones" _ (partial timezone-list component))
             (GET "/user/me" _ (partial my-user component))
