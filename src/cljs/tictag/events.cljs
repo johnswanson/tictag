@@ -3,13 +3,42 @@
             [re-frame.core :refer [reg-event-fx reg-event-db reg-fx reg-cofx inject-cofx]]
             [taoensso.timbre :as timbre]
             [ajax.core :refer [transit-response-format transit-request-format]]
+            [ajax.protocols]
             [tictag.nav :as nav]
             [tictag.schemas :as schemas]
             [tictag.dates]
             [tictag.utils :refer [descend]]
             [goog.net.cookies]
             [cljs.spec :as s]
-            [cljs-time.format :as f]))
+            [cljs-time.format :as f]
+            [goog.events :as events]
+            [goog.net.XhrIo :as xhr]
+            [goog.net.EventType]))
+
+(extend-type goog.net.XhrIo
+  ajax.protocols/AjaxImpl
+  (-js-ajax-request
+    [this
+     {:keys [uri method body headers timeout with-credentials
+             response-format progress-handler]
+      :or {with-credentials false
+           timeout 0}}
+     handler]
+    (when-let [response-type (:type response-format)]
+      (.setResponseType this (name response-type)))
+   ;; Check for the existence of a :progress-handler arg and register if it's there
+    (when progress-handler
+      (doto this
+        (.setProgressEventsEnabled true)
+        (.listen goog.net.EventType.UPLOAD_PROGRESS progress-handler)))
+    (doto this
+      (events/listen goog.net.EventType/COMPLETE
+                     #(do (println "Overriden Complete")
+                          (handler (.-target %))))
+      (.setTimeoutInterval timeout)
+      (.setWithCredentials with-credentials)
+      (.send uri method body (clj->js headers)))))
+
 
 (def interceptors [(when ^boolean goog.DEBUG re-frame.core/debug)])
 
@@ -526,34 +555,52 @@
      (assoc-in db [:goal/by-id (:goal/id to-merge)] to-merge))))
 
 (reg-event-fx
- :tagtime-import/send
- [interceptors]
- (fn [{:keys [db]} [_ data]]
-   {:http-xhrio (authenticated-xhrio
-                 {:params          {:tagtime-log data}
-                  :method          :post
-                  :uri             "/api/tagtime"
-                  :format          (transit-request-format {})
-                  :response-format (transit-response-format {})
-                  :on-success      [:tagtime-import/success]
-                  :on-failure      [:tagtime-import/fail]}
-                 (:auth-token db))}))
-
-(reg-event-fx
  :tagtime-import/file
  [interceptors]
  (fn [{:keys [db]} [_ file]]
-   (js/console.log file)
    {:http-xhrio (authenticated-xhrio
-                 {:body (doto (js/FormData.)
-                          (.append "tagtime-log" file))
+                 {:body             (doto (js/FormData.)
+                                      (.append "tagtime-log" file))
+                  :progress-handler #(re-frame.core/dispatch
+                                      [:tagtime-import/progress (.-name file) %])
                   :method           :put
                   :uri              "/api/tagtime"
                   :format           (transit-request-format {})
                   :response-format  (transit-response-format {})
-                  :on-success       [:tagtime-import/success]
-                  :on-failure       [:tagtime-import/fail]}
-                 (:auth-token db))}))
+                  :on-success       [:tagtime-import/success (.-name file)]
+                  :on-failure       [:tagtime-import/fail (.-name file)]}
+                 (:auth-token db))
+    :db         (assoc-in db [:db/tagtime-upload (.-name file)]
+                          {:upload-progress 0})}))
+
+(reg-event-db
+ :tagtime-import/progress
+ [interceptors]
+ (fn [db [_ filename e]]
+   (assoc-in db [:db/tagtime-upload filename :upload-progress]
+             (* 100 (/ (.-loaded e)
+                       (.-total e))))))
+
+(reg-event-db
+ :tagtime-import/success
+ [interceptors]
+ (fn [db [_ filename]]
+   (update-in db [:db/tagtime-upload filename]
+              merge
+              {:upload-progress 100
+               :success? true
+               :error? []})))
+
+(reg-event-db
+ :tagtime-import/fail
+ [interceptors]
+ (fn [db [_ filename]]
+   (update-in db [:db/tagtime-upload filename]
+              merge
+              {:error?          [:upload-failed]
+               :success?        nil
+               :upload-progress 0
+               :process-progress 0})))
 
 (defonce timeouts
   (atom {}))

@@ -317,3 +317,13 @@
  (fn [db _]
    (map :name (:allowed-timezones db))))
 
+(reg-sub
+ :db/tagtime-uploads
+ (fn [db _]
+   (keys (:db/tagtime-upload db))))
+
+(reg-sub
+ :db/tagtime-upload
+ (fn [db [_ k]]
+   (get-in db [:db/tagtime-upload k])))
+

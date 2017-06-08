@@ -7,6 +7,30 @@
             [goog.string :as str]
             [cljs.reader :as edn]))
 
+(defn tagtime-upload-progress-view [name u]
+  [re-com/v-box
+   :children [[re-com/title :level :level3 :label name]
+              [re-com/title :level :level4 :label "Upload Progress"]
+              [re-com/progress-bar
+               :bar-class "error"
+               :model (:upload-progress u)]
+              (when (:process-progress u)
+                [:div
+                 [re-com/title :level :level4 :label "Processing Progress"]
+                 [re-com/progress-bar
+                  :model (:process-progress u)]])]])
+
+(defn tagtime-upload-progress [fname]
+  (let [sub (subscribe [:db/tagtime-upload fname])]
+    [tagtime-upload-progress-view fname @sub]))
+
+(defn tagtime-upload-progress-all []
+  (let [subs (subscribe [:db/tagtime-uploads])]
+    [re-com/v-box
+     :children
+     (for [fname @subs]
+       ^{:key fname} [tagtime-upload-progress fname])]))
+
 (defn tagtime-import []
   (let [model (reagent/atom "")]
     [re-com/v-box
@@ -18,7 +42,8 @@
                           [:span.rc-button.btn.btn-default [:i.zmdi.zmdi-cloud-upload {:style {:margin-right "1em"}}] "Upload Log"]]
                          [:input#upload
                           {:type "file" :name "file" :style {:width "0px" :height "0px" :opacity 0 :overflow :hidden :position :absolute :z-index -1}
-                           :on-change #(dispatch [:tagtime-import/file (-> % .-target .-files (aget 0))])}]]]]]))
+                           :on-change #(dispatch [:tagtime-import/file (-> % .-target .-files (aget 0))])}]]]
+                [tagtime-upload-progress-all]]]))
 
 (defn slack-authorize []
   [:div
