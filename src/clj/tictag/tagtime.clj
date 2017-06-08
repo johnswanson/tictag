@@ -58,7 +58,6 @@
   (->> (str/split log #"\n")
        (map parse-line)
        (filter #(not (nil? %)))
-       (map #(assoc % :user-id user-id))
        (reduce (fn [accu {:keys [local-time ts] :as m}]
                  (if local-time
                    (conj accu m)
@@ -68,4 +67,5 @@
                [])
        (map add-tz-offset)
        (map #(select-keys % [:tz-offset :ts :tags]))
+       (map #(assoc % :user-id user-id))
        seq))
