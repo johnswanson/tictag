@@ -7,8 +7,10 @@
             [buddy.core.hash :as hash]))
 
 (def config
-  {:tictag-server {:host                     (env :tictag-host "127.0.0.1")
+  {:tictag-server {:ip                       (env :tictag-host "127.0.0.1")
                    :port                     (or (some-> env :tictag-port Integer.) 8080)
+                   :max-body                 (or (some-> env :tictag-max-body Integer.)
+                                                 (* 32 1024 1024))
                    :slack-client-id          (env :slack-client-id)
                    :slack-client-secret      (env :slack-client-secret)
                    :slack-verification-token (env :slack-verification-token)}

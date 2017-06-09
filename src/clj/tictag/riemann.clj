@@ -9,7 +9,6 @@
             [taoensso.timbre :as timbre]))
 
 (defn send! [c e]
-  (timbre/debug e)
   (r/send-event (:conn c) e))
 
 (defrecord RiemannClient [config db]

@@ -1,4 +1,6 @@
 (ns tictag.events
+  (:require-macros
+   [cljs.core.async.macros :as asyncm :refer (go go-loop)])
   (:require [cljs.tools.reader.edn :as edn]
             [re-frame.core :refer [reg-event-fx reg-event-db reg-fx reg-cofx inject-cofx]]
             [taoensso.timbre :as timbre]
@@ -13,7 +15,9 @@
             [cljs-time.format :as f]
             [goog.events :as events]
             [goog.net.XhrIo :as xhr]
-            [goog.net.EventType]))
+            [goog.net.EventType]
+            [cljs.core.async :as a :refer [<! >! put! chan]]
+            [taoensso.sente :as sente :refer [cb-success?]]))
 
 (extend-type goog.net.XhrIo
   ajax.protocols/AjaxImpl
@@ -33,8 +37,7 @@
         (.listen goog.net.EventType.UPLOAD_PROGRESS progress-handler)))
     (doto this
       (events/listen goog.net.EventType/COMPLETE
-                     #(do (println "Overriden Complete")
-                          (handler (.-target %))))
+                     #(handler (.-target %)))
       (.setTimeoutInterval timeout)
       (.setWithCredentials with-credentials)
       (.send uri method body (clj->js headers)))))
@@ -201,7 +204,8 @@
  :user-me-success
  [interceptors]
  (fn [{:keys [db]} [_ user]]
-   {:db (merge db (normalize-user-to-db user))
+   {:db             (merge db (normalize-user-to-db user))
+    :sente-connect  (:auth-token db)
     :dispatch-later [{:ms 2 :dispatch [:pings/receive
                                        (ref-to-user user)
                                        true
@@ -366,6 +370,54 @@
  (fn [kv]
    (doseq [[k v] kv]
      (.set goog.net.cookies (name k) v))))
+
+(defonce !chsk (atom nil))
+(defonce !ch-chsk (atom nil))
+(defonce !chsk-send! (atom nil))
+(defonce !chsk-state (atom nil))
+
+(reg-event-db
+ :chsk/state
+ [interceptors]
+ (fn [db [_ v]]
+   (js/console.log v)
+   db))
+
+(reg-event-fx
+ :chsk/recv
+ [interceptors]
+ (fn [_ [_ v]]
+   {:dispatch v}))
+
+(reg-event-db
+ :chsk/handshake
+ [interceptors]
+ (fn [db [_ v]]
+   (js/console.log v)
+   db))
+
+(reg-fx
+ :sente-connect
+ (fn [auth-token]
+   (js/console.log auth-token)
+   (let [{:keys [chsk ch-recv send-fn state]}
+         (sente/make-channel-socket! "/chsk"
+                                     {:type :auto
+                                      :packer :edn})]
+     (go-loop []
+       (let [{:keys [event id ?data send-fn]} (<! ch-recv)]
+         (re-frame.core/dispatch event)
+         (recur)))
+     (reset! !chsk chsk)
+     (reset! !ch-chsk ch-recv)
+     (reset! !chsk-send! send-fn)
+     (reset! !chsk-state state))))
+
+(reg-fx
+ :sente-send
+ (fn [event]
+   (let [f @!chsk-send!]
+     (f event))))
 
 (reg-fx
  :delete-cookie
@@ -562,9 +614,9 @@
                  {:body             (doto (js/FormData.)
                                       (.append "tagtime-log" file))
                   :progress-handler #(re-frame.core/dispatch
-                                      [:tagtime-import/progress (.-name file) %])
+                                      [:tagtime-import/upload-progress (.-name file) %])
                   :method           :put
-                  :uri              "/api/tagtime"
+                  :uri              "/tagtime"
                   :format           (transit-request-format {})
                   :response-format  (transit-response-format {})
                   :on-success       [:tagtime-import/success (.-name file)]
@@ -574,12 +626,21 @@
                           {:upload-progress 0})}))
 
 (reg-event-db
- :tagtime-import/progress
+ :tagtime-import/upload-progress
  [interceptors]
  (fn [db [_ filename e]]
    (assoc-in db [:db/tagtime-upload filename :upload-progress]
              (* 100 (/ (.-loaded e)
                        (.-total e))))))
+
+(reg-event-db
+ :tagtime-import/process-progress
+ [interceptors]
+ (fn [db [_ {:keys [filename total processed]}]]
+   (assoc-in db
+             [:db/tagtime-upload filename :process-progress]
+             (Math/round (* 100 (/ processed total))))))
+
 
 (reg-event-db
  :tagtime-import/success
@@ -588,6 +649,7 @@
    (update-in db [:db/tagtime-upload filename]
               merge
               {:upload-progress 100
+               :process-progress 0
                :success? true
                :error? []})))
 

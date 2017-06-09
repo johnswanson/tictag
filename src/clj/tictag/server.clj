@@ -6,7 +6,7 @@
             [compojure.core :refer [GET PUT POST DELETE context]]
             [taoensso.timbre]
             [ring.util.response :refer [response]]
-            [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
+            [ring.middleware.defaults :refer [wrap-defaults api-defaults site-defaults]]
             [ring.middleware.format :refer [wrap-restful-format]]
             [tictag.db :as db]
             [tictag.riemann :as r]
@@ -14,16 +14,18 @@
             [hiccup.core :refer [html]]
             [hiccup.page :refer [html5]]
             [tictag.cli :as cli]
+            [tictag.ws :as ws]
             [tictag.users :as users]
             [tictag.beeminder :as beeminder]
             [tictag.slack :as slack]
-            [tictag.jwt :as jwt]
+            [tictag.jwt :as jwt :refer [wrap-user wrap-session-auth]]
             [tictag.schemas :as schemas]
             [clojure.spec.alpha :as s]
             [tictag.tagtime :as tagtime]
             [taoensso.timbre :as timbre]))
 
 (taoensso.timbre/refer-timbre)
+
 (def wtf (f/formatter "yyyy-MM-dd HH:mm:SS"))
 
 (def UNAUTHORIZED
@@ -185,6 +187,7 @@ Separate commands with a newline to apply multiple commands at once
                         {:db db :jwt jwt}
                         (:username params)
                         (:password params))]
+    (timbre/debugf "%s" params)
     (if valid?
       {:status 200 :headers {} :body token}
       {:status 401 :headers {} :body nil})))
@@ -305,26 +308,25 @@ Separate commands with a newline to apply multiple commands at once
     (db/delete-goal db user-id int-id)
     (response {})))
 
-(defn wrap-session-auth [handler jwt]
-  (fn [req]
-    (if (:user-id req)
-      (handler req)
-      (let [token (get-in req [:cookies "auth-token" :value])
-            user (jwt/unsign jwt token)]
-        (handler (assoc req :user-id (:user-id user)))))))
-
-(defn tagtime-import-from-file [{:keys [db]} {:keys [multipart-params user-id]}]
+(defn tagtime-import-from-file [{:keys [db ws]} {:keys [multipart-params user-id params] :as req}]
+  (debug multipart-params)
   (taoensso.timbre/logged-future
-   (debug multipart-params)
-   (if-let [parsed-all (seq (partition-all 1000
-                                           (tagtime/parse user-id
-                                                          (slurp
-                                                           (get-in multipart-params
-                                                                   ["tagtime-log" :tempfile])))))]
-     (doseq [parsed parsed-all]
+   (if-let [parsed-all (seq
+                        (partition-all
+                         1000
+                         (tagtime/parse
+                          user-id
+                          (slurp
+                           (get-in multipart-params
+                                   ["tagtime-log" :tempfile])))))]
+     (doseq [[idx parsed] (map-indexed vector parsed-all)]
        (do
          (timbre/debugf "adding %d pings to user %d" (count parsed) user-id)
-         (db/insert-tagtime-data db parsed)))
+         (db/insert-tagtime-data db parsed)
+         ((:chsk-send! ws) user-id [:tagtime-import/process-progress
+                                    {:total     (count parsed-all)
+                                     :filename  (get-in multipart-params ["tagtime-log" :filename])
+                                     :processed (inc idx)}])))
      (debugf "Invalid tagtime data received from user-id %d" user-id)))
   (response {:accepted true}))
 
@@ -332,65 +334,68 @@ Separate commands with a newline to apply multiple commands at once
   (let [{:keys [enable?]} params]
     (db/enable-beeminder db user-id enable?)))
 
-(defn routes [component]
-  (compojure.core/routes
-   (GET "/slack-callback" _ (wrap-session-auth (partial slack-callback component) (:jwt component)))
-   (POST "/slack" _ (partial slack component))
-   (PUT "/time/:timestamp" _ (partial timestamp component))
-   (POST "/token" _ (partial token component))
-   (GET "/pings" _ (partial pings component))
-   (GET "/config" _ (partial config component))
-   (GET "/" _ (index component))
-   (GET "/devcards" _ (devcards component))
-   (GET "/signup" _ (index component))
-   (GET "/login" _ (index component))
-   (GET "/logout" _ (index component))
-   (GET "/about" _ (index component))
-   (GET "/settings" _ (index component))
-   (context "/api" []
-            (PUT "/tagtime" _ (partial tagtime-import-from-file component))
-            (GET "/timezones" _ (partial timezone-list component))
-            (GET "/user/me" _ (partial my-user component))
-            (POST "/user/me/beeminder" _ (partial add-beeminder component))
-            (POST "/user/me/beeminder/enable" _ (partial enable-beeminder component))
-            (POST "/user/me/tz" _ (partial update-tz component))
-            (DELETE "/user/me/beeminder" _ (partial delete-beeminder component))
-            (DELETE "/user/me/slack" _ (partial delete-slack component))
-            (POST "/user/me/goals/" _ (partial add-goal component))
-            (PUT "/user/me/goals/:id" _ (partial update-goal component))
-            (DELETE "/user/me/goals/:id" _ (partial delete-goal component)))
-   (POST "/signup" _ (partial signup component))
-   (GET "/healthcheck" _ (health-check component))))
-
-(defn wrap-user [handler jwt]
-  (fn [req]
-    (let [token (get-in req [:headers "authorization"])
-          user  (jwt/unsign jwt token)]
-      (handler (assoc req :user-id (:user-id user))))))
-
 (defn wrap-log [handler]
   (fn [req]
     (trace req)
-    (when-not (= (:uri req) "/healthcheck")
+    (when-not (or (= (:uri req) "/healthcheck") (str/starts-with? (:uri req) "/js"))
       (debugf "REQ: [user: %s] [%s] [%s]" (:user-id req) (:uri req) (:remote-addr req)))
     (handler req)))
 
+(defn site-routes [component]
+  (-> (compojure.core/routes
+       (GET "/slack-callback" _
+            (wrap-session-auth (partial slack-callback component)
+                               (:jwt component)))
+       (GET "/devcards" _ (devcards component))
+       (GET "/" _ (index component))
+       (GET "/signup" _ (index component))
+       (GET "/login" _ (index component))
+       (GET "/logout" _ (index component))
+       (GET "/about" _ (index component))
+       (GET "/settings" _ (index component))
+       (PUT "/tagtime" _ (partial tagtime-import-from-file component))
+       (GET "/healthcheck" _ (health-check component)))
+      (wrap-defaults (-> site-defaults
+                         (assoc-in [:security :anti-forgery] false)
+                         (assoc :proxy true)))))
 
-(defrecord Server [db config tagtime riemann]
+(defn api-routes [component]
+  (-> (compojure.core/routes
+       (POST "/signup" _ (partial signup component))
+       (POST "/slack" _ (partial slack component))
+       (PUT "/time/:timestamp" _ (partial timestamp component))
+       (POST "/token" _ (partial token component))
+       (GET "/pings" _ (partial pings component))
+       (GET "/config" _ (partial config component))
+       (context "/api" []
+                (GET "/timezones" _ (partial timezone-list component))
+                (GET "/user/me" _ (partial my-user component))
+                (POST "/user/me/beeminder" _ (partial add-beeminder component))
+                (POST "/user/me/beeminder/enable" _ (partial enable-beeminder component))
+                (POST "/user/me/tz" _ (partial update-tz component))
+                (DELETE "/user/me/beeminder" _ (partial delete-beeminder component))
+                (DELETE "/user/me/slack" _ (partial delete-slack component))
+                (POST "/user/me/goals/" _ (partial add-goal component))
+                (PUT "/user/me/goals/:id" _ (partial update-goal component))
+                (DELETE "/user/me/goals/:id" _ (partial delete-goal component))))
+      (wrap-defaults (-> api-defaults (assoc :proxy true)))))
+
+
+(defn my-routes [component]
+  (wrap-restful-format
+   (compojure.core/routes (site-routes component) (api-routes component))
+   :formats [:json-kw :edn :transit-json :transit-msgpack]))
+
+(defrecord Server [db config tagtime riemann ws jwt]
   component/Lifecycle
   (start [component]
     (debug "Starting server")
     (let [stop (http/run-server
-                (-> (routes component)
+                (-> (compojure.core/routes (my-routes component)
+                                           (ws/ws-routes ws (:jwt component)))
                     (wrap-log)
                     (wrap-user (:jwt component))
-                    (wrap-restful-format :formats [:json-kw :edn :transit-json :transit-msgpack])
-                    (wrap-defaults (-> api-defaults
-                                       (assoc-in [:params :multipart] true)
-                                       (assoc-in [:static :resources] "/public")
-                                       (assoc :proxy true)
-                                       (assoc :cookies true)))
-                    (r/wrap-riemann riemann))
+                    (r/wrap-riemann (:riemann component)))
                 config)]
       (debug "Server created")
       (assoc component :stop stop)))

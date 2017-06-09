@@ -3,6 +3,7 @@
             [tictagapi.core :as tagtime]
             [tictag.tester :as tester]
             [tictag.server :as server]
+            [tictag.ws :as ws]
             [tictag.server-chimer :as server-chimer]
             [tictag.db :as db]
             [tictag.repl :as repl]
@@ -13,7 +14,9 @@
    :server (component/using
             (server/map->Server
              {:config (:tictag-server config)})
-            [:db :tagtime :jwt :riemann :beeminder :slack])
+            [:db :tagtime :jwt :riemann :beeminder :slack :ws])
+
+   :ws (ws/->Sente)
    :tagtime (tagtime/tagtime
              (get-in config [:tagtime :gap])
              (get-in config [:tagtime :seed]))
