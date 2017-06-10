@@ -56,7 +56,7 @@
                    :query-params {:auth_token auth-token}})))
 
 (defn past-week-days []
-  (set (map db/local-day (take 7 (p/periodic-seq (t/now) (t/days -24))))))
+  (set (map db/local-day (take 7 (p/periodic-seq (t/now) (t/days -1))))))
 
 (defn days-matching-tag [tags rows]
   (->> rows
@@ -79,9 +79,7 @@
                 existing-datapoints      (filter
                                           #(in-past-week? (:daystamp %))
                                           (datapoints
-                                           (get-in
-                                            user
-                                            [:beeminder :token])
+                                           token
                                            username
                                            name))
                 existing-map             (group-by :daystamp existing-datapoints)
