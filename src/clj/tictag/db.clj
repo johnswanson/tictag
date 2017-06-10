@@ -83,6 +83,8 @@
               "afk"
               :id)
              (from :users))])
+       (upsert (-> (on-conflict :ts :user-id)
+                   (do-nothing)))
        sql/format)))
 
 (defn add-pending! [{:keys [pends] :as db} time id]
