@@ -18,7 +18,7 @@
             [tictag.users :as users]
             [tictag.beeminder :as beeminder]
             [tictag.slack :as slack]
-            [tictag.jwt :as jwt :refer [wrap-user wrap-session-auth]]
+            [tictag.jwt :as jwt :refer [wrap-user]]
             [tictag.schemas :as schemas]
             [clojure.spec.alpha :as s]
             [tictag.tagtime :as tagtime]
@@ -344,8 +344,9 @@ Separate commands with a newline to apply multiple commands at once
 (defn site-routes [component]
   (-> (compojure.core/routes
        (GET "/slack-callback" _
-            (wrap-session-auth (partial slack-callback component)
-                               (:jwt component)))
+            (jwt/wrap-session-auth
+             (partial slack-callback component)
+             (:jwt component)))
        (GET "/devcards" _ (devcards component))
        (GET "/" _ (index component))
        (GET "/signup" _ (index component))
@@ -391,10 +392,13 @@ Separate commands with a newline to apply multiple commands at once
   (start [component]
     (debug "Starting server")
     (let [stop (http/run-server
-                (-> (compojure.core/routes (my-routes component)
-                                           (ws/ws-routes ws (:jwt component)))
+                (-> (compojure.core/routes
+                     (my-routes component)
+                     (ws/ws-routes ws))
                     (wrap-log)
                     (wrap-user (:jwt component))
+                    (wrap-defaults {:params {:urlencoded true
+                                             :keywordize true}})
                     (r/wrap-riemann (:riemann component)))
                 config)]
       (debug "Server created")

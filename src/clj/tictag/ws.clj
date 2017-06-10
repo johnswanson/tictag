@@ -12,10 +12,11 @@
   (start [component]
     (let [{:keys [ch-recv send-fn connected-uids
                   ajax-post-fn ajax-get-or-ws-handshake-fn]}
-          (sente/make-channel-socket-server! (get-sch-adapter) {:user-id-fn :user-id
-                                                                :packer     :edn
-                                                                :handshake-fn (fn [req]
-                                                                                {:arb :data})})]
+          (sente/make-channel-socket-server! (get-sch-adapter)
+                                             {:user-id-fn :user-id
+                                              :packer     :edn
+                                              :handshake-fn (fn [req]
+                                                              {:arb :data})})]
       (assoc component
              :ring-ajax-post ajax-post-fn
              :ring-ajax-get-or-ws-handshake ajax-get-or-ws-handshake-fn
@@ -30,14 +31,7 @@
             :chsk-send!
             :connected-uids)))
 
-(defn ws-routes [ws jwt]
-  (wrap-defaults
-   (jwt/wrap-session-auth
-    (compojure.core/routes
-     (GET "/chsk" _ (:ring-ajax-get-or-ws-handshake ws))
-     (POST "/chsk" _ (:ring-ajax-post ws)))
-    jwt)
-   {:params  {:urlencoded true
-              :keywordize true}
-    :proxy   true
-    :cookies true}))
+(defn ws-routes [ws]
+  (compojure.core/routes
+   (GET "/chsk" _ (:ring-ajax-get-or-ws-handshake ws))
+   (POST "/chsk" _ (:ring-ajax-post ws))))

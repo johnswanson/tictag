@@ -20,6 +20,7 @@
 
 (defn wrap-user [handler jwt]
   (fn [req]
-    (let [token (get-in req [:headers "authorization"])
+    (let [token (or (get-in req [:headers "authorization"])
+                    (get-in req [:params :authorization]))
           user  (when token (unsign jwt token))]
       (handler (assoc req :user-id (:user-id user))))))

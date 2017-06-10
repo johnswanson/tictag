@@ -399,11 +399,11 @@
 (reg-fx
  :sente-connect
  (fn [auth-token]
-   (js/console.log auth-token)
    (let [{:keys [chsk ch-recv send-fn state]}
          (sente/make-channel-socket! "/chsk"
                                      {:type :auto
-                                      :packer :edn})]
+                                      :packer :edn
+                                      :params {:authorization auth-token}})]
      (go-loop []
        (let [{:keys [event id ?data send-fn]} (<! ch-recv)]
          (re-frame.core/dispatch event)
