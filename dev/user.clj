@@ -4,7 +4,7 @@
             [reloaded.repl :refer [system init start stop go reset]]
             [com.stuartsierra.component :as component]
             [tictag.config :refer [config]]
-            [tictag.server :as server]
+            [tictag.server :as server :refer [evaluate]]
             [tictag.db :as db]
             [tictag.beeminder :as bm]
             [tictag.system]
@@ -15,13 +15,15 @@
             [ragtime.repl :refer [migrate rollback]]
             [clojure.repl :refer [doc]]
             [honeysql.core :as sql]
-            [honeysql.helpers :refer :all]
+            [honeysql.helpers :refer [insert-into values limit where from select join]]
             [honeysql-postgres.format :refer :all]
-            [honeysql-postgres.helpers :refer :all]
+            [honeysql-postgres.helpers :refer [upsert do-nothing on-conflict do-update-set]]
             [clojure.java.jdbc :as j]
             [tictag.crypto :as crypto]
             [environ.core :refer [env]]
-            [figwheel-sidecar.repl-api]))
+            [figwheel-sidecar.repl-api]
+            [instaparse.core :as insta]))
+
 
 (defn cljs-repl []
   (do (figwheel-sidecar.repl-api/stop-figwheel!)
@@ -38,11 +40,11 @@
 
 (reloaded.repl/set-init! #(tictag.system/system config))
 
-(defn dev-user [] (db/get-user (:db system) "TEST_USER"))
+(defn dev-user [] (db/get-user (:db system) "test"))
 
 (def my-user-id (-> (select :id)
                     (from :users)
-                    (where [:= :username "TEST_USER"])
+                    (where [:= :username "test"])
                     (limit 1)))
 
 (def my-beeminder-id (-> (select :beeminder.id)
@@ -53,9 +55,9 @@
   (j/with-db-transaction [tx (-> system :db :db)]
     (j/execute! tx
                 (-> (insert-into :users)
-                    (values [{:username "TEST_USER"
+                    (values [{:username "test"
                               :email    "tictag-test@agh.io"
-                              :pass     (db/hashp "foobar")
+                              :pass     (db/hashp "test")
                               :tz       "America/Los_Angeles"}])
                     (upsert (-> (on-conflict :username)
                                 (do-nothing)))
@@ -95,3 +97,7 @@
                     (upsert (-> (on-conflict :beeminder_id :goal)
                                 (do-nothing)))
                     sql/format))))
+
+(def p (insta/parser (clojure.java.io/resource "parser.bnf")))
+(defn e [v] (evaluate {:db (:db system) :user (dev-user)} v))
+
