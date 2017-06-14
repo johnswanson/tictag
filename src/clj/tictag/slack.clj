@@ -36,12 +36,13 @@
 (defn users-info [token user-id]
   (slack-call! "users.info" {:token token :user user-id}))
 
-(defn send-message [user body]
+(defn send-message [user body & [thread-ts]]
   (when-let [{:keys [channel-id bot-access-token]} (:slack user)]
     (tracef "tictag.slack/send-message! %s" (:username user))
     (-> (method-url "chat.postMessage")
         (http/post {:form-params {:token bot-access-token
                                   :channel channel-id
+                                  :thread_ts thread-ts
                                   :text body}}))))
 
 (defn record-response [riemann resp]

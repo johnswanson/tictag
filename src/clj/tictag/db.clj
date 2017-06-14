@@ -4,6 +4,7 @@
             [clj-time.jdbc]
             [clj-time.coerce :as coerce]
             [clj-time.format :as f]
+            [clj-time.core :as t]
             [clojure.string :as str]
             [clojure.edn :as edn]
             [clojure.data.csv :as csv]
@@ -19,6 +20,11 @@
             [buddy.hashers :refer [check]]
             [hikari-cp.core :as hikari]
             [tictag.utils :as utils]))
+
+(defn at-time
+  "This is SUPER hacky and only works for the `db/latest-pings` fn."
+  [db t]
+  (assoc db :_time-travel t))
 
 (defn beeminder-id [user-id]
   (-> (select :beeminder.id)
@@ -47,7 +53,7 @@
     (assoc component
            :db {:datasource (hikari/make-datasource (datasource-options db-spec))
                 :crypto-key (:crypto-key db-spec)}
-           :pends (atom (ring-buffer 16))))
+           :pends (atom (ring-buffer 32))))
   (stop [component]
     (when-let [ds (get-in component [:db :datasource])]
       (timbre/debug "Closing database pool.")
@@ -126,12 +132,14 @@
    (:db db)
    (-> ping-select
        (where [:= :user_id (:id user)])
+       (merge-where
+        (when-let [now (:_time-travel db)]
+          [:<= :ts now]))
        (order-by [:ts :desc])
        (limit count))))
 
 (defn last-ping [db user]
   (first (last-pings db user 1)))
-
 
 (defn ping-from-long-time [db user long-time]
   (first
@@ -150,7 +158,7 @@
   (:pings tagtime))
 
 (defn update-tags! [{db :db} pings]
-  (timbre/debugf "Updating pings: %s" (pr-str pings))
+  (timbre/tracef "Updating pings: %s" (pr-str pings))
   (j/with-db-transaction [db db]
     (doseq [{:keys [tags user-id timestamp]} pings]
       (j/execute! db (-> (update :pings)

@@ -23,7 +23,8 @@
             [tictag.tagtime :as tagtime]
             [clojure.spec.alpha :as s]
             [taoensso.timbre :as timbre]
-            [instaparse.core :as insta]))
+            [instaparse.core :as insta]
+            [clj-time.coerce :as tc]))
 
 (taoensso.timbre/refer-timbre)
 
@@ -89,8 +90,10 @@
     (response (unjoda (db/get-pings-by-user-id (:db db) user-id)))))
 
 (defn slack-text [slack-message]
-  (format "%s\n" (->> (get-in slack-message [:event :text])
-                      (str/lower-case))))
+  (str
+   (->> (get-in slack-message [:event :text])
+        (str/lower-case))
+   "\n"))
 
 (def command-parser (insta/parser (clojure.java.io/resource "parser.bnf")))
 
@@ -145,7 +148,7 @@
                 (assoc p :tags (set t) :_old-tags (:tags p)))))
        (remove nil?)))
 
-(defn save* [{:keys [db user]} ps]
+(defn save* [{:keys [db user thread-ts]} ps]
   (let [new (update-pings ps)]
     (try (do (db/update-tags! db new)
              (slack/send-message user
@@ -156,7 +159,8 @@
                                                  (f/unparse wtf local-time)
                                                  _old-tags
                                                  tags))
-                                       new)))
+                                       new))
+                                 thread-ts)
              {:saved new})
          (catch Exception e
            {:error {:exception e
@@ -166,11 +170,14 @@
   (save* ctx [p]))
 
 (defn help [{:keys [slack user]}]
-  (slack/send-message user ["Tag the most recent ping (e.g. by saying `ttc`)
+  (slack/send-message user ["TicTag will ping you every 45 minutes, on average.
+Pings look like this: `ping <id> [<long-time>]`
+Tag the most recent ping (e.g. by saying `ttc`)
+Tag a specific ping by responding in a slack thread to that ping's message
 Tag a ping by its id (e.g. by saying `113 ttc`)
 Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
 `sleep` command: tag the most recent set of contiguous pings as `sleep`
-`\"` command: tags the last ping with whatever the second-to-last ping had
+`\"`: macroexpands to the tags of the ping sent *before the one you're tagging*
 Separate commands with a newline to apply multiple commands at once
 "]))
 
@@ -207,10 +214,19 @@ Separate commands with a newline to apply multiple commands at once
 
 (defn slack [{:keys [db] :as component} {:keys [params]}]
   (taoensso.timbre/logged-future
-    (when-let [user (and (valid-slack? component params)
-                         (slack-user db params))]
-      (let [ctx {:db db :user user}]
-        (eval-command ctx (slack-text params)))))
+   (when-let [user (and (valid-slack? component params)
+                        (slack-user db params))]
+     (let [ctx {:db db :user user}]
+       (if-let [thread (some->
+                        params :event :thread_ts
+                        (str/replace #"\.(\d\d\d)\d+$" "$1")
+                        (Long.)
+                        (tc/from-long))]
+         (eval-command (-> ctx
+                           (update :db db/at-time thread)
+                           (assoc :thread-ts (get-in params [:event :thread_ts])))
+                       (slack-text params))
+         (eval-command ctx (slack-text params))))))
   {:status 200 :body ""})
 
 (defn timestamp [{:keys [db] :as component} {:keys [params user-id]}]

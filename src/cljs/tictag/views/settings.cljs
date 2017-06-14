@@ -64,14 +64,18 @@
                    :on-click #(dispatch [:slack/delete])]
                   [slack-authorize])
                 [re-com/title :level :level2 :label "Slackbot instructions:"]
-                [re-com/p "Use the " [:code "help"] " command to see the available commands, like:"]
+                [re-com/p "Every time a ping goes out, you'll get a slack message like: "]
+                [re-com/p [:code "ping 123 [1495753682000]"]]
+                [re-com/p "To respond, you can:"]
                 [:ol
                  [:li [re-com/p "Just send something like " [:code "foo bar"] " to tag the most recent ping as " [:code (pr-str ["foo" "bar"])]]]
+                 [:li [re-com/p "Using the same syntax, respond to a ping in a thread to respond to that specific ping"]]
                  [:li [re-com/p "Refer to a recent ping by its ID, like " [:code "123 foo bar"] ", to tag that ping as " [:code (pr-str ["foo" "bar"])]]]
                  [:li [re-com/p "Refer to any ping by its ms-from-epoch timestamp, like " [:code "1495753682000 foo bar"] ", to tag that ping as " [:code (pr-str ["foo" "bar"])]]]
-                 [:li [re-com/p "The special command " [:code "sleep"] " will tag the last contiguous series of pings as " [:code (pr-str "sleep")]]]
-                 [:li [re-com/p "Send a single " [:code "\""] " to 'ditto'--just tag the last ping with the same tags as the second-to-last ping"]]
-                 [:li [re-com/p "You can send multiple commands at once by separating them with newlines"]]]]]))
+                 [:li [re-com/p "The special command " [:code "sleep"] " will tag the last contiguous series of pings as " [:code (pr-str ["sleep"])]]]
+                 [:li [re-com/p [:code "\""] " will macro-expand to 'ditto'--in other words, the tags that the " [:span.bold "previous"] " ping had"]]
+                 [:li [re-com/p "You can send multiple commands at once by separating them with newlines"]]]
+                [re-com/p "You can also send " [:code "help"] " to the slackbot if you need it."]]]))
 
 (defn beeminder-goal-editor [goal]
   [re-com/h-box

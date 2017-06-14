@@ -21,7 +21,7 @@
         (slack/send-messages
          slack
          (db/get-all-users db)
-         (format "PING! id: %s, long-time: %s" id long-time))
+         (format "`ping %s [%s]`" id long-time))
         (timbre/debugf "CHIME %s: All done!" id)))))
 
 (defrecord ServerChimer [db slack riemann]
