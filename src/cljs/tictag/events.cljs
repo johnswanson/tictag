@@ -369,7 +369,7 @@
  :set-cookie
  (fn [kv]
    (doseq [[k v] kv]
-     (.set goog.net.cookies (name k) v))))
+     (.set goog.net.cookies (name k) v (* 60 60 24 365 2)))))
 
 (defonce !chsk (atom nil))
 (defonce !ch-chsk (atom nil))
