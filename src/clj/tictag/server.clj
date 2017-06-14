@@ -91,7 +91,7 @@
 
 (defn slack-text [slack-message]
   (str
-   (->> (get-in slack-message [:event :text])
+   (->> (str/replace (get-in slack-message [:event :text]) #"^<.+> " "")
         (str/lower-case))
    "\n"))
 
@@ -210,23 +210,30 @@ Separate commands with a newline to apply multiple commands at once
 (defn eval-command [ctx s]
   (try (evaluate ctx (command-parser s))
        (catch Exception e
-         (timbre/error e))))
+         (timbre/error e)
+         (timbre/error (command-parser s)))))
 
 (defn slack [{:keys [db] :as component} {:keys [params]}]
   (taoensso.timbre/logged-future
    (when-let [user (and (valid-slack? component params)
                         (slack-user db params))]
-     (let [ctx {:db db :user user}]
-       (if-let [thread (some->
-                        params :event :thread_ts
-                        (str/replace #"\.(\d\d\d)\d+$" "$1")
-                        (Long.)
-                        (tc/from-long))]
-         (eval-command (-> ctx
-                           (update :db db/at-time thread)
-                           (assoc :thread-ts (get-in params [:event :thread_ts])))
-                       (slack-text params))
-         (eval-command ctx (slack-text params))))))
+     (let [evt (:event params)
+           me (first (:authed_users params))
+           dm? (str/starts-with? (or (:channel evt) "") "D")
+           to-me? (str/starts-with? (:text evt)
+                                    (str "<@" me ">"))]
+       (if (or dm? to-me?)
+         (let [ctx {:db db :user user}]
+           (if-let [thread (some->
+                            params :event :thread_ts
+                            (str/replace #"\.(\d\d\d)\d+$" "$1")
+                            (Long.)
+                            (tc/from-long))]
+             (eval-command (-> ctx
+                               (update :db db/at-time thread)
+                               (assoc :thread-ts (get-in params [:event :thread_ts])))
+                           (slack-text params))
+             (eval-command ctx (slack-text params))))))))
   {:status 200 :body ""})
 
 (defn timestamp [{:keys [db] :as component} {:keys [params user-id]}]

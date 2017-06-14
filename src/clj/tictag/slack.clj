@@ -40,10 +40,10 @@
   (when-let [{:keys [channel-id bot-access-token]} (:slack user)]
     (tracef "tictag.slack/send-message! %s" (:username user))
     (-> (method-url "chat.postMessage")
-        (http/post {:form-params {:token bot-access-token
-                                  :channel channel-id
+        (http/post {:form-params {:token     bot-access-token
+                                  :channel   channel-id
                                   :thread_ts thread-ts
-                                  :text body}}))))
+                                  :text      body}}))))
 
 (defn record-response [riemann resp]
   (let [r                @resp
