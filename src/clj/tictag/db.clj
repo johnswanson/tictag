@@ -52,16 +52,12 @@
     (timbre/debug "Starting database pool")
     (assoc component
            :db {:datasource (hikari/make-datasource (datasource-options db-spec))
-                :crypto-key (:crypto-key db-spec)}
-           :pends (atom (ring-buffer 32))))
+                :crypto-key (:crypto-key db-spec)}))
   (stop [component]
     (when-let [ds (get-in component [:db :datasource])]
       (timbre/debug "Closing database pool.")
       (hikari/close-datasource ds))
     (dissoc component :db)))
-
-(defn add-pend! [rb id time]
-  (into rb [[id time]]))
 
 (defn add-pings!
   "At this point, just used for parsed TagTime data"
@@ -93,12 +89,24 @@
                    (do-nothing)))
        sql/format)))
 
-(defn add-pending! [{:keys [pends] :as db} time id]
+(defn add-pending! [db time id]
   (add-afk-pings! db time)
-  (swap! pends add-pend! id time))
+  (j/execute! (:db db)
+              (-> (insert-into :ping-ids)
+                  (values [{:id id :ts time}])
+                  (upsert (-> (on-conflict :id)
+                              (do-update-set :ts)))
+                  sql/format)))
 
-(defn pending-timestamp [{:keys [pends]} id]
-  (second (first (filter #(= (first %) id) @pends))))
+(defn pending-timestamp [{:keys [db]} id]
+  (:ts
+   (first
+    (j/query db
+             (-> (select :ts)
+                 (from :ping-ids)
+                 (where [:= :id id])
+                 (limit 1)
+                 sql/format)))))
 
 (def ymd (f/formatter "yyyyMMdd"))
 (defn local-day [local-time] (f/unparse ymd local-time))
