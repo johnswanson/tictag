@@ -8,6 +8,6 @@ ID = #'\d{1,3}'
 LT = #'\d\d\d\d\d+'
 PREVPING = TAGS
 TAGS = !#'^help$' (TAG | DITTO | <' '>)+
-TAG = #'[-:.a-zA-Z][-:.a-zA-Z0-9]+'
+TAG = #'[-:.a-zA-Z][-:.a-zA-Z0-9]*'
 SLEEP = <'sleep'>
 DITTO = <'"'>
