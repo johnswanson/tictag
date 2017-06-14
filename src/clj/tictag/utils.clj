@@ -16,3 +16,6 @@
 (defn system-map [m]
   (apply component/system-map
          (flatten (into [] m))))
+
+(defn str-number? [s]
+  (try (Long. s) (catch Exception e nil)))
