@@ -240,11 +240,11 @@ Separate commands with a newline to apply multiple commands at once
   (if-let [user (db/get-user-by-id db user-id)]
     (do
       (debugf "Received a timestamp: %s" (pr-str params))
-      (save {:db db :user user}
-            (-> params
-                (assoc :user-id (:id user))
-                (update :timestamp utils/str-number?)
-                (dissoc :username :password)))
+      (db/update-tags! db
+                       [(-> params
+                            (assoc :user-id (:id user))
+                            (update :timestamp utils/str-number?)
+                            (dissoc :username :password))])
       (response {:status 200}))
     UNAUTHORIZED))
 
