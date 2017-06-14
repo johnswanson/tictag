@@ -257,7 +257,6 @@ Separate commands with a newline to apply multiple commands at once
                         {:db db :jwt jwt}
                         (:username params)
                         (:password params))]
-    (timbre/debugf "%s" params)
     (if valid?
       {:status 200 :headers {} :body token}
       {:status 401 :headers {} :body nil})))
@@ -379,7 +378,6 @@ Separate commands with a newline to apply multiple commands at once
     (response {})))
 
 (defn tagtime-import-from-file [{:keys [db ws]} {:keys [multipart-params user-id params] :as req}]
-  (debug multipart-params)
   (taoensso.timbre/logged-future
    (if-let [parsed-all (seq
                         (partition-all
