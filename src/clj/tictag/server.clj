@@ -26,7 +26,7 @@
 
 (taoensso.timbre/refer-timbre)
 
-(def wtf (f/formatter "yyyy-MM-dd HH:mm:SS"))
+(def wtf (f/formatter "yyyy-MM-dd HH:mm:ss"))
 
 (def UNAUTHORIZED
   {:status 401
