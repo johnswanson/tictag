@@ -7,7 +7,8 @@
             [clj-time.core :as t]
             [clj-time.periodic :as p]
             [tictag.db :as db]
-            [tictag.beeminder-matching :refer [match?]]))
+            [tictag.beeminder-matching :refer [match?]]
+            [tictag.utils :as utils]))
 
 (timbre/refer-timbre)
 
@@ -103,9 +104,9 @@
                 save-futures             (doall (map #(save-datapoint! token username name %) to-save))
                 delete-futures           (doall (map #(delete-datapoint! token username name %) to-delete))]
             (doseq [resp (concat save-futures delete-futures)]
-              (if-not (<= 200 (some-> resp deref :status) 299)
-                (timbre/error "error response from beeminder" @resp)
-                (timbre/debug "successful response from beeminder" (-> @resp :opts :method) (:status @resp))))))))))
+              (if-not (utils/success? @resp)
+                (timbre/error @resp)
+                (timbre/trace (get-in @resp [:opts :method]) (:status @resp))))))))))
 
 (defn user-for [token]
   (let [resp (-> (http/request {:url         "https://www.beeminder.com/api/v1/users/me.json"

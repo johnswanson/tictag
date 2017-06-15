@@ -5,7 +5,7 @@
             [clojure.string :as str]
             [oauth.v2 :as v2]
             [taoensso.timbre :as timbre]
-            [tictag.riemann :as riemann]))
+            [tictag.utils :as utils]))
 
 (timbre/refer-timbre)
 
@@ -38,31 +38,20 @@
 
 (defn send-message [user body & [thread-ts]]
   (when-let [{:keys [channel-id bot-access-token]} (:slack user)]
-    (tracef "tictag.slack/send-message! %s" (:username user))
+    (trace (:username user))
     (-> (method-url "chat.postMessage")
         (http/post {:form-params {:token     bot-access-token
                                   :channel   channel-id
                                   :thread_ts thread-ts
                                   :text      body}}))))
 
-(defn record-response [riemann resp]
-  (let [r                @resp
-        {status :status} r]
-    (riemann/send! riemann {:service     "slack"
-                            :description (pr-str r)
-                            :state       (if (>= status 300)
-                                           "warning"
-                                           "ok")})))
-
-(defn send-message! [{riemann :riemann} user body]
-  (when-let [resp (send-message user body)]
-    (record-response riemann resp)))
-
-(defn send-messages [{riemann :riemann} users body]
+(defn send-messages [users body]
   (let [messages (doall
                   (->> users
                        (map #(send-message % body))
                        (remove nil?)))]
     (doseq [resp messages]
-      (record-response riemann resp))))
+      (if-not (utils/success? @resp)
+        (timbre/error @resp)
+        (timbre/trace (get-in @resp [:opts :method]) (:status @resp))))))
 

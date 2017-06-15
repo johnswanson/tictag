@@ -19,3 +19,8 @@
 
 (defn str-number? [s]
   (try (Long. s) (catch Exception e nil)))
+
+(defn success? [?http-resp]
+  (let [status (:status ?http-resp)]
+    (and status (<= 200 status 299))))
+

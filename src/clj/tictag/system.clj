@@ -6,15 +6,14 @@
             [tictag.ws :as ws]
             [tictag.server-chimer :as server-chimer]
             [tictag.db :as db]
-            [tictag.repl :as repl]
-            [tictag.riemann :as riemann]))
+            [tictag.repl :as repl]))
 
 (defn system [config]
   (component/system-map
    :server (component/using
             (server/map->Server
              {:config (:tictag-server config)})
-            [:db :tagtime :jwt :riemann :beeminder :slack :ws])
+            [:db :tagtime :jwt :beeminder :slack :ws])
 
    :ws (ws/->Sente)
    :tagtime (tagtime/tagtime
@@ -29,15 +28,12 @@
                            :crypto-key (:crypto-key config)})
         [:tagtime])
 
-   :riemann (component/using
-             (riemann/map->RiemannClient {:config (:riemann config)})
-             [:db])
    :chimer (component/using
             (server-chimer/map->ServerChimer {})
-            [:db :slack])
+            [:db])
 
-   :beeminder (component/using {} [:db :tagtime :riemann])
-   :slack (component/using {} [:riemann])
+   :beeminder (component/using {} [:db :tagtime])
+   :slack {}
 
    :tester (tester/->Tester (:run-tests? config))))
 

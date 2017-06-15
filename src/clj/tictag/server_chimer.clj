@@ -5,10 +5,9 @@
             [chime :refer [chime-at]]
             [clj-time.coerce :as tc]
             [taoensso.timbre :as timbre]
-            [tictag.slack :as slack]
-            [tictag.riemann :as riemann]))
+            [tictag.slack :as slack]))
 
-(defn chime! [{db :db slack :slack}]
+(defn chime! [{db :db}]
   (let [state (atom (cycle (shuffle (range 1000))))
         next! (fn [] (swap! state next) (str (first @state)))]
     (fn [time]
@@ -19,12 +18,11 @@
         (db/add-pending! db time id)
         (timbre/debugf "CHIME %s: Sending slack messages" id)
         (slack/send-messages
-         slack
          (db/get-all-users db)
          (format "`ping %s [%s]`" id long-time))
         (timbre/debugf "CHIME %s: All done!" id)))))
 
-(defrecord ServerChimer [db slack riemann]
+(defrecord ServerChimer [db]
   component/Lifecycle
   (start [component]
     (assoc

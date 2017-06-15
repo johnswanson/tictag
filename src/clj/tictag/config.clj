@@ -24,6 +24,5 @@
                    :public-key  (some-> env :ec-pub-key b64/decode String. keys/str->public-key)}
    :tagtime       {:seed (or (some-> env :tagtime-seed Integer.) 666)
                    :gap  (or (some-> env :tagtime-gap Integer.) (* 60 45))}
-   :run-tests?    (env :tictag-run-tests)
-   :riemann       {:host (env :riemann-host)}})
+   :run-tests?    (env :tictag-run-tests)})
 

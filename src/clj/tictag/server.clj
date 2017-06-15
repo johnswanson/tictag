@@ -1,6 +1,5 @@
 (ns tictag.server
   (:require [tictag.db :as db]
-            [tictag.riemann :as r]
             [tictag.utils :as utils]
             [tictag.ws :as ws]
             [tictag.users :as users]
@@ -464,7 +463,7 @@ Separate commands with a newline to apply multiple commands at once
    (compojure.core/routes (site-routes component) (api-routes component))
    :formats [:json-kw :edn :transit-json :transit-msgpack]))
 
-(defrecord Server [db config tagtime riemann ws jwt]
+(defrecord Server [db config tagtime ws jwt]
   component/Lifecycle
   (start [component]
     (debug "Starting server")
@@ -475,8 +474,7 @@ Separate commands with a newline to apply multiple commands at once
                     (wrap-log)
                     (wrap-user (:jwt component))
                     (wrap-defaults {:params {:urlencoded true
-                                             :keywordize true}})
-                    (r/wrap-riemann (:riemann component)))
+                                             :keywordize true}}))
                 config)]
       (debug "Server created")
       (assoc component :stop stop)))
