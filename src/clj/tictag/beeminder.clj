@@ -7,8 +7,7 @@
             [clj-time.core :as t]
             [clj-time.periodic :as p]
             [tictag.db :as db]
-            [tictag.beeminder-matching :refer [match?]]
-            [tictag.riemann :as riemann]))
+            [tictag.beeminder-matching :refer [match?]]))
 
 (timbre/refer-timbre)
 
@@ -64,7 +63,7 @@
        (map :local-day)
        (frequencies)))
 
-(defn sync! [{:keys [db riemann tagtime]} user]
+(defn sync! [{:keys [db tagtime]} user]
   (debugf "Beginning beeminder sync: %s" (:enabled? (:beeminder user)))
   (when (:enabled? (:beeminder user))
     (when-let [goals (seq (db/get-goals db (:beeminder user)))]
@@ -104,15 +103,9 @@
                 save-futures             (doall (map #(save-datapoint! token username name %) to-save))
                 delete-futures           (doall (map #(delete-datapoint! token username name %) to-delete))]
             (doseq [resp (concat save-futures delete-futures)]
-              (let [r                           @resp
-                    {status :status opts :opts} r
-                    {url :url method :method}   opts]
-                (riemann/send! riemann {:service     "beeminder"
-                                        :description (pr-str
-                                                      {:status status :goal-name name :username username :user (:id user)})
-                                        :state       (if (>= status 300)
-                                                       "warning"
-                                                       "ok")})))))))))
+              (if-not (<= 200 (some-> resp deref :status) 299)
+                (timbre/error "error response from beeminder" @resp)
+                (timbre/debug "successful response from beeminder" (-> @resp :opts :method) (:status @resp))))))))))
 
 (defn user-for [token]
   (let [resp (-> (http/request {:url         "https://www.beeminder.com/api/v1/users/me.json"

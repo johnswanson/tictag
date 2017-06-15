@@ -213,27 +213,28 @@ Separate commands with a newline to apply multiple commands at once
          (timbre/error e)
          (timbre/error (command-parser s)))))
 
-(defn slack [{:keys [db] :as component} {:keys [params]}]
+(defn slack [{:keys [db tagtime] :as component} {:keys [params]}]
   (taoensso.timbre/logged-future
    (when-let [user (and (valid-slack? component params)
                         (slack-user db params))]
-     (let [evt (:event params)
-           me (first (:authed_users params))
-           dm? (str/starts-with? (or (:channel evt) "") "D")
+     (let [evt    (:event params)
+           me     (first (:authed_users params))
+           dm?    (str/starts-with? (or (:channel evt) "") "D")
            to-me? (str/starts-with? (:text evt)
-                                    (str "<@" me ">"))]
-       (if (or dm? to-me?)
-         (let [ctx {:db db :user user}]
-           (if-let [thread (some->
-                            params :event :thread_ts
-                            (str/replace #"\.(\d\d\d)\d+$" "$1")
-                            (Long.)
-                            (tc/from-long))]
-             (eval-command (-> ctx
-                               (update :db db/at-time thread)
-                               (assoc :thread-ts (get-in params [:event :thread_ts])))
-                           (slack-text params))
-             (eval-command ctx (slack-text params))))))))
+                                    (str "<@" me ">"))
+           ctx    (assoc component :user user)]
+       (when (or dm? to-me?)
+         (if-let [thread (some->
+                          params :event :thread_ts
+                          (str/replace #"\.(\d\d\d)\d+$" "$1")
+                          (Long.)
+                          (tc/from-long))]
+           (eval-command (-> ctx
+                             (update :db db/at-time thread)
+                             (assoc :thread-ts (get-in params [:event :thread_ts])))
+                         (slack-text params))
+           (eval-command ctx (slack-text params)))
+         (beeminder/sync! component user)))))
   {:status 200 :body ""})
 
 (defn timestamp [{:keys [db] :as component} {:keys [params user-id]}]
@@ -245,6 +246,7 @@ Separate commands with a newline to apply multiple commands at once
                             (assoc :user-id (:id user))
                             (update :timestamp utils/str-number?)
                             (dissoc :username :password))])
+      (beeminder/sync! component user)
       (response {:status 200}))
     UNAUTHORIZED))
 
