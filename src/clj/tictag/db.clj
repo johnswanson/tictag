@@ -24,6 +24,7 @@
 (defn at-time
   "This is SUPER hacky and only works for the `db/latest-pings` fn."
   [db t]
+  (timbre/trace "setting _time-travel to" t)
   (assoc db :_time-travel t))
 
 (defn beeminder-id [user-id]
