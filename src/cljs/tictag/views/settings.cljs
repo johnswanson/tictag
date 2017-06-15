@@ -173,12 +173,28 @@
                  :filter-box? true
                  :on-change #(dispatch [:settings/changed-timezone %])]]]))
 
+(defn download []
+  (let [pings (subscribe [:raw-pings])
+        blob  (js/Blob. #js [(js/JSON.stringify (clj->js @pings))] #js {:type "text/json"})
+        url   (.createObjectURL js/window.URL blob)]
+    [re-com/v-box
+     :children [[re-com/title :level :level1 :label "Download your data"]
+                [re-com/box
+                 :child [:label
+                         [:a {:download "tictag.json"
+                              :href url}
+                          [:span.rc-button.btn.btn-default
+                           [:i.zmdi.zmdi-cloud-download {:style {:cursor :pointer
+                                                                 :margin-right "1em"}}]
+                           "Download"]]]]]]))
+
 (defn settings []
   (let [auth-user (subscribe [:authorized-user])]
     [re-com/v-box
-     :children [[timezone]
-                [tagtime-import]
+     :children [[slack]
                 [beeminder]
-                [slack]]]))
+                [timezone]
+                [tagtime-import]
+                [download]]]))
 
 
