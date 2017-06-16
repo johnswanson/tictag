@@ -7,6 +7,7 @@
                     (and (#{'not 'and 'or :not :and :or} c)
                          (every? valid? args)))
     (keyword? thing) true
+    (symbol? thing) true
     (string? thing) true))
 
 (defn match? [thing b]
