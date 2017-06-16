@@ -239,13 +239,14 @@ Separate commands with a newline to apply multiple commands at once
 (defn timestamp [{:keys [db] :as component} {:keys [params user-id]}]
   (if-let [user (db/get-user-by-id db user-id)]
     (do
-      (debugf "Received a timestamp: %s" (pr-str params))
-      (db/update-tags! db
-                       [(-> params
-                            (assoc :user-id (:id user))
-                            (update :timestamp utils/str-number?)
-                            (dissoc :username :password))])
-      (beeminder/sync! component user)
+      (taoensso.timbre/logged-future
+       (debugf "Received a timestamp: %s" (pr-str params))
+       (db/update-tags! db
+                        [(-> params
+                             (assoc :user-id (:id user))
+                             (update :timestamp utils/str-number?)
+                             (dissoc :username :password))])
+       (beeminder/sync! component user))
       (response {:status 200}))
     UNAUTHORIZED))
 
