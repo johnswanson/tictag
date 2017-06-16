@@ -89,11 +89,9 @@
 
 (defn slack-text [slack-message]
   (str
-   (->> (str/replace (get-in slack-message [:event :text]) #"^<.+> " "")
-        (str/lower-case))
-   "\n"))
+   (str/replace (get-in slack-message [:event :text]) #"^<.+> " "") "\n"))
 
-(def command-parser (insta/parser (clojure.java.io/resource "parser.bnf")))
+(def command-parser (insta/parser (clojure.java.io/resource "parser.bnf") :string-ci true))
 
 (defmulti evaluate (fn [context [v & vs]] v))
 
@@ -115,7 +113,7 @@
   (vec (:tags (second (db/last-pings db user 2)))))
 
 (defmethod evaluate :TAG [_ [_ tag]]
-  tag)
+  (str/lower-case tag))
 
 (defmethod evaluate :HELP [_ v] v)
 
@@ -202,10 +200,19 @@ Separate commands with a newline to apply multiple commands at once
     valid?))
 
 (defn eval-command [ctx s]
-  (try (evaluate ctx (command-parser s))
-       (catch Exception e
-         (timbre/error e)
-         (timbre/error (command-parser s)))))
+  (let [parse-result (command-parser s)]
+    (if (insta/failure? parse-result)
+      (do
+        (slack/send-message
+         (:user ctx)
+         (format "%s\n```%s```\n%s"
+                 "Uh-oh! We had an error parsing your response! Maybe this will help:"
+                 (pr-str parse-result)
+                 "If you can't figure out what went wrong, let me know!"))
+        (timbre/error "PARSE ERROR" (:user ctx) s parse-result))
+      (try (evaluate ctx parse-result)
+           (catch Exception e
+             (timbre/error "EVAL ERROR" (:user ctx) e s parse-result))))))
 
 (defn slack [{:keys [db tagtime] :as component} {:keys [params]}]
   (taoensso.timbre/logged-future
