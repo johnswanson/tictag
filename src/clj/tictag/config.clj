@@ -4,7 +4,10 @@
             [buddy.core.codecs :as codecs]
             [buddy.core.codecs.base64 :as b64]
             [buddy.core.keys :as keys]
-            [buddy.core.hash :as hash]))
+            [buddy.core.hash :as hash]
+            [taoensso.timbre :as timbre]))
+
+(timbre/refer-timbre)
 
 (def config
   {:tictag-server {:ip                       (env :tictag-host "127.0.0.1")

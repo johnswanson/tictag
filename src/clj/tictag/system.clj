@@ -6,7 +6,10 @@
             [tictag.ws :as ws]
             [tictag.server-chimer :as server-chimer]
             [tictag.db :as db]
-            [tictag.repl :as repl]))
+            [tictag.repl :as repl]
+            [tictag.logging :as logging]))
+
+(logging/configure!)
 
 (defn system [config]
   (component/system-map

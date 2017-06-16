@@ -4,7 +4,9 @@
             [reloaded.repl :refer [system init start stop go reset]]
             [com.stuartsierra.component :as component]
             [tictag.config :refer [config]]
+            [tictag.slack :as slack]
             [tictag.server :as server :refer [evaluate]]
+            [tictag.server-chimer :refer [chime!]]
             [tictag.db :as db]
             [tictag.beeminder :as bm]
             [tictag.system]
@@ -22,7 +24,12 @@
             [tictag.crypto :as crypto]
             [environ.core :refer [env]]
             [figwheel-sidecar.repl-api]
-            [instaparse.core :as insta]))
+            [instaparse.core :as insta]
+            [clj-time.core :as t]
+            [clj-time.coerce :as tc]))
+
+(defn chime-test! []
+  ((chime! system) (t/now)))
 
 
 (defn cljs-repl []

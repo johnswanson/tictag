@@ -21,11 +21,18 @@
             [hikari-cp.core :as hikari]
             [tictag.utils :as utils]))
 
-(defn at-time
-  "This is SUPER hacky and only works for the `db/latest-pings` fn."
-  [db t]
-  (timbre/trace "setting _time-travel to" t)
-  (assoc db :_time-travel t))
+(defn with-last-ping
+  "This is SUPER hacky and only works for the `db/last-pings` fn."
+  [db {id :id} ts]
+  (timbre/trace "Using thread-ts" ts)
+  (if-let [[ping] (j/query (:db db)
+                           (-> (select :pings.ts)
+                               (from :pings)
+                               (where [:= :pings.user-id id]
+                                      [:= :pings.slack-ts ts])
+                               sql/format))]
+    (assoc db :_last-ping (:ts ping))
+    db))
 
 (defn beeminder-id [user-id]
   (-> (select :beeminder.id)
@@ -35,6 +42,7 @@
 (def ping-select (-> (select :ts
                              [(sql/call :+ :tz_offset :ts) :local_time]
                              :tags
+                             :slack-ts
                              :user_id)
                      (from :pings)))
 
@@ -112,12 +120,13 @@
 (def ymd (f/formatter "yyyyMMdd"))
 (defn local-day [local-time] (f/unparse ymd local-time))
 
-(defn to-ping [{:keys [local_time ts tags user_id]}]
-  {:tags              (set (str/split tags #" "))
-   :user-id           user_id
-   :local-time        local_time
-   :local-day         (local-day local_time)
-   :timestamp         (coerce/to-long ts)})
+(defn to-ping [{:keys [local_time ts tags user_id slack_ts]}]
+  {:tags       (set (str/split tags #" "))
+   :user-id    user_id
+   :local-time local_time
+   :local-day  (local-day local_time)
+   :slack-ts   slack_ts
+   :timestamp  (coerce/to-long ts)})
 
 (defn get-pings [db query]
   (map to-ping (j/query db (sql/format query))))
@@ -142,7 +151,8 @@
    (-> ping-select
        (where [:= :user_id (:id user)])
        (merge-where
-        (when-let [now (:_time-travel db)]
+        (when-let [now (:_last-ping db)]
+          (timbre/trace "looking for last-pings with <= ts " now)
           [:<= :ts now]))
        (order-by [:ts :desc])
        (limit count))))
@@ -150,21 +160,41 @@
 (defn last-ping [db user]
   (first (last-pings db user 1)))
 
-(defn ping-from-long-time [db user long-time]
-  (first
-   (get-pings
-    (:db db)
-    (-> ping-select
-        (where [:= :ts (coerce/from-long long-time)] [:= :user_id (:id user)])
-        (limit 1)))))
-
 (defn is-ping? [{tagtime :tagtime} long-time]
   (tagtime/is-ping? tagtime long-time))
+
+(defn ping-from-long-time [db user long-time]
+  (or
+   (first
+    (get-pings
+     (:db db)
+     (-> ping-select
+         (where [:= :ts (coerce/from-long long-time)] [:= :user_id (:id user)])
+         (limit 1))))
+   (when (is-ping? db long-time)
+     {:user-id   (:id user)
+      :tags      #{"afk"}
+      :timestamp long-time})))
 
 (defn pings
   "An infinite list of pings from tagtime"
   [{tagtime :tagtime}]
   (:pings tagtime))
+
+
+(defn update-tags-with-slack-ts [{db :db} timestamp c]
+  (j/with-db-transaction [db db]
+    (doseq [[user-id resp] c]
+      (j/execute! db (-> (update :pings)
+                         (sset
+                          {:slack-ts (some->
+                                      resp
+                                      deref
+                                      :json
+                                      :ts)})
+                         (where [:= :ts (coerce/from-long timestamp)]
+                                [:= :user_id user-id])
+                         sql/format)))))
 
 (defn update-tags! [{db :db} pings]
   (timbre/tracef "Updating pings: %s" (pr-str pings))
@@ -269,19 +299,26 @@
                        beeminder_encrypted_token
                        beeminder_encryption_iv
                        beeminder_is_enabled
+                       id
                        beeminder_id]}]
   (when (and user beeminder_encrypted_token beeminder_encryption_iv)
     {:id       beeminder_id
      :username beeminder_username
+     :user-id  id
      :enabled? beeminder_is_enabled
      :token    (crypto/decrypt
                 beeminder_encrypted_token
                 (:crypto-key db)
                 beeminder_encryption_iv)}))
 
-(defn slack-from-db [db {:as user :keys [slack_username slack_encrypted_bot_access_token slack_encryption_iv slack_channel_id]}]
+(defn slack-from-db [db {:as user :keys [slack_username
+                                         slack_encrypted_bot_access_token
+                                         slack_encryption_iv
+                                         slack_channel_id
+                                         id]}]
   (when (and user slack_encrypted_bot_access_token slack_encryption_iv)
     {:username         slack_username
+     :user-id          id
      :channel-id       slack_channel_id
      :bot-access-token (crypto/decrypt
                         slack_encrypted_bot_access_token

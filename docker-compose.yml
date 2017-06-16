@@ -1,7 +1,11 @@
 version: "2"
 services:
+  redis:
+    image: redis:3.0-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
   db:
-    image: postgres:9.6.1-alpine
+    image: postgres:9.6-alpine
     environment:
       - POSTGRES_USER=test
       - POSTGRES_PASSWORD=test

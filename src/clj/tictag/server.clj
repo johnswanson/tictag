@@ -12,7 +12,6 @@
             [com.stuartsierra.component :as component]
             [org.httpkit.server :as http]
             [compojure.core :refer [GET PUT POST DELETE context]]
-            [taoensso.timbre]
             [ring.util.response :refer [response]]
             [ring.middleware.defaults :refer [wrap-defaults api-defaults site-defaults]]
             [ring.middleware.format :refer [wrap-restful-format]]
@@ -25,7 +24,7 @@
             [instaparse.core :as insta]
             [clj-time.coerce :as tc]))
 
-(taoensso.timbre/refer-timbre)
+(timbre/refer-timbre)
 
 (def wtf (f/formatter "yyyy-MM-dd HH:mm:ss"))
 
@@ -103,23 +102,19 @@
     (when error (timbre/error error))))
 
 (defmethod evaluate :ID [{:keys [db user]} [_ id-str]]
-  (timbre/tracef "in :id, evaluating %s" id-str)
   (if-let [ping (db/ping-from-id db user id-str)]
     ping
     (do (slack/send-message user (format "Warning: can't find ping with id: `%s`" id-str)) nil)))
 
 (defmethod evaluate :LT [{:keys [db user]} [_ lt-str]]
-  (timbre/tracef "in :lt, evaluating %s" lt-str)
   (if-let [ping (db/ping-from-long-time db user (Long. lt-str))]
     ping
     (do (slack/send-message user (format "Warning: can't find ping from time: `%s`" lt-str)) nil)))
 
 (defmethod evaluate :DITTO [{:keys [db user]} _]
-  (timbre/tracef "in :ditto, evaluating")
   (vec (:tags (second (db/last-pings db user 2)))))
 
 (defmethod evaluate :TAG [_ [_ tag]]
-  (timbre/tracef "in :tag, evaluating %s" (pr-str tag))
   tag)
 
 (defmethod evaluate :HELP [_ v] v)
@@ -129,11 +124,9 @@
                (db/last-ping db user))])
 
 (defmethod evaluate :TAGS [ctx [_ & tags :as all]]
-  (timbre/tracef "in :tags, evaluating %s" (pr-str tags))
   (flatten (map (partial evaluate ctx) tags)))
 
 (defmethod evaluate :SLEEP [{:keys [db user] :as ctx} _]
-  (timbre/tracef "in :sleep, evaluating")
   [:SAVE*
    (map
     (fn [ping]
@@ -147,19 +140,23 @@
                 (assoc p :tags (set t) :_old-tags (:tags p)))))
        (remove nil?)))
 
-(defn save* [{:keys [db user thread-ts]} ps]
+(defn save-pings [{:keys [db user thread-ts]} pings]
+  (db/update-tags! db pings)
+  (slack/send-messages
+   user
+   (map
+    (fn [{:keys [local-time tags _old-tags] :as ping}]
+      (timbre/trace ping)
+      {:text      (format "`updated %s:`\n`%s -> %s`"
+                          (f/unparse wtf local-time)
+                          _old-tags
+                          tags)
+       :thread-ts thread-ts})
+    pings)))
+
+(defn save* [{:keys [db user] :as ctx} ps]
   (let [new (update-pings ps)]
-    (try (do (db/update-tags! db new)
-             (slack/send-message user
-                                 (str/join
-                                  "\n"
-                                  (map (fn [{:keys [local-time tags _old-tags] :as ping}]
-                                         (format "`updated %s:`\n`%s -> %s`"
-                                                 (f/unparse wtf local-time)
-                                                 _old-tags
-                                                 tags))
-                                       new))
-                                 thread-ts)
+    (try (do (save-pings ctx new)
              {:saved new})
          (catch Exception e
            {:error {:exception e
@@ -169,7 +166,7 @@
   (save* ctx [p]))
 
 (defn help [{:keys [slack user]}]
-  (slack/send-message user ["TicTag will ping you every 45 minutes, on average.
+  (slack/send-message user "TicTag will ping you every 45 minutes, on average.
 Pings look like this: `ping <id> [<long-time>]`
 Tag the most recent ping (e.g. by saying `ttc`)
 Tag a specific ping by responding in a slack thread to that ping's message
@@ -178,10 +175,10 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
 `sleep` command: tag the most recent set of contiguous pings as `sleep`
 `\"`: macroexpands to the tags of the ping sent *before the one you're tagging*
 Separate commands with a newline to apply multiple commands at once
-"]))
+")
+  nil)
 
 (defmethod evaluate :CMD [ctx [_ things]]
-  (timbre/tracef "in :cmd, evaluating %s" (pr-str things))
   (let [[cmd args] (evaluate ctx things)]
     [cmd
      (case cmd
@@ -193,11 +190,9 @@ Separate commands with a newline to apply multiple commands at once
                 :args args}})]))
 
 (defmethod evaluate :BYID [ctx [_ & args]]
-  (timbre/tracef "in :byid, evaluating %s" (pr-str args))
   [:SAVE (map (partial evaluate ctx) args)])
 
 (defmethod evaluate :BYLT [ctx [_ & args]]
-  (timbre/tracef "in :bylt, evaluating %s" (pr-str args))
   [:SAVE (map (partial evaluate ctx) args)])
 
 (defn valid-slack? [{:keys [config]} params]
@@ -222,15 +217,15 @@ Separate commands with a newline to apply multiple commands at once
            to-me? (str/starts-with? (:text evt)
                                     (str "<@" me ">"))
            ctx    (assoc component :user user)]
+       (timbre/debug [:slack-message
+                      {:user   (:id user)
+                       :dm?    dm?
+                       :to-me? to-me?}])
        (when (or dm? to-me?)
-         (if-let [thread (some->
-                          params :event :thread_ts
-                          (str/replace #"\.(\d\d\d)\d+$" "$1")
-                          (Long.)
-                          (tc/from-long))]
+         (if-let [thread-ts (some-> params :event :thread_ts)]
            (eval-command (-> ctx
-                             (update :db db/at-time thread)
-                             (assoc :thread-ts (get-in params [:event :thread_ts])))
+                             (assoc :thread-ts thread-ts)
+                             (update :db db/with-last-ping user thread-ts))
                          (slack-text params))
            (eval-command ctx (slack-text params)))
          (beeminder/sync! component user)))))
@@ -240,13 +235,21 @@ Separate commands with a newline to apply multiple commands at once
   (if-let [user (db/get-user-by-id db user-id)]
     (do
       (taoensso.timbre/logged-future
-       (debugf "Received a timestamp: %s" (pr-str params))
-       (db/update-tags! db
-                        [(-> params
-                             (assoc :user-id (:id user))
-                             (update :timestamp utils/str-number?)
-                             (dissoc :username :password))])
-       (beeminder/sync! component user))
+       (debug [:timestamp {:user-id   (:id user)
+                           :timestamp (:timestamp params)
+                           :tags      (:tags params)}])
+       (let [ping     (db/ping-from-long-time db user (Long. (:timestamp params)))
+             new-ping (-> ping
+                          (assoc :tags (set (:tags params))
+                                 :_old-tags (:tags ping)))]
+         (if ping
+           (do (save-pings (assoc component :user user)
+                           [new-ping])
+               (beeminder/sync! component user))
+           (slack/send-message
+            user
+            (format "WARNING: couldn't find ping with timestamp: `%s`"
+                    (:timestamp params))))))
       (response {:status 200}))
     UNAUTHORIZED))
 
@@ -413,9 +416,9 @@ Separate commands with a newline to apply multiple commands at once
 
 (defn wrap-log [handler]
   (fn [req]
-    (trace req)
-    (when-not (or (= (:uri req) "/healthcheck") (str/starts-with? (:uri req) "/js"))
-      (debugf "REQ: [user: %s] [%s] [%s]" (:user-id req) (:uri req) (:remote-addr req)))
+    (when-not (or (= (:uri req) "/healthcheck") (= (:uri req) "/slack") (str/starts-with? (:uri req) "/js"))
+      (debug [:request
+              (select-keys req [:user-id :uri :remote-addr])]))
     (handler req)))
 
 (defn site-routes [component]

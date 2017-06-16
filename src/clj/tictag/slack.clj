@@ -36,22 +36,57 @@
 (defn users-info [token user-id]
   (slack-call! "users.info" {:token token :user user-id}))
 
-(defn send-message [user body & [thread-ts]]
+(defn send-messages
+  "Send one user MULTIPLE messages"
+  [user messages]
   (when-let [{:keys [channel-id bot-access-token]} (:slack user)]
-    (trace (:username user))
-    (-> (method-url "chat.postMessage")
-        (http/post {:form-params {:token     bot-access-token
-                                  :channel   channel-id
-                                  :thread_ts thread-ts
-                                  :text      body}}))))
+    (timbre/trace [:send-messages
+                   {:user (:id user)
+                    :messages messages}])
+    (doall
+     (map (fn [{:keys [text thread-ts]}]
+            (future
+              (let [resp @(http/post (method-url "chat.postMessage")
+                                     {:form-params {:token           bot-access-token
+                                                    :channel         channel-id
+                                                    :text            text
+                                                    :thread_ts       thread-ts
+                                                    :reply_broadcast true}})]
+                (if-not (utils/success? resp)
+                  (timbre/error resp)
+                  (timbre/trace (:status resp)))
+                (when (utils/success? resp)
+                  (assoc resp
+                         :json (when-let [body (:body resp)]
+                                 (json/parse-string body true)))))))
+          messages))))
 
-(defn send-messages [users body]
-  (let [messages (doall
-                  (->> users
-                       (map #(send-message % body))
-                       (remove nil?)))]
-    (doseq [resp messages]
-      (if-not (utils/success? @resp)
-        (timbre/error @resp)
-        (timbre/trace (get-in @resp [:opts :method]) (:status @resp))))))
+(defn send-message [user message]
+  (send-messages user [{:text message}]))
 
+
+(defn send-messages*
+  "Send multiple users ONE message"
+  [users body]
+  (let [slack-users (->> users
+                         (map :slack)
+                         (map #(select-keys % [:user-id :bot-access-token :channel-id]))
+                         (filter seq))]
+    (map (fn [slack-user]
+           [(:user-id slack-user)
+            (future
+              (let [resp (http/post (method-url "chat.postMessage")
+                                    {:form-params {:token   (:bot-access-token slack-user)
+                                                   :channel (:channel-id slack-user)
+                                                   :text    body}})]
+                (if-not (utils/success? @resp)
+                  (timbre/error @resp)
+                  (timbre/trace @resp))
+                (when (utils/success? @resp)
+                  (assoc @resp
+                         :json (when-let [body (:body @resp)]
+                                 (json/parse-string body true))))))])
+         slack-users)))
+
+(defn send-chime! [users id long-time]
+  (send-messages* users (format "`ping %s [%s]`" id long-time)))

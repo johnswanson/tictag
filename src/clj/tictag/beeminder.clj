@@ -65,15 +65,20 @@
        (frequencies)))
 
 (defn sync! [{:keys [db tagtime]} user]
-  (debugf "Beginning beeminder sync: %s" (:enabled? (:beeminder user)))
+  (debug [:beeminder-sync
+          {:user     (:id user)
+           :enabled? (:enabled? (:beeminder user))}])
   (when (:enabled? (:beeminder user))
     (when-let [goals (seq (db/get-goals db (:beeminder user)))]
-      (tracef "goals are %s, getting rows" goals)
+      (trace [:beeminder-sync
+              {:goals goals}])
       (let [in-past-week? (past-week-days)
             rows          (filter #(in-past-week? (:local-day %))
                                   (db/get-pings-by-user (:db db) user))]
         (doseq [{:keys [goal/name goal/tags]} goals]
-          (debugf "Syncing goal: %s with tags %s" name tags)
+          (trace [:beeminder-sync
+                  {:name name
+                   :tags tags}])
           (let [{:keys [username token]} (:beeminder user)
                 days                     (days-matching-tag tags rows)
                 existing-datapoints      (filter

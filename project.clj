@@ -91,6 +91,7 @@
                  [im.chit/hara.io.watch "2.4.8"]
                  [compojure "1.5.2"]
                  [com.taoensso/timbre "4.10.0"]
+                 [com.taoensso/carmine "2.16.0"]
                  [com.taoensso/sente "1.11.0"]
                  [com.fzakaria/slf4j-timbre "0.3.5"]
                  [environ "1.1.0"]
