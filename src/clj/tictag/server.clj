@@ -96,6 +96,7 @@
 (defmulti evaluate (fn [context [v & vs]] v))
 
 (defmethod evaluate :CMDS [ctx [_ & vs]]
+  (timbre/trace [:evaluate :CMDS vs])
   (doseq [[cmd {:keys [saved error]}] (map (partial evaluate ctx) vs)]
     (when error (timbre/error error))))
 
@@ -125,11 +126,13 @@
   (flatten (map (partial evaluate ctx) tags)))
 
 (defmethod evaluate :SLEEP [{:keys [db user] :as ctx} _]
-  [:SAVE*
-   (map
-    (fn [ping]
-      [ping ["sleep"]])
-    (db/sleepy-pings db user))])
+  (let [sleepy-pings (db/sleepy-pings db user)]
+    (trace [:sleepy-pings (:id user) (vec sleepy-pings)])
+    [:SAVE*
+     (map
+      (fn [ping]
+        [ping ["sleep"]])
+      sleepy-pings)]))
 
 (defn update-pings [pings]
   (->> pings
@@ -139,6 +142,7 @@
        (remove nil?)))
 
 (defn save-pings [{:keys [db user thread-ts]} pings]
+  (trace [:save-pings (:id user) pings])
   (db/update-tags! db pings)
   (slack/send-messages
    user
@@ -153,6 +157,7 @@
     pings)))
 
 (defn save* [{:keys [db user] :as ctx} ps]
+  (trace [:save* (:id user) ps])
   (let [new (update-pings ps)]
     (try (do (save-pings ctx new)
              {:saved new})
@@ -225,9 +230,10 @@ Separate commands with a newline to apply multiple commands at once
                                     (str "<@" me ">"))
            ctx    (assoc component :user user)]
        (timbre/debug [:slack-message
-                      {:user   (:id user)
-                       :dm?    dm?
-                       :to-me? to-me?}])
+                      {:user    (:id user)
+                       :dm?     dm?
+                       :to-me?  to-me?
+                       :message (get-in params [:event :text])}])
        (when (or dm? to-me?)
          (if-let [thread-ts (some-> params :event :thread_ts)]
            (eval-command (-> ctx
