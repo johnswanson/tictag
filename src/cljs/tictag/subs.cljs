@@ -298,6 +298,11 @@
               (vals (:slack/by-id db)))))))
 
 (reg-sub
+ :slack-errors
+ (fn [db _]
+   (get-in db [:errors :slack])))
+
+(reg-sub
  :goal/by-id
  (fn [db path]
    (when path (get-in db path))))

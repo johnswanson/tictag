@@ -194,10 +194,10 @@
         normalized-slack     (normalize-slack user slack)
         normalized-beeminder (normalize-beeminder user beeminder)
         normalized-goals     (normalize-goals user beeminder (:goals beeminder))]
-    {:slack/by-id           (when slack {(:id slack) (normalize-slack user slack)})
-     :beeminder/by-id       (when beeminder {(:id beeminder) (normalize-beeminder user beeminder)})
+    {:slack/by-id           (when slack {(:id slack) normalized-slack})
+     :beeminder/by-id       (when beeminder {(:id beeminder) normalized-beeminder})
      :user/by-id            (when user {(:id user) (normalize-user user)})
-     :goal/by-id            (normalize-goals user beeminder (get-in user [:beeminder :goals]))
+     :goal/by-id            normalized-goals
      :db/authenticated-user (ref-to-user user)}))
 
 (reg-event-fx
@@ -380,7 +380,6 @@
  :chsk/state
  [interceptors]
  (fn [db [_ v]]
-   (js/console.log v)
    db))
 
 (reg-event-fx
@@ -393,8 +392,9 @@
  :chsk/handshake
  [interceptors]
  (fn [db [_ v]]
-   (js/console.log v)
    db))
+
+(reg-event-db :chsk/ping (fn [db _] db))
 
 (reg-fx
  :sente-connect
@@ -652,6 +652,33 @@
                :process-progress 0
                :success? true
                :error? []})))
+
+(reg-event-fx
+ :slack/update
+ [interceptors]
+ (fn [{:keys [db]} [_ id k v]]
+   {:db         (assoc-in db [:slack/by-id id k] v)
+    :http-xhrio (authenticated-xhrio
+                 {:method          :put
+                  :params          {k v}
+                  :uri             "/api/user/me/slack"
+                  :format          (transit-request-format {})
+                  :response-format (transit-response-format {})
+                  :on-success      [:slack/update-success k v]
+                  :on-failure      [:slack/update-failure k v]}
+                 (:auth-token db))}))
+
+(reg-event-db
+ :slack/update-success
+ [interceptors]
+ (fn [db [_ k v]]
+   (assoc-in db [:errors :slack k] nil)))
+
+(reg-event-db
+ :slack/update-failure
+ [interceptors]
+ (fn [db [_ k v r]]
+   (assoc-in db [:errors :slack k] (:error (:response r)))))
 
 (reg-event-db
  :tagtime-import/fail

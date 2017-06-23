@@ -6,6 +6,3 @@
   {:datastore  (jdbc/sql-database (:db tictag.config/config))
    :migrations (jdbc/load-resources "migrations")})
 
-
-
-

@@ -17,8 +17,8 @@
         (timbre/debugf "CHIME %s: Adding 'afk' pings" id)
         (db/add-pending! db time id)
         (timbre/debugf "CHIME %s: Sending slack messages" id)
-        (let [responses (doall (slack/send-chime! (db/get-all-users db) id long-time))]
-          (db/update-tags-with-slack-ts db long-time responses))
+        (let [responses (doall (slack/send-chime! (db/get-all-slacks db) id long-time))]
+          (db/update-tags-with-slack-ts db time responses))
         (timbre/debugf "CHIME %s: All done!" id)))))
 
 (defrecord ServerChimer [db]

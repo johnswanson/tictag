@@ -36,19 +36,29 @@
 (defn users-info [token user-id]
   (slack-call! "users.info" {:token token :user user-id}))
 
+(defn channels [token]
+  (into
+   {}
+   (map (juxt :name_normalized :id)
+        (:channels
+         (slack-call! "channels.list" {:token token})))))
+
+(defn channel-id [token channel-name]
+  (get (channels token) channel-name))
+
 (defn send-messages
   "Send one user MULTIPLE messages"
   [user messages]
-  (when-let [{:keys [channel-id bot-access-token]} (:slack user)]
+  (when-let [{:keys [dm-id bot-access-token]} (:slack user)]
     (timbre/trace [:send-messages
                    {:user (:id user)
                     :messages messages}])
     (doall
-     (map (fn [{:keys [text thread-ts]}]
+     (map (fn [{:keys [text thread-ts channel]}]
             (future
               (let [resp @(http/post (method-url "chat.postMessage")
                                      {:form-params {:token           bot-access-token
-                                                    :channel         channel-id
+                                                    :channel         (or channel dm-id)
                                                     :text            text
                                                     :thread_ts       thread-ts
                                                     :reply_broadcast true}})]
@@ -64,29 +74,25 @@
 (defn send-message [user message]
   (send-messages user [{:text message}]))
 
+(defn send-message!
+  [params]
+  (future
+    (let [resp (http/post (method-url "chat.postMessage")
+                          {:form-params params})]
+      (if-not (utils/success? @resp)
+        (timbre/error @resp)
+        (timbre/trace @resp))
+      (when (utils/success? @resp)
+        (assoc @resp
+               :json (when-let [body (:body @resp)]
+                       (json/parse-string body true)))))))
 
 (defn send-messages*
   "Send multiple users ONE message"
-  [users body]
-  (let [slack-users (->> users
-                         (map :slack)
-                         (map #(select-keys % [:user-id :bot-access-token :channel-id]))
-                         (filter seq))]
-    (map (fn [slack-user]
-           [(:user-id slack-user)
-            (future
-              (let [resp (http/post (method-url "chat.postMessage")
-                                    {:form-params {:token   (:bot-access-token slack-user)
-                                                   :channel (:channel-id slack-user)
-                                                   :text    body}})]
-                (if-not (utils/success? @resp)
-                  (timbre/error @resp)
-                  (timbre/trace @resp))
-                (when (utils/success? @resp)
-                  (assoc @resp
-                         :json (when-let [body (:body @resp)]
-                                 (json/parse-string body true))))))])
-         slack-users)))
+  [slacks body]
+  (->> slacks
+       (map #(assoc % :text body))
+       (map send-message!)))
 
-(defn send-chime! [users id long-time]
-  (send-messages* users (format "`ping %s [%s]`" id long-time)))
+(defn send-chime! [slacks id long-time]
+  (send-messages* slacks (format "`ping %s [%s]`" id long-time)))

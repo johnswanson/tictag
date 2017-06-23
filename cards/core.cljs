@@ -3,9 +3,12 @@
             [tictag.views :as v]
             [devtools.core :as devtools]
             [devcards.core :as dc]
+            [tictag.views.settings :as vs]
             [c2.ticks]
             [c2.scale]
-            [cljs.test :refer [is testing async]])
+            [cljs.test :refer [is testing async]]
+            [reagent.core :as reagent]
+            [taoensso.timbre :as timbre])
   (:require-macros [devcards.core :refer [defcard-rg deftest]]))
 
 (defonce runonce
@@ -36,5 +39,18 @@
         (circle {:x X :y Y} x y))])])
 
 
+(defcard-rg slack-help
+  [vs/slack-help])
+
+(defcard-rg slack-preferences
+  (let [state (reagent/atom {})]
+    [vs/slack-preferences-component
+     (fn [[ev param]]
+       (timbre/debug "Received event: " ev param)
+       (case ev
+         :slack/want-dm? (swap! state assoc :dm? param)
+         :slack/want-channel? (swap! state assoc :channel? param)
+         :slack/channel (swap! state assoc :channel param)))
+     state]))
 
 

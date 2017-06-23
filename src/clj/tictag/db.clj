@@ -13,25 +13,40 @@
             [clojure.java.jdbc :as j]
             [amalloy.ring-buffer :refer [ring-buffer]]
             [honeysql.core :as sql]
-            [honeysql.helpers :refer :all]
+            [honeysql.helpers :refer [select
+                                      update
+                                      order-by
+                                      where
+                                      merge-where
+                                      from
+                                      limit
+                                      insert-into
+                                      values
+                                      sset
+                                      delete-from
+                                      left-join
+                                      group
+                                      join]]
             [honeysql-postgres.format :refer :all]
-            [honeysql-postgres.helpers :refer :all]
+            [honeysql-postgres.helpers :refer :all :exclude [partition-by]]
             [tictag.crypto :as crypto]
             [buddy.hashers :refer [check]]
             [hikari-cp.core :as hikari]
             [tictag.utils :as utils]))
+
+(defn decrypt [db t iv]
+  (crypto/decrypt t (:crypto-key db) iv))
 
 (defn with-last-ping
   "This is SUPER hacky and only works for the `db/last-pings` fn."
   [db {id :id} ts]
   (timbre/trace "Using thread-ts" ts)
   (if-let [[ping] (j/query (:db db)
-                           (-> (select :pings.ts)
-                               (from :pings)
-                               (where [:= :pings.user-id id]
-                                      [:= :pings.slack-ts ts])
+                           (-> (select :ping-ts)
+                               (from :ping-threads)
+                               (where [:= :ping-threads.slack-ts ts])
                                sql/format))]
-    (assoc db :_last-ping (:ts ping))
+    (assoc db :_last-ping (:ping-ts ping))
     db))
 
 (defn beeminder-id [user-id]
@@ -42,7 +57,6 @@
 (def ping-select (-> (select :ts
                              [(sql/call :+ :tz_offset :ts) :local_time]
                              :tags
-                             :slack-ts
                              :user_id)
                      (from :pings)))
 
@@ -120,12 +134,11 @@
 (def ymd (f/formatter "yyyyMMdd"))
 (defn local-day [local-time] (f/unparse ymd local-time))
 
-(defn to-ping [{:keys [local_time ts tags user_id slack_ts]}]
+(defn to-ping [{:keys [local_time ts tags user_id]}]
   {:tags       (set (str/split tags #" "))
    :user-id    user_id
    :local-time local_time
    :local-day  (local-day local_time)
-   :slack-ts   slack_ts
    :timestamp  (coerce/to-long ts)})
 
 (defn get-pings [db query]
@@ -182,18 +195,17 @@
   (:pings tagtime))
 
 
-(defn update-tags-with-slack-ts [{db :db} timestamp c]
+(defn update-tags-with-slack-ts [{db :db} time c]
   (j/with-db-transaction [db db]
-    (doseq [[user-id resp] c]
-      (j/execute! db (-> (update :pings)
-                         (sset
-                          {:slack-ts (some->
-                                      resp
-                                      deref
-                                      :json
-                                      :ts)})
-                         (where [:= :ts (coerce/from-long timestamp)]
-                                [:= :user_id user-id])
+    (doseq [resp c]
+      (j/execute! db (-> (insert-into :ping-threads)
+                         (values
+                          [{:slack-ts (some->
+                                       resp
+                                       deref
+                                       :json
+                                       :ts)
+                            :ping-ts  time}])
                          sql/format)))))
 
 (defn update-tags! [{db :db} pings]
@@ -250,21 +262,21 @@
      :token
      token)))
 
-(defn slack-record [crypto-key user username token channel-id slack-user-id]
+(defn slack-record [crypto-key user username token dm-id slack-user-id]
   (let [{:keys [encrypted iv]} (crypto/encrypt token crypto-key)]
     {:user_id                    (:id user)
      :username                   username
      :encrypted_bot_access_token encrypted
      :encryption_iv              iv
-     :channel_id                 channel-id
+     :dm-id                      dm-id
      :slack_user_id              slack-user-id}))
 
-(defn write-slack-sql [crypto-key user username token channel-id slack-user-id]
+(defn write-slack-sql [crypto-key user username token dm-id slack-user-id]
   (-> (insert-into :slack)
-      (values [(slack-record crypto-key user username token channel-id slack-user-id)])))
+      (values [(slack-record crypto-key user username token dm-id slack-user-id)])))
 
 
-(defn write-slack [db user username token channel-id slack-user-id]
+(defn write-slack [db user username token dm-id slack-user-id]
   (let [{:keys [encrypted iv]} (crypto/encrypt token (:crypto-key db))]
     (j/execute!
      (:db db)
@@ -274,7 +286,7 @@
        user
        username
        token
-       channel-id
+       dm-id
        slack-user-id)))))
 
 (defn delete-slack [db user-id]
@@ -306,23 +318,33 @@
      :username beeminder_username
      :user-id  id
      :enabled? beeminder_is_enabled
-     :token    (crypto/decrypt
+     :token    (decrypt
+                db
                 beeminder_encrypted_token
-                (:crypto-key db)
                 beeminder_encryption_iv)}))
 
 (defn slack-from-db [db {:as user :keys [slack_username
                                          slack_encrypted_bot_access_token
                                          slack_encryption_iv
                                          slack_channel_id
+                                         slack_channel_name
+                                         slack_dm_id
+                                         slack_id
+                                         slack_use_channel
+                                         slack_use_dm
                                          id]}]
   (when (and user slack_encrypted_bot_access_token slack_encryption_iv)
     {:username         slack_username
+     :id               slack_id
      :user-id          id
+     :dm?              slack_use_dm
+     :dm-id            slack_dm_id
+     :channel?         slack_use_channel
      :channel-id       slack_channel_id
-     :bot-access-token (crypto/decrypt
+     :channel-name     slack_channel_name
+     :bot-access-token (decrypt
+                        db
                         slack_encrypted_bot_access_token
-                        (:crypto-key db)
                         slack_encryption_iv)}))
 
 (defn to-user [db user]
@@ -339,6 +361,11 @@
               [:slack.slack_user_id :slack_user_id]
               [:slack.username :slack_username]
               [:slack.channel_id :slack_channel_id]
+              [:slack.dm_id :slack_dm_id]
+              [:slack.use_dm :slack_use_dm]
+              [:slack.use_channel :slack_use_channel]
+              [:slack.id :slack_id]
+              [:slack.channel_name :slack_channel_name]
 
               [:beeminder.id :beeminder_id]
               [:beeminder.user_id :beeminder_user_id]
@@ -382,6 +409,48 @@
 
 (defn get-all-users [db]
   (map #(to-user db %) (j/query (:db db) (sql/format user-query))))
+
+(defn get-all-slack-channels [db]
+  (->> (j/query
+        (:db db)
+        (-> (select :slack.channel-id
+                    :slack.encrypted-bot-access-token
+                    :slack.encryption-iv)
+            (from :slack)
+            (where [:= :use-channel true]
+                   [:not= :channel-id nil])
+            (order-by :slack.channel-id)
+            sql/format))
+       (partition-by :channel_id)
+       (map first)
+       (map (fn [{token   :encrypted_bot_access_token
+                  iv      :encryption_iv
+                  channel :channel_id}]
+              {:token   (decrypt db token iv)
+               :channel channel}))))
+
+(defn get-all-slack-dms [db]
+  (->> (j/query
+        (:db db)
+        (-> (select :slack.dm-id
+                    :slack.encrypted-bot-access-token
+                    :slack.encryption-iv)
+            (from :slack)
+            (where [:= :use-dm true])
+            (order-by :slack.dm-id)
+            sql/format))
+       (partition-by :dm_id)
+       (map first)
+       (map (fn [{token   :encrypted_bot_access_token
+                  iv      :encryption_iv
+                  channel :dm_id}]
+              {:token   (decrypt db token iv)
+               :channel channel}))))
+
+(defn get-all-slacks [db]
+  (concat
+   (get-all-slack-dms db)
+   (get-all-slack-channels db)))
 
 (defn authenticated-user [db username password]
   (let [user (get-user db username)]
@@ -479,4 +548,13 @@
        (values data)
        (upsert (-> (on-conflict :ts :user-id)
                    (do-update-set :tags :tz_offset)))
+       sql/format)))
+
+(defn update-slack! [db user-id vs]
+  (timbre/trace user-id vs)
+  (j/execute!
+   (:db db)
+   (-> (update :slack)
+       (sset vs)
+       (where [:= :user-id user-id])
        sql/format)))

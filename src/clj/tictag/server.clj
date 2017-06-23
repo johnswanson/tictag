@@ -141,7 +141,7 @@
                 (assoc p :tags (set t) :_old-tags (:tags p)))))
        (remove nil?)))
 
-(defn save-pings [{:keys [db user thread-ts]} pings]
+(defn save-pings [{:keys [db user]} pings]
   (trace [:save-pings (:id user) pings])
   (db/update-tags! db pings)
   (slack/send-messages
@@ -149,11 +149,10 @@
    (map
     (fn [{:keys [local-time tags _old-tags] :as ping}]
       (timbre/trace ping)
-      {:text      (format "`updated %s:`\n`%s -> %s`"
+      {:text      (format "updated `%s: %s -> %s`"
                           (f/unparse wtf local-time)
                           _old-tags
-                          tags)
-       :thread-ts thread-ts})
+                          tags)})
     pings)))
 
 (defn save* [{:keys [db user] :as ctx} ps]
@@ -223,24 +222,27 @@ Separate commands with a newline to apply multiple commands at once
   (taoensso.timbre/logged-future
    (when-let [user (and (valid-slack? component params)
                         (slack-user db params))]
-     (let [evt    (:event params)
-           me     (first (:authed_users params))
-           dm?    (str/starts-with? (or (:channel evt) "") "D")
-           to-me? (str/starts-with? (:text evt)
-                                    (str "<@" me ">"))
-           ctx    (assoc component :user user)]
+     (let [evt       (:event params)
+           channel   (:channel evt)
+           me        (first (:authed_users params))
+           dm?       (str/starts-with? (or channel "") "D")
+           to-me?    (str/starts-with? (:text evt)
+                                       (str "<@" me ">"))
+           ctx       (assoc component :user user)
+           thread-ts (some-> params :event :thread_ts)
+           db        (if thread-ts (db/with-last-ping db user thread-ts) db)]
        (timbre/debug [:slack-message
                       {:user    (:id user)
                        :dm?     dm?
                        :to-me?  to-me?
                        :message (get-in params [:event :text])}])
-       (when (or dm? to-me?)
-         (if-let [thread-ts (some-> params :event :thread_ts)]
-           (eval-command (-> ctx
-                             (assoc :thread-ts thread-ts)
-                             (update :db db/with-last-ping user thread-ts))
-                         (slack-text params))
-           (eval-command ctx (slack-text params)))
+       (when (or dm? to-me? thread-ts)
+         (eval-command
+          (-> ctx
+              (assoc :db db)
+              (assoc :thread-ts thread-ts)
+              (assoc :channel channel))
+          (slack-text params))
          (beeminder/sync! component user)))))
   {:status 200 :body ""})
 
@@ -333,7 +335,7 @@ Separate commands with a newline to apply multiple commands at once
   (-> user
       (select-keys [:username :email :tz :beeminder :slack :id :pings])
       (update :beeminder #(select-keys % [:username :enabled? :token :goals :id]))
-      (update :slack #(select-keys % [:username :id]))
+      (update :slack #(select-keys % [:username :id :channel? :dm? :channel-id :dm-id :channel-name]))
       (update :beeminder #(if (seq %) % nil))
       (update :slack #(if (seq %) % nil))))
 
@@ -453,6 +455,36 @@ Separate commands with a newline to apply multiple commands at once
                          (assoc-in [:security :anti-forgery] false)
                          (assoc :proxy true)))))
 
+(defn strip-hashtag [s]=
+  (if (= (first s) \#)
+    (subs s 1)
+    s))
+
+(defn update-slack [{:keys [db]} {:keys [user-id params]}]
+  (let [trimmed      (select-keys params [:dm? :channel? :channel-name])
+        dm?          (:dm? params)
+        channel?     (:channel? params)
+        channel-name (strip-hashtag (:channel-name params))
+        channel-id   (slack/channel-id
+                      (:bot-access-token
+                       (:slack (db/get-user-by-id db user-id)))
+                      channel-name)]
+    (when (seq (keys trimmed))
+      (if (and channel-name (not channel-id))
+        {:status 400
+         :body   {:error "Channel not found"}}
+        (do
+          (db/update-slack!
+           db
+           user-id
+           (cond-> {}
+             (contains? params :dm?)          (assoc :use-dm dm?)
+             (contains? params :channel?)     (assoc :use-channel channel?)
+             (contains? params :channel-name) (assoc :channel-id channel-id
+                                                     :channel-name channel-name)))
+          {:body trimmed})))))
+
+
 (defn api-routes [component]
   (-> (compojure.core/routes
        (POST "/signup" _ (partial signup component))
@@ -469,6 +501,7 @@ Separate commands with a newline to apply multiple commands at once
                 (POST "/user/me/tz" _ (partial update-tz component))
                 (DELETE "/user/me/beeminder" _ (partial delete-beeminder component))
                 (DELETE "/user/me/slack" _ (partial delete-slack component))
+                (PUT "/user/me/slack" _ (partial update-slack component))
                 (POST "/user/me/goals/" _ (partial add-goal component))
                 (PUT "/user/me/goals/:id" _ (partial update-goal component))
                 (DELETE "/user/me/goals/:id" _ (partial delete-goal component))))
