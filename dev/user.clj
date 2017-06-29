@@ -37,8 +37,8 @@
       (figwheel-sidecar.repl-api/start-figwheel! "dev" "devcards")
       (figwheel-sidecar.repl-api/cljs-repl)))
 
-(defn migrate! [] (migrate ragtime/config))
-(defn rollback! [] (rollback ragtime/config))
+(defn migrate! [] (migrate (ragtime/config)))
+(defn rollback! [] (rollback (ragtime/config)))
 
 (clojure.tools.namespace.repl/set-refresh-dirs "dev" "src/clj" "test/clj")
 
