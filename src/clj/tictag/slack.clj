@@ -23,25 +23,35 @@
 
 (def slack-api-url "https://slack.com/api/")
 (defn method-url [m] (str slack-api-url m))
-(defn slack-call! [cmd params]
-  (-> (method-url cmd)
-      (http/post {:form-params params})
-      deref
-      :body
-      (json/parse-string true)))
+
+(defn success? [resp]
+  (if (utils/success? resp)
+    (get-in resp [:body :ok])))
+
+(defn post [cmd opts]
+  (let [resp (http/post (method-url cmd) opts)]
+    (future
+      (let [resp (update @resp :body json/parse-string true)]
+        (if-not (success? resp)
+          (timbre/error [:slack-error-resp resp])
+          (timbre/trace [:slack-resp resp]))
+        (when (success? resp)
+          resp)))))
 
 (defn im-open [token user-id]
-  (slack-call! "im.open" {:token token :user user-id}))
+  (:body @(post "im.open" {:form-params {:token token :user user-id}})))
 
 (defn users-info [token user-id]
-  (slack-call! "users.info" {:token token :user user-id}))
+  (:body @(post "users.info" {:form-params {:token token :user user-id}})))
 
 (defn channels [token]
-  (into
-   {}
-   (map (juxt :name_normalized :id)
-        (:channels
-         (slack-call! "channels.list" {:token token})))))
+  (into {}
+        (map (juxt :name_normalized :id)
+             (-> "channels.list"
+                 (post {:form-params {:token token}})
+                 deref
+                 :body
+                 :channels))))
 
 (defn channel-id [token channel-name]
   (get (channels token) channel-name))
@@ -55,20 +65,12 @@
                     :messages messages}])
     (doall
      (map (fn [{:keys [text thread-ts channel]}]
-            (future
-              (let [resp @(http/post (method-url "chat.postMessage")
-                                     {:form-params {:token           bot-access-token
-                                                    :channel         (or channel dm-id)
-                                                    :text            text
-                                                    :thread_ts       thread-ts
-                                                    :reply_broadcast true}})]
-                (if-not (utils/success? resp)
-                  (timbre/error resp)
-                  (timbre/trace (:status resp)))
-                (when (utils/success? resp)
-                  (assoc resp
-                         :json (when-let [body (:body resp)]
-                                 (json/parse-string body true)))))))
+            (post "chat.postMessage"
+                  {:form-params {:token           bot-access-token
+                                 :channel         (or channel dm-id)
+                                 :text            text
+                                 :thread_ts       thread-ts
+                                 :reply_broadcast true}}))
           messages))))
 
 (defn send-message [user message]
@@ -76,16 +78,7 @@
 
 (defn send-message!
   [params]
-  (future
-    (let [resp (http/post (method-url "chat.postMessage")
-                          {:form-params params})]
-      (if-not (utils/success? @resp)
-        (timbre/error @resp)
-        (timbre/trace @resp))
-      (when (utils/success? @resp)
-        (assoc @resp
-               :json (when-let [body (:body @resp)]
-                       (json/parse-string body true)))))))
+  (post "chat.postMessage" {:form-params params}))
 
 (defn send-messages*
   "Send multiple users ONE message"

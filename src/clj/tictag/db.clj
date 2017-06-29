@@ -197,14 +197,10 @@
 
 (defn update-tags-with-slack-ts [{db :db} time c]
   (j/with-db-transaction [db db]
-    (doseq [resp c]
+    (doseq [resp (remove #(nil? @%) c)]
       (j/execute! db (-> (insert-into :ping-threads)
                          (values
-                          [{:slack-ts (some->
-                                       resp
-                                       deref
-                                       :json
-                                       :ts)
+                          [{:slack-ts (get-in @resp [:body :ts])
                             :ping-ts  time}])
                          sql/format)))))
 
