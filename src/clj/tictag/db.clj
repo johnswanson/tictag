@@ -347,11 +347,25 @@
                         slack_encrypted_bot_access_token
                         slack_encryption_iv)}))
 
+(defn macroexpansions [db user]
+  (into
+   {}
+   (map
+    (fn [{:keys [expands_from expands_to]}]
+      [expands_from (str/split expands_to #" ")])
+    (j/query
+     (:db db)
+     (-> (select :expands-from :expands-to)
+         (from :macroexpansions)
+         (where [:= :user-id (:id user)])
+         sql/format)))))
+
 (defn to-user [db user]
   (when user
     (-> user
         (assoc :slack (slack-from-db db user))
-        (assoc :beeminder (beeminder-from-db db user)))))
+        (assoc :beeminder (beeminder-from-db db user))
+        (assoc :macros (macroexpansions db user)))))
 
 (def user-query
   (-> (select :users.*

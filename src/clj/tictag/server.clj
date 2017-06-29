@@ -113,8 +113,9 @@
 (defmethod evaluate :DITTO [{:keys [db user]} _]
   (vec (:tags (second (db/last-pings db user 2)))))
 
-(defmethod evaluate :TAG [_ [_ tag]]
-  (str/lower-case tag))
+(defmethod evaluate :TAG [{{macros :macros} :user} [_ tag]]
+  (let [lc (str/lower-case tag)]
+    (get macros lc lc)))
 
 (defmethod evaluate :HELP [_ v] v)
 
