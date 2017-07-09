@@ -3,9 +3,12 @@
             [com.stuartsierra.component :as component]
             [tictag.db :as db]
             [chime :refer [chime-at]]
+            [clj-time.core :as t]
             [clj-time.coerce :as tc]
             [taoensso.timbre :as timbre]
-            [tictag.slack :as slack]))
+            [tictag.slack :as slack]
+            [clj-time.format :as f]
+            [tictag.utils :as utils]))
 
 (defn chime! [{db :db}]
   (let [state (atom (cycle (shuffle (range 1000))))
@@ -17,7 +20,14 @@
         (timbre/debugf "CHIME %s: Adding 'afk' pings" id)
         (db/add-pending! db time id)
         (timbre/debugf "CHIME %s: Sending slack messages" id)
-        (let [responses (doall (slack/send-chime! (db/get-all-slacks db) id long-time))]
+        (let [slacks    (db/get-all-slacks db)
+              messages (->> slacks
+                            (map :users.tz)
+                            (map t/time-zone-for-id)
+                            (map #(f/with-zone utils/wtf %))
+                            (map #(format "%s\n`ping %s [%s]`" (f/unparse % time) id long-time)))
+              responses (doall
+                         (slack/send-chime! slacks messages))]
           (db/update-tags-with-slack-ts db time responses))
         (timbre/debugf "CHIME %s: All done!" id)))))
 

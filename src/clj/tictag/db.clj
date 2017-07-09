@@ -425,8 +425,10 @@
         (:db db)
         (-> (select :slack.channel-id
                     :slack.encrypted-bot-access-token
-                    :slack.encryption-iv)
+                    :slack.encryption-iv
+                    :users.tz)
             (from :slack)
+            (left-join :users [:= :slack.user_id :users.id])
             (where [:= :use-channel true]
                    [:not= :channel-id nil])
             (order-by :slack.channel-id)
@@ -444,8 +446,10 @@
         (:db db)
         (-> (select :slack.dm-id
                     :slack.encrypted-bot-access-token
-                    :slack.encryption-iv)
+                    :slack.encryption-iv
+                    :users.tz)
             (from :slack)
+            (left-join :users [:= :slack.user_id :users.id])
             (where [:= :use-dm true])
             (order-by :slack.dm-id)
             sql/format))

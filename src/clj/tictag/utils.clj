@@ -5,6 +5,8 @@
             [clj-time.core :as t]
             [clj-time.coerce :as tc]))
 
+(def wtf (f/formatter "yyyy-MM-dd HH:mm:ss"))
+
 (defn local-time [time]
   (clj-time.local/format-local-time
    (t/to-time-zone time (t/default-time-zone))

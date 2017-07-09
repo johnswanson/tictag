@@ -81,11 +81,10 @@
   (post "chat.postMessage" {:form-params params}))
 
 (defn send-messages*
-  "Send multiple users ONE message"
-  [slacks body]
-  (->> slacks
-       (map #(assoc % :text body))
+  "Send multiple users messages"
+  [slacks bodies]
+  (->> (map #(assoc %1 :text %2) slacks bodies)
        (map send-message!)))
 
-(defn send-chime! [slacks id long-time]
-  (send-messages* slacks (format "`ping %s [%s]`" id long-time)))
+(defn send-chime! [slacks messages]
+  (send-messages* slacks messages))

@@ -26,8 +26,6 @@
 
 (timbre/refer-timbre)
 
-(def wtf (f/formatter "yyyy-MM-dd HH:mm:ss"))
-
 (def UNAUTHORIZED
   {:status 401
    :headers {"Content-Type" "text/plain"}
@@ -151,7 +149,7 @@
     (fn [{:keys [local-time tags _old-tags] :as ping}]
       (timbre/trace ping)
       {:text      (format "updated `%s: %s -> %s`"
-                          (f/unparse wtf local-time)
+                          (f/unparse utils/wtf local-time)
                           _old-tags
                           tags)})
     pings)))
