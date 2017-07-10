@@ -22,7 +22,7 @@
         (timbre/debugf "CHIME %s: Sending slack messages" id)
         (let [slacks    (db/get-all-slacks db)
               messages (->> slacks
-                            (map :users.tz)
+                            (map :tz)
                             (map t/time-zone-for-id)
                             (map #(f/with-zone utils/wtf %))
                             (map #(format "%s\n`ping %s [%s]`" (f/unparse % time) id long-time)))

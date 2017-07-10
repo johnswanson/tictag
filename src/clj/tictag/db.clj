@@ -437,9 +437,11 @@
        (map first)
        (map (fn [{token   :encrypted_bot_access_token
                   iv      :encryption_iv
-                  channel :channel_id}]
+                  channel :channel_id
+                  tz      :tz}]
               {:token   (decrypt db token iv)
-               :channel channel}))))
+               :channel channel
+               :tz      tz}))))
 
 (defn get-all-slack-dms [db]
   (->> (j/query
@@ -457,9 +459,11 @@
        (map first)
        (map (fn [{token   :encrypted_bot_access_token
                   iv      :encryption_iv
-                  channel :dm_id}]
+                  channel :dm_id
+                  tz      :tz}]
               {:token   (decrypt db token iv)
-               :channel channel}))))
+               :channel channel
+               :tz      tz}))))
 
 (defn get-all-slacks [db]
   (concat
