@@ -332,3 +332,12 @@
  (fn [db [_ k]]
    (get-in db [:db/tagtime-upload k])))
 
+(reg-sub
+ :macro
+ (fn [db [_ id]]
+   (get-in db [:macro/by-id id])))
+
+(reg-sub
+ :macros
+ (fn [db]
+   (remove #(= :temp %) (keys (remove #(nil? (val %)) (:macro/by-id db))))))

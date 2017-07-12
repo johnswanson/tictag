@@ -343,25 +343,31 @@
                         slack_encrypted_bot_access_token
                         slack_encryption_iv)}))
 
-(defn macroexpansions [db user]
-  (into
-   {}
-   (map
-    (fn [{:keys [expands_from expands_to]}]
-      [expands_from (str/split expands_to #" ")])
-    (j/query
-     (:db db)
-     (-> (select :expands-from :expands-to)
-         (from :macroexpansions)
-         (where [:= :user-id (:id user)])
-         sql/format)))))
+(defn macros [db id]
+  (map #(utils/with-ns % "macro")
+       (j/query
+        (:db db)
+        (-> (select :id :expands-from :expands-to :user-id)
+            (from :macroexpansions)
+            (where [:= :user-id id])
+            sql/format))))
+
+(defn with-macros [db user]
+  (when user
+    (assoc user :macros (macros db (:id user)))))
+
+(defn with-beeminder [db user]
+  (when user (assoc user :beeminder (beeminder-from-db db user))))
+
+(defn with-slack [db user]
+  (when user (assoc user :slack (slack-from-db db user))))
 
 (defn to-user [db user]
   (when user
-    (-> user
-        (assoc :slack (slack-from-db db user))
-        (assoc :beeminder (beeminder-from-db db user))
-        (assoc :macros (macroexpansions db user)))))
+    (->> user
+         (with-macros db)
+         (with-slack db)
+         (with-beeminder db))))
 
 (def user-query
   (-> (select :users.*
@@ -413,6 +419,7 @@
 
 (defn get-user-by-id [db id]
   (to-user db (first (j/query (:db db) (sql/format (where user-query [:= :users.id id]))))))
+
 
 (defn get-user [db username]
   (to-user db (first (j/query (:db db) (sql/format (where user-query [:= :users.username username]))))))
@@ -576,3 +583,41 @@
        (sset vs)
        (where [:= :user-id user-id])
        sql/format)))
+
+(def allowed-keys
+  {:macro [:macro/expands-from :macro/expands-to]})
+
+(def to-table
+  {:macro :macroexpansions})
+
+(defn to-type [type entity]
+  (select-keys entity (allowed-keys type)))
+
+(defn create! [db user-id type entity]
+  (utils/with-ns
+    (j/db-do-prepared-return-keys
+     (:db db)
+     (-> (insert-into (to-table type))
+         (values [(assoc (to-type type entity) :user-id user-id)])
+         sql/format))
+    "macro"))
+
+(defn update! [db user-id id type entity]
+  (utils/with-ns
+    (j/db-do-prepared-return-keys
+     (:db db)
+     (-> (update (to-table type))
+         (sset (to-type type entity))
+         (where [:= :user-id user-id]
+                [:= :id id])
+         sql/format))
+    "macro"))
+
+(defn delete! [db user-id id type entity]
+  (j/execute!
+   (:db db)
+   (-> (delete-from (to-table type))
+       (where [:= :user-id user-id]
+              [:= :id id])
+       sql/format)))
+

@@ -4,6 +4,7 @@
             [reloaded.repl :refer [system init start stop go reset]]
             [com.stuartsierra.component :as component]
             [tictag.config :refer [config]]
+            [tictag.utils :as utils]
             [tictag.slack :as slack]
             [tictag.server :as server :refer [evaluate]]
             [tictag.server-chimer :refer [chime!]]

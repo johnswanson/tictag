@@ -9,7 +9,7 @@
             [tictag.nav :as nav]
             [tictag.schemas :as schemas]
             [tictag.dates]
-            [tictag.utils :refer [descend]]
+            [tictag.utils :refer [deep-merge]]
             [goog.net.cookies]
             [cljs.spec :as s]
             [cljs-time.format :as f]
@@ -42,8 +42,13 @@
       (.setWithCredentials with-credentials)
       (.send uri method body (clj->js headers)))))
 
+(def validate-schema
+  (re-frame.core/after (fn [db]
+                         (when-not (s/valid? :tictag.schemas/db db)
+                           (timbre/error (s/explain :tictag.schemas/db db))))))
 
-(def interceptors [(when ^boolean goog.DEBUG re-frame.core/debug)])
+(def interceptors [(when ^boolean goog.DEBUG re-frame.core/debug)
+                   (when ^boolean goog.DEBUG validate-schema)])
 
 (defn authenticated-xhrio [m token]
   (merge m {:headers {"Authorization" token}}))
@@ -210,7 +215,69 @@
                                        (ref-to-user user)
                                        true
                                        []
-                                       (partition-all 100 (:pings user))]}]}))
+                                       (partition-all 100 (:pings user))]}
+                     {:ms 2 :dispatch [:macro/get]}]}))
+
+(reg-event-fx
+ :macro/get
+ [interceptors]
+ (fn [{:keys [db]} _]
+   {:sente-send {:event [:macro/get]
+                 :timeout 3000
+                 :on-success [:macro/get-success]
+                 :on-failure [:macro/get-failure]}}))
+
+(reg-event-fx
+ :macro/get-success
+ [interceptors]
+ (fn [{:keys [db]} [_ resp]]
+   {:db (assoc
+         db
+         :macro/by-id
+         (into
+          {}
+          (map (fn [m]
+                 [(:macro/id m) m])
+               resp)))}))
+
+(reg-event-db
+ :macro/update
+ [interceptors]
+ (fn [db [_ id k v]]
+   (assoc-in db [:macro/by-id id k] v)))
+
+(defn with-path [db path]
+  (assoc-in {} path (get-in db path)))
+
+(reg-event-fx
+ :macro/save
+ [interceptors]
+ (fn [{:keys [db]} [_ id]]
+   {:sente-send {:event      [:db/save (with-path db [:macro/by-id id])]
+                 :timeout    3000
+                 :on-success [:macro/save-success id]
+                 :on-failure [:macro/save-failure id]}}))
+
+(reg-event-db
+ :macro/save-success
+ [interceptors]
+ (fn [db [_ id saved]]
+   (deep-merge db saved)))
+
+(reg-event-fx
+ :macro/delete
+ [interceptors]
+ (fn [{:keys [db]} [_ id]]
+   {:sente-send {:event      [:db/save {:macro/by-id {id nil}}]
+                 :timeout    3000
+                 :on-success [:macro/delete-success id]
+                 :on-failure [:macro/delete-failure id]}}))
+
+(reg-event-db
+ :macro/delete-success
+ [interceptors]
+ (fn [db [_ id saved]]
+   (deep-merge db saved)))
 
 (def formatter (f/formatters :basic-date-time))
 
@@ -415,9 +482,12 @@
 
 (reg-fx
  :sente-send
- (fn [event]
+ (fn [{:keys [event timeout on-success on-failure]}]
    (let [f @!chsk-send!]
-     (f event))))
+     (f event (or timeout 3000) (fn [resp]
+                                  (if (cb-success? resp)
+                                    (re-frame.core/dispatch (conj on-success resp))
+                                    (re-frame.core/dispatch (conj on-failure resp))))))))
 
 (reg-fx
  :delete-cookie
@@ -451,18 +521,19 @@
   (inject-cofx :window-dimensions nil)
   interceptors]
  (fn [{:keys [cookies db window-dimensions]} _]
-   (merge {:pushy-init                       true
-           :http-xhrio                       {:method          :get
-                                              :uri             "/api/timezones"
-                                              :timeout         8000
-                                              :format          (transit-request-format {})
-                                              :response-format (transit-response-format {})
-                                              :on-success      [:success-timezones]
-                                              :on-failure      [:failed-timezones]}
-           :dispatch-n                       [[:fetch-user-info]]
-           :add-window-resize-event-listener nil
-           :db                               (merge db {:auth-token (:auth-token cookies)
-                                                        :db/window  window-dimensions})})))
+   {:pushy-init                       true
+    :http-xhrio                       {:method          :get
+                                       :uri             "/api/timezones"
+                                       :timeout         8000
+                                       :format          (transit-request-format {})
+                                       :response-format (transit-response-format {})
+                                       :on-success      [:success-timezones]
+                                       :on-failure      [:failed-timezones]}
+    :dispatch-n                       [[:fetch-user-info]]
+    :add-window-resize-event-listener nil
+    :db                               {:auth-token (:auth-token cookies)
+                                       :db/window  window-dimensions
+                                       :macro/by-id {}}}))
 
 (reg-event-fx
  :window-resize

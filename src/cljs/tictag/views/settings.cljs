@@ -75,7 +75,6 @@
 (defn slack-preferences-component [dispatch slack slack-errors]
   (let [{:keys [dm-id channel-id dm? channel? username channel-name] :as slack} @slack
         errors                                                                  @slack-errors]
-    (timbre/debug slack)
     (if username
       [re-com/v-box
        :children [[re-com/title :level :level2 :label "Remove slackbot"]
@@ -227,11 +226,53 @@
                                                                  :margin-right "1em"}}]
                            "Download"]]]]]]))
 
+(defn macro-editor [id]
+  (let [macro                                         (subscribe [:macro id])
+        {:keys [macro/expands-from macro/expands-to]} @macro]
+    [re-com/h-box
+     :children
+     [[re-com/input-text
+       :placeholder "expands from"
+       :model (or expands-from "")
+       :on-change #(dispatch [:macro/update id :macro/expands-from %])]
+      [re-com/input-text
+       :placeholder "expands to"
+       :model (or expands-to "")
+       :on-change #(dispatch [:macro/update id :macro/expands-to %])]
+      [re-com/button
+       :on-click #(dispatch [:macro/save id])
+       :label "Save"]
+      [re-com/button
+       :on-click #(dispatch [:macro/delete id])
+       :label "Delete"]]]))
+
+(defn macros []
+  (let [macros (subscribe [:macros])]
+    [re-com/v-box
+     :children [[re-com/title :level :level1 :label "Macroexpansions"]
+                [re-com/p
+                 "Macroexpansions allow you to type " [:code "foo"] " and tag your ping with "
+                 "something like " [:code "bar baz"] "."]
+                [re-com/p
+                 "For example - imagine I tag my time as "
+                 [:code "a b c eat"] " very often, because I'm usually eating with person A, B, "
+                 "and C. I might create a macroexpansion from " [:code "fameat"] " to "
+                 [:code "a b c eat"] " to make typing this easier."]
+                [re-com/p "Another example might be if "
+                 "a tag is *always* a 'subtag'. If you do all your " [:code "dev"] " tags at "
+                 "work, you might want to make " [:code "dev"] " always expand to " [:code "dev work"]]
+                [re-com/v-box
+                 :children (for [id @macros]
+                             ^{:key id}
+                             [macro-editor id])]
+                [macro-editor :temp]]]))
+
 (defn settings []
   (let [auth-user (subscribe [:authorized-user])]
     [re-com/v-box
      :children [[slack]
                 [beeminder]
+                [macros]
                 [timezone]
                 [tagtime-import]
                 [download]]]))

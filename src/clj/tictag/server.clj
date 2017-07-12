@@ -7,6 +7,9 @@
             [tictag.slack :as slack]
             [tictag.jwt :as jwt :refer [wrap-user]]
             [tictag.schemas :as schemas]
+            [tictag.tagtime :as tagtime]
+            [tictag.events]
+            [taoensso.sente :as sente]
             [clj-time.format :as f]
             [clj-time.core :as t]
             [com.stuartsierra.component :as component]
@@ -18,7 +21,6 @@
             [clojure.string :as str]
             [hiccup.core :refer [html]]
             [hiccup.page :refer [html5]]
-            [tictag.tagtime :as tagtime]
             [clojure.spec.alpha :as s]
             [taoensso.timbre :as timbre]
             [instaparse.core :as insta]
@@ -220,14 +222,14 @@ Separate commands with a newline to apply multiple commands at once
 (defn slack [{:keys [db tagtime] :as component} {:keys [params]}]
   (taoensso.timbre/logged-future
    (when-let [user (and (valid-slack? component params)
-                        (slack-user db params))]
+                        (utils/with-macros
+                          (slack-user db params)))]
      (let [evt       (:event params)
            channel   (:channel evt)
            me        (first (:authed_users params))
            dm?       (str/starts-with? (or channel "") "D")
            to-me?    (str/starts-with? (:text evt)
                                        (str "<@" me ">"))
-           ctx       (assoc component :user user)
            thread-ts (some-> params :event :thread_ts)
            db        (if thread-ts (db/with-last-ping db user thread-ts) db)]
        (timbre/debug [:slack-message
@@ -237,7 +239,8 @@ Separate commands with a newline to apply multiple commands at once
                        :message (get-in params [:event :text])}])
        (when (or dm? to-me? thread-ts)
          (eval-command
-          (-> ctx
+          (-> component
+              (assoc :user user)
               (assoc :db db)
               (assoc :thread-ts thread-ts)
               (assoc :channel channel))
@@ -246,15 +249,16 @@ Separate commands with a newline to apply multiple commands at once
   {:status 200 :body ""})
 
 (defn timestamp [{:keys [db] :as component} {:keys [params user-id]}]
-  (if-let [user (db/get-user-by-id db user-id)]
+  (if-let [user (utils/with-macros (db/get-user-by-id db user-id))]
     (do
       (taoensso.timbre/logged-future
        (debug [:timestamp {:user-id   (:id user)
                            :timestamp (:timestamp params)
                            :tags      (:tags params)}])
        (let [ping     (db/ping-from-long-time db user (Long. (:timestamp params)))
+             tags     (flatten (map #(get (:macros user) % %) (:tags params)))
              new-ping (-> ping
-                          (assoc :tags (set (:tags params))
+                          (assoc :tags (set tags)
                                  :_old-tags (:tags ping)))]
          (if ping
            (do (save-pings (assoc component :user user)
@@ -483,7 +487,6 @@ Separate commands with a newline to apply multiple commands at once
                                                      :channel-name channel-name)))
           {:body trimmed})))))
 
-
 (defn api-routes [component]
   (-> (compojure.core/routes
        (POST "/signup" _ (partial signup component))
@@ -516,6 +519,8 @@ Separate commands with a newline to apply multiple commands at once
   component/Lifecycle
   (start [component]
     (debug "Starting server")
+    (sente/start-server-chsk-router! (:ch-chsk ws)
+                                     (tictag.events/event-msg-handler db jwt))
     (let [stop (http/run-server
                 (-> (compojure.core/routes
                      (my-routes component)

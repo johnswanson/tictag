@@ -3,7 +3,8 @@
             [clj-time.local]
             [clj-time.format :as f]
             [clj-time.core :as t]
-            [clj-time.coerce :as tc]))
+            [clj-time.coerce :as tc]
+            [clojure.string :as str]))
 
 (def wtf (f/formatter "yyyy-MM-dd HH:mm:ss"))
 
@@ -26,3 +27,24 @@
   (let [status (:status ?http-resp)]
     (and status (<= 200 status 299))))
 
+(defn with-macros [user]
+  (when user
+    (assoc
+     user
+     :macros
+     (into {} (map (juxt :macro/expands-from #(str/split (:macro/expands-to %) #" ")) (:macros user))))))
+
+(defn kebab-str [kw]
+  (str/replace (name kw) #"_" "-"))
+
+(defn with-ns [m ns]
+  (assoc (into {}
+               (map
+                (fn [[k v]]
+                  [(keyword ns (kebab-str k)) v])
+                m))
+         :id
+         (:id m)))
+
+(defn without-ns [m]
+  (into {} (map (fn [[k v]] [(keyword (name k)) v]) m)))

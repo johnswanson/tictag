@@ -3,9 +3,7 @@
             [taoensso.sente.server-adapters.http-kit :refer [get-sch-adapter]]
             [com.stuartsierra.component :as component]
             [taoensso.timbre :as timbre]
-            [compojure.core :refer [GET POST]]
-            [ring.middleware.defaults :refer [wrap-defaults]]
-            [tictag.jwt :as jwt]))
+            [compojure.core :refer [GET POST]]))
 
 (defrecord Sente []
   component/Lifecycle
