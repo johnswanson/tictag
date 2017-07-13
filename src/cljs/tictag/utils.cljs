@@ -1,5 +1,6 @@
 (ns tictag.utils
-  (:require [taoensso.timbre :as timbre]))
+  (:require [taoensso.timbre :as timbre]
+            [clojure.string :as str]))
 
 (defn get-thing [db cursor thing]
   (let [source (if (vector? cursor)
@@ -38,3 +39,15 @@
   (if (every? map? vs)
     (apply merge-with (partial deep-merge-with f) vs)
     (apply f vs)))
+
+(defn pending-type [[t id :as path]]
+  (if (str/index-of (namespace t) "pending")
+    (keyword (namespace t))
+    (keyword (str "pending-" (namespace t)))))
+
+(defn pending-path [[t id :as path]]
+  (if (str/index-of (namespace t) "pending")
+    path
+    [:tictag.schemas/ui
+     (keyword (str "pending-" (namespace t)) (name t))
+     id]))

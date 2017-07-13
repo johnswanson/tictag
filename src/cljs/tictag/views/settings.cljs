@@ -115,38 +115,39 @@
               [slack-help]]])
 
 
-(defn beeminder-goal-editor [goal]
-  [re-com/h-box
-   :children [[re-com/input-text
-               :model (or (:goal/name goal) "")
-               :on-change #(dispatch [:goal/edit (:goal/id goal) :goal/name %])]
-              [re-com/input-text
-               :model (or (:goal/tags goal) "")
-               :status (if (:goal/tags-valid? goal) nil :error)
-               :placeholder "(and \"foo\" (or \"bar\" \"baz\" \"bin\"))"
-               :on-change #(dispatch [:goal/edit (:goal/id goal) :goal/tags %])]
-              [re-com/button
-               :on-click #(dispatch [:goal/save (:goal/id goal)])
-               :label "Save"]
-              [re-com/button
-               :on-click #(dispatch [:goal/delete (:goal/id goal)])
-               :label "Delete"]]])
+(defn goal-editor [id]
+  (let [{pending-goal :pending-goal/goal
+         pending-tags :pending-goal/tags
+         :keys        [goal/goal goal/tags]} @(subscribe [:goal id])]
+    (timbre/debug "tags: " pending-tags tags)
+    [re-com/h-box
+     :children
+     [[re-com/input-text
+       :placeholder "goal slug @ beeminder"
+       :model (or pending-goal goal "")
+       :status (when (and (seq pending-goal) (not= goal pending-goal))
+                 :warning)
+       :on-change #(dispatch [:goal/update id :goal %])]
+      [re-com/input-text
+       :placeholder "tags"
+       :model (or pending-tags tags "")
+       :status (when (and (seq pending-tags) (not= tags pending-tags))
+                 :warning)
+       :on-change #(dispatch [:goal/update id :tags %])]
+      [re-com/button
+       :on-click #(dispatch [:db/save :goal/by-id id])
+       :label "Save"]
+      [re-com/button
+       :on-click #(dispatch [:db/delete :goal/by-id id])
+       :label "Delete"]]]))
 
 (defn beeminder-goals [goals]
-  (when goals
-    [re-com/v-box
-     :children (for [goal goals]
-                 ^{:key (:goal/id goal)}
-                 [beeminder-goal-editor goal])]))
-
-(defn add-beeminder-goal-button []
-  (let [path [:goal/by-id :temp]
-        goal (subscribe path)]
-    (if @goal
-      [beeminder-goal-editor @goal]
-      [re-com/button
-       :on-click #(dispatch [:goal/new])
-       :label "Add Goal"])))
+  [:div
+   [re-com/v-box
+    :children (for [id @goals]
+                ^{:key id}
+                [goal-editor id])]
+   [goal-editor :temp]])
 
 (defn beeminder-token-input []
   (let [val (reagent/atom "")]
@@ -174,7 +175,7 @@
 
 (defn beeminder []
   (let [beeminder-sub (subscribe [:beeminder])
-        goals         (subscribe [:beeminder-goals])]
+        goals         (subscribe [:goals])]
     [re-com/v-box
      :children [[re-com/title
                  :level :level1
@@ -194,8 +195,7 @@
                                :label "I have read the above and want to enable Beeminder sync."]
                               [re-com/label
                                :label [:span "Beeminder user: " [:b (:username @beeminder-sub)]]]
-                              [beeminder-goals @goals]
-                              [add-beeminder-goal-button]
+                              [beeminder-goals goals]
                               [delete-beeminder-button]]]
                   [beeminder-token-input])]]))
 
@@ -227,23 +227,29 @@
                            "Download"]]]]]]))
 
 (defn macro-editor [id]
-  (let [macro                                         (subscribe [:macro id])
-        {:keys [macro/expands-from macro/expands-to]} @macro]
+  (let [macro                                                        (subscribe [:macro id])
+        {pending-expands-from :pending-macro/expands-from
+         pending-expands-to   :pending-macro/expands-to
+         :keys                [macro/expands-from macro/expands-to]} @macro]
     [re-com/h-box
      :children
      [[re-com/input-text
        :placeholder "expands from"
-       :model (or expands-from "")
-       :on-change #(dispatch [:macro/update id :macro/expands-from %])]
+       :model (or pending-expands-from expands-from "")
+       :status (when (and (seq pending-expands-from) (not= expands-from pending-expands-from))
+                 :warning)
+       :on-change #(dispatch [:macro/update id :expands-from %])]
       [re-com/input-text
        :placeholder "expands to"
-       :model (or expands-to "")
-       :on-change #(dispatch [:macro/update id :macro/expands-to %])]
+       :model (or pending-expands-to expands-to "")
+       :status (when (and (seq pending-expands-to) (not= expands-to pending-expands-to))
+                 :warning)
+       :on-change #(dispatch [:macro/update id :expands-to %])]
       [re-com/button
-       :on-click #(dispatch [:macro/save id])
+       :on-click #(dispatch [:db/save :macro/by-id id])
        :label "Save"]
       [re-com/button
-       :on-click #(dispatch [:macro/delete id])
+       :on-click #(dispatch [:db/delete :macro/by-id id])
        :label "Delete"]]]))
 
 (defn macros []
@@ -252,15 +258,17 @@
      :children [[re-com/title :level :level1 :label "Macroexpansions"]
                 [re-com/p
                  "Macroexpansions allow you to type " [:code "foo"] " and tag your ping with "
-                 "something like " [:code "bar baz"] "."]
+                 "something like " [:code "bar"] [:code "baz"] "."]
                 [re-com/p
                  "For example - imagine I tag my time as "
-                 [:code "a b c eat"] " very often, because I'm usually eating with person A, B, "
+                 [:code "a"] [:code "b"] [:code "c"] [:code "eat"]
+                 " very often, because I'm usually eating with person A, B, "
                  "and C. I might create a macroexpansion from " [:code "fameat"] " to "
-                 [:code "a b c eat"] " to make typing this easier."]
+                 [:code "a"] [:code "b"] [:code "c"] [:code "eat"]
+                 " to make typing this easier."]
                 [re-com/p "Another example might be if "
-                 "a tag is *always* a 'subtag'. If you do all your " [:code "dev"] " tags at "
-                 "work, you might want to make " [:code "dev"] " always expand to " [:code "dev work"]]
+                 "a tag is *always* a 'subtag'. Maybe " [:code "costco"] " should always expand "
+                 "to " [:code "costco"] [:code "grocery"] ", for example."]
                 [re-com/v-box
                  :children (for [id @macros]
                              ^{:key id}

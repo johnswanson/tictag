@@ -388,25 +388,6 @@ Separate commands with a newline to apply multiple commands at once
            UNAUTHORIZED))
     UNAUTHORIZED))
 
-(defn add-goal [{:keys [db]} {:keys [params user-id]}]
-  (if (spy (s/valid? :tictag.schemas/goal params))
-    (let [new-id (:id (db/add-goal db user-id params))]
-      (response (assoc params :goal/id new-id)))
-    {:status 400}))
-
-(defn update-goal [{:keys [db]} {:keys [params user-id]}]
-  (if (spy (s/valid? :tictag.schemas/goal params))
-    (when-let [int-id (utils/str-number? (:id params))]
-      (db/update-goal db user-id (assoc params :goal/id int-id))
-      (response {}))
-    {:status 400}))
-
-(defn delete-goal [{:keys [db]} {:keys [params user-id]}]
-  (when-let [int-id (try (Integer. (:id params))
-                         (catch Exception _ nil))]
-    (db/delete-goal db user-id int-id)
-    (response {})))
-
 (defn tagtime-import-from-file [{:keys [db ws]} {:keys [multipart-params user-id params] :as req}]
   (taoensso.timbre/logged-future
    (if-let [parsed-all (seq
@@ -503,10 +484,7 @@ Separate commands with a newline to apply multiple commands at once
                 (POST "/user/me/tz" _ (partial update-tz component))
                 (DELETE "/user/me/beeminder" _ (partial delete-beeminder component))
                 (DELETE "/user/me/slack" _ (partial delete-slack component))
-                (PUT "/user/me/slack" _ (partial update-slack component))
-                (POST "/user/me/goals/" _ (partial add-goal component))
-                (PUT "/user/me/goals/:id" _ (partial update-goal component))
-                (DELETE "/user/me/goals/:id" _ (partial delete-goal component))))
+                (PUT "/user/me/slack" _ (partial update-slack component))))
       (wrap-defaults (-> api-defaults (assoc :proxy true)))))
 
 

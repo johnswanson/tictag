@@ -75,9 +75,9 @@
       (let [in-past-week? (past-week-days)
             rows          (filter #(in-past-week? (:local-day %))
                                   (db/get-pings-by-user (:db db) user))]
-        (doseq [{:keys [goal/name goal/tags]} goals]
+        (doseq [{:keys [goal/goal goal/tags]} goals]
           (trace [:beeminder-sync
-                  {:name name
+                  {:name goal
                    :tags tags}])
           (let [{:keys [username token]} (:beeminder user)
                 days                     (days-matching-tag tags rows)
@@ -86,7 +86,7 @@
                                           (datapoints
                                            token
                                            username
-                                           name))
+                                           goal))
                 existing-map             (group-by :daystamp existing-datapoints)
                 to-save                  (filter :value
                                                  (for [[daystamp value] days
@@ -106,8 +106,8 @@
                                           (flatten
                                            (remove nil?
                                                    (map rest (vals existing-map)))))
-                save-futures             (doall (map #(save-datapoint! token username name %) to-save))
-                delete-futures           (doall (map #(delete-datapoint! token username name %) to-delete))]
+                save-futures             (doall (map #(save-datapoint! token username goal %) to-save))
+                delete-futures           (doall (map #(delete-datapoint! token username goal %) to-delete))]
             (doseq [resp (concat save-futures delete-futures)]
               (if-not (utils/success? @resp)
                 (timbre/error @resp)

@@ -5,11 +5,13 @@
             [tictag.dates :refer [seconds-since-midnight days-since-epoch]]
             [tictag.utils :refer [descend]]
             [tictag.beeminder-matching :as beeminder-matching]
+            [tictag.schemas :as schemas]
             [cljs.tools.reader.edn :as edn]
             [taoensso.timbre :refer-macros
              [trace debug info warn error fatal report
               tracef debugf infof warnf errorf fatalf reportf
-              spy]]))
+              spy]]
+            [taoensso.timbre :as timbre]))
 
 
 (def formatter (f/formatters :basic-date-time))
@@ -280,16 +282,6 @@
             (catch js/Error _ nil)))))
 
 (reg-sub
- :beeminder-goals
- (fn [db _]
-   (let [user (:db/authenticated-user db)]
-     (->> (:goal/by-id db)
-          (vals)
-          (filter #(and (= (:user %) user)
-                        (not= (:goal/id %) :temp)))
-          (map valid-goal)))))
-
-(reg-sub
  :slack
  (fn [db _]
    (let [user (:db/authenticated-user db)]
@@ -335,9 +327,24 @@
 (reg-sub
  :macro
  (fn [db [_ id]]
-   (get-in db [:macro/by-id id])))
+   (let [pending-macro (get-in db [:tictag.schemas/ui :pending-macro/by-id id])
+         saved-macro   (get-in db [:macro/by-id id])]
+     (merge saved-macro pending-macro))))
 
 (reg-sub
  :macros
  (fn [db]
-   (remove #(= :temp %) (keys (remove #(nil? (val %)) (:macro/by-id db))))))
+   (sort (keys (remove #(nil? (val %)) (:macro/by-id db))))))
+
+(reg-sub
+ :goal
+ (fn [db [_ id]]
+   (let [pending-goal (get-in db [:tictag.schemas/ui :pending-goal/by-id id])
+         saved-goal (get-in db [:goal/by-id id])]
+     (merge saved-goal pending-goal))))
+
+(reg-sub
+ :goals
+ (fn [db]
+   (sort (keys (:goal/by-id db)))))
+

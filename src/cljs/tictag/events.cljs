@@ -2,6 +2,7 @@
   (:require-macros
    [cljs.core.async.macros :as asyncm :refer (go go-loop)])
   (:require [cljs.tools.reader.edn :as edn]
+            [clojure.string :as str]
             [re-frame.core :refer [reg-event-fx reg-event-db reg-fx reg-cofx inject-cofx]]
             [taoensso.timbre :as timbre]
             [ajax.core :refer [transit-response-format transit-request-format]]
@@ -9,7 +10,7 @@
             [tictag.nav :as nav]
             [tictag.schemas :as schemas]
             [tictag.dates]
-            [tictag.utils :refer [deep-merge]]
+            [tictag.utils :as utils :refer [deep-merge]]
             [goog.net.cookies]
             [cljs.spec :as s]
             [cljs-time.format :as f]
@@ -44,8 +45,7 @@
 
 (def validate-schema
   (re-frame.core/after (fn [db]
-                         (when-not (s/valid? :tictag.schemas/db db)
-                           (timbre/error (s/explain :tictag.schemas/db db))))))
+                         (schemas/assert-valid-db! db))))
 
 (def interceptors [(when ^boolean goog.DEBUG re-frame.core/debug)
                    (when ^boolean goog.DEBUG validate-schema)])
@@ -241,43 +241,70 @@
                resp)))}))
 
 (reg-event-db
+ :goal/update
+ [interceptors]
+ (fn [db [_ id k v]]
+   (assoc-in db
+             [:tictag.schemas/ui
+              :pending-goal/by-id id
+              (keyword "pending-goal" (name k))]
+             v)))
+
+(reg-event-db
  :macro/update
  [interceptors]
  (fn [db [_ id k v]]
-   (assoc-in db [:macro/by-id id k] v)))
+   (assoc-in db
+             [:tictag.schemas/ui
+              :pending-macro/by-id id
+              (keyword "pending-macro" (name k))]
+             v)))
 
 (defn with-path [db path]
   (assoc-in {} path (get-in db path)))
 
-(reg-event-fx
- :macro/save
- [interceptors]
- (fn [{:keys [db]} [_ id]]
-   {:sente-send {:event      [:db/save (with-path db [:macro/by-id id])]
-                 :timeout    3000
-                 :on-success [:macro/save-success id]
-                 :on-failure [:macro/save-failure id]}}))
-
-(reg-event-db
- :macro/save-success
- [interceptors]
- (fn [db [_ id saved]]
-   (deep-merge db saved)))
+(defn merge-pending [pending saved]
+  (let [type (if (seq saved)
+               (keyword (namespace (first (keys saved))))
+               (keyword (second (str/split (namespace (first (keys pending))) #"pending-"))))]
+    (apply merge saved (for [[k v] pending]
+                         [(keyword type (name k)) v]))))
 
 (reg-event-fx
- :macro/delete
+ :db/save
  [interceptors]
- (fn [{:keys [db]} [_ id]]
-   {:sente-send {:event      [:db/save {:macro/by-id {id nil}}]
-                 :timeout    3000
-                 :on-success [:macro/delete-success id]
-                 :on-failure [:macro/delete-failure id]}}))
+ (fn [{:keys [db]} [_ type id]]
+   (let [path         [type id]
+         pending-path (utils/pending-path path)]
+     {:sente-send {:event      [:db/save (assoc-in {} path (merge-pending (get-in db pending-path) (get-in db path)))]
+                   :timeout    3000
+                   :on-success [:db/save-success type id]
+                   :on-failure [:db/save-failure type id]}})))
 
 (reg-event-db
- :macro/delete-success
+ :db/save-success
  [interceptors]
- (fn [db [_ id saved]]
-   (deep-merge db saved)))
+ (fn [db [_ type id saved]]
+   (let [pending-path (utils/pending-path [type id])]
+     (-> db
+         (deep-merge saved)
+         (update-in (butlast pending-path) dissoc (last pending-path))))))
+
+(reg-event-fx
+ :db/delete
+ [interceptors]
+ (fn [{:keys [db]} [_ type id]]
+   (let [path [type id]]
+     {:sente-send {:event      [:db/save (assoc-in {} path nil)]
+                   :timeout    3000
+                   :on-success [:db/delete-success type id]
+                   :on-failure [:db/delete-failure type id]}})))
+
+(reg-event-db
+ :db/delete-success
+ [interceptors]
+ (fn [db [_ type id saved]]
+   (update db type dissoc id)))
 
 (def formatter (f/formatters :basic-date-time))
 
@@ -533,7 +560,8 @@
     :add-window-resize-event-listener nil
     :db                               {:auth-token (:auth-token cookies)
                                        :db/window  window-dimensions
-                                       :macro/by-id {}}}))
+                                       :macro/by-id {}
+                                       :schemas/ui {:pending-macro/by-id {:temp {}}}}}))
 
 (reg-event-fx
  :window-resize
@@ -591,91 +619,6 @@
  (fn [_ [_ page]]
    {:pushy-replace-token! page}))
 
-(reg-event-db
- :goal/new
- [interceptors]
- (fn [db _]
-   (let [user      (:db/authenticated-user db)
-         beeminder [:beeminder/by-id
-                    (:id
-                     (first (filter #(= user (:user %))
-                                    (vals (:beeminder/by-id db)))))]]
-     (assoc-in db
-               [:goal/by-id :temp]
-               {:user user
-                :beeminder beeminder
-                :goal/id :temp}))))
-
-(reg-event-db
- :goal/edit
- [interceptors]
- (fn [db [_ id k new]]
-   (assoc-in db [:goal/by-id id k] new)))
-
-(reg-event-fx
- :goal/delete
- [interceptors]
- (fn [{:keys [db]} [_ id]]
-   (merge
-    {:db (let [old (get-in db [:goal/by-id id])]
-           (-> db
-               (assoc-in [:goal/by-id id] nil)
-               (assoc-in [:db/trash :goal/by-id id] old)))}
-    (when (not= :temp id)
-      {:http-xhrio (authenticated-xhrio
-                    {:uri             (str "/api/user/me/goals/" id)
-                     :method          :delete
-                     :timeout         8000
-                     :format          (transit-request-format {})
-                     :response-format (transit-response-format {})
-                     :on-success      [:goal/delete-succeed]
-                     :on-failure      [:goal/delete-fail id]}
-                    (:auth-token db))}))))
-
-(reg-event-db
- :goal/delete-fail
- [interceptors]
- (fn [db [_ id result]]
-   (let [old (get-in db [:db/trash :goal/by-id id])]
-     (assoc-in db [:goal/by-id id] old))))
-
-(reg-event-fx
- :goal/save
- [interceptors]
- (fn [{:keys [db]} [_ id]]
-   (let [goal (get-in db [:goal/by-id id] {})
-         base (if (= :temp id)
-                {:method :post
-                 :uri "/api/user/me/goals/"}
-                {:method :put
-                 :uri (str "/api/user/me/goals/" id)})]
-     (if (and (s/valid? :tictag.schemas/goal goal)
-              (= (count (filter #(= (:goal/name goal)
-                                    (:goal/name %))
-                                (vals (:goal/by-id db))))
-                 1))
-       {:http-xhrio (authenticated-xhrio
-                     (merge {:params          goal
-                             :timeout         8000
-                             :format          (transit-request-format {})
-                             :response-format (transit-response-format {})
-                             :on-success      [:good-goal-update-result id]
-                             :on-failure      [:bad-goal-update-result id]}
-                            base)
-                     (:auth-token db))}
-       {}))))
-
-(reg-event-db
- :good-goal-update-result
- [interceptors]
- (fn [db [_ old-id to-merge]]
-   (if (= old-id :temp)
-     (-> db
-         (update-in (conj (:beeminder to-merge) :goals)
-                    conj [:goal/by-id (:goal/id to-merge)])
-         (assoc-in [:goal/by-id :temp] nil)
-         (assoc-in [:goal/by-id (:goal/id to-merge)] to-merge))
-     (assoc-in db [:goal/by-id (:goal/id to-merge)] to-merge))))
 
 (reg-event-fx
  :tagtime-import/file

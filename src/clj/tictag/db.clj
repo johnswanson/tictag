@@ -485,14 +485,14 @@
 (defn get-goals-raw [db beeminder-user]
   (map
    (fn [{:keys [goal tags id]}]
-     {:goal/name goal
+     {:goal/goal goal
       :goal/tags tags
       :goal/id id})
    (j/query
     (:db db)
     (-> (select :goal :tags :id)
         (from :beeminder_goals)
-        (where [:= (:id beeminder-user) :beeminder_id])
+        (where [:= (:user-id beeminder-user) :user-id])
         sql/format))))
 
 (defn get-goal-raw [db user-id goal]
@@ -502,54 +502,13 @@
     (-> (select :id)
         (from :beeminder-goals)
         (where [:= :id (:goal/id goal)]
-               [:= :beeminder-id (-> (select :beeminder.id)
-                                     (from :beeminder)
-                                     (where [:= :beeminder.user-id user-id]))])
+               [:= :user-id user-id])
         sql/format))))
 
 (defn get-goals [db beeminder-user]
   (map
    #(clojure.core/update % :goal/tags edn/read-string)
    (get-goals-raw db beeminder-user)))
-
-(defn add-goal [db user-id goal]
-  (j/execute!
-   (:db db)
-   (-> (insert-into [[:beeminder-goals [:goal :tags :beeminder-id]]
-                     (select (beeminder-id user-id)
-                             (:goal/name goal)
-                             (:goal/tags goal)
-                             :beeminder.id)])
-       sql/format))
-  (first
-   (j/query
-    (:db db)
-    (-> (select :id)
-        (from :beeminder-goals)
-        (where [:= :goal (:goal/name goal)]
-               [:= :tags (:goal/tags goal)]
-               [:= :beeminder-id (beeminder-id user-id)])
-        sql/format))))
-
-
-(defn update-goal [db user-id goal]
-  (j/execute!
-   (:db db)
-   (-> (update :beeminder-goals)
-       (sset {:goal (:goal/name goal)
-              :tags (:goal/tags goal)})
-       (where [:= (:goal/id goal) :id]
-              [:= :beeminder-id (beeminder-id user-id)])
-       sql/format)))
-
-
-(defn delete-goal [db user-id goal-id]
-  (j/execute!
-   (:db db)
-   (-> (delete-from :beeminder-goals)
-       (where [:= :id goal-id]
-              [:= :beeminder-id (beeminder-id user-id)])
-       sql/format)))
 
 (defn test-query! [db]
   (try (j/query (:db db) (sql/format (select 1)))
@@ -585,10 +544,12 @@
        sql/format)))
 
 (def allowed-keys
-  {:macro [:macro/expands-from :macro/expands-to]})
+  {:macro [:macro/expands-from :macro/expands-to]
+   :goal  [:goal/goal :goal/tags]})
 
 (def to-table
-  {:macro :macroexpansions})
+  {:macro :macroexpansions
+   :goal  :beeminder-goals})
 
 (defn to-type [type entity]
   (select-keys entity (allowed-keys type)))
@@ -600,7 +561,7 @@
      (-> (insert-into (to-table type))
          (values [(assoc (to-type type entity) :user-id user-id)])
          sql/format))
-    "macro"))
+    (name type)))
 
 (defn update! [db user-id id type entity]
   (utils/with-ns
@@ -611,7 +572,7 @@
          (where [:= :user-id user-id]
                 [:= :id id])
          sql/format))
-    "macro"))
+    (name type)))
 
 (defn delete! [db user-id id type entity]
   (j/execute!

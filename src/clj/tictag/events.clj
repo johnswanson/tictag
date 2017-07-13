@@ -10,6 +10,10 @@
   [{:keys [id]}]
   (timbre/debug :UNHANDLED-EVENT id))
 
+(defmethod -event-msg-handler :chsk/ws-ping [{}] nil)
+(defmethod -event-msg-handler :chsk/uidport-close [{}] nil)
+(defmethod -event-msg-handler :chsk/uidport-open [{}] nil)
+
 (defmethod -event-msg-handler
   :db/save
   [{:keys [db ?reply-fn ?data id] {:keys [user-id]} :ring-req}]
@@ -25,12 +29,11 @@
 
         (= entity-id :temp)
         (when-let [saved (db/create! db user-id entity-type entity)]
-          (?reply-fn {k {:temp nil
-                         (:id saved) (assoc saved :user [:user/by-id user-id])}}))
+          (?reply-fn {k {(:id saved) saved}}))
 
         :else
         (when-let [saved (db/update! db user-id entity-id entity-type entity)]
-          (?reply-fn {k {(:id saved) (assoc saved :user [:user/by-id user-id])}}))))))
+          (?reply-fn {k {(:id saved) saved}}))))))
 
 (defmethod -event-msg-handler
   :macro/get
