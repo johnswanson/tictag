@@ -334,7 +334,7 @@
 (reg-sub
  :macros
  (fn [db]
-   (sort (keys (remove #(nil? (val %)) (:macro/by-id db))))))
+   (sort (keys (:macro/by-id db)))))
 
 (reg-sub
  :goal

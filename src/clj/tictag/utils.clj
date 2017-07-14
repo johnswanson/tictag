@@ -38,13 +38,25 @@
   (str/replace (name kw) #"_" "-"))
 
 (defn with-ns [m ns]
-  (assoc (into {}
-               (map
-                (fn [[k v]]
-                  [(keyword ns (kebab-str k)) v])
-                m))
-         :id
-         (:id m)))
+  (into {}
+        (map
+         (fn [[k v]]
+           [(keyword ns (kebab-str k)) v])
+         m)))
 
 (defn without-ns [m]
   (into {} (map (fn [[k v]] [(keyword (name k)) v]) m)))
+
+(defn to-entities [db]
+  (->> db
+       (map
+        (fn [[k m]]
+          (map (fn [[id entity]]
+                 {:path [k id]
+                  :selector k
+                  :namespace (namespace k)
+                  :id id
+                  :entity entity})
+               m)))
+       (flatten)))
+

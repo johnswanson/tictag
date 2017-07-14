@@ -14,7 +14,6 @@
             [amalloy.ring-buffer :refer [ring-buffer]]
             [honeysql.core :as sql]
             [honeysql.helpers :refer [select
-                                      update
                                       order-by
                                       where
                                       merge-where
@@ -26,13 +25,18 @@
                                       delete-from
                                       left-join
                                       group
-                                      join]]
+                                      join]
+             :as h]
             [honeysql-postgres.format :refer :all]
             [honeysql-postgres.helpers :refer :all :exclude [partition-by]]
             [tictag.crypto :as crypto]
             [buddy.hashers :refer [check]]
             [hikari-cp.core :as hikari]
             [tictag.utils :as utils]))
+
+(defn encrypt [db t]
+  (when t
+    (crypto/encrypt t (:crypto-key db))))
 
 (defn decrypt [db t iv]
   (crypto/decrypt t (:crypto-key db) iv))
@@ -208,7 +212,7 @@
   (timbre/tracef "Updating pings: %s" (pr-str pings))
   (j/with-db-transaction [db db]
     (doseq [{:keys [tags user-id timestamp]} pings]
-      (j/execute! db (-> (update :pings)
+      (j/execute! db (-> (h/update :pings)
                          (sset {:tags (str/join " " tags)})
                          (where [:= :ts (coerce/from-long timestamp)]
                                 [:= :user_id user-id])
@@ -297,7 +301,7 @@
 
 (defn enable-beeminder [db user-id enable?]
   (j/execute! (:db db)
-              (-> (update :beeminder)
+              (-> (h/update :beeminder)
                   (sset {:is-enabled enable?})
                   (where [:= :user-id user-id])
                   sql/format)))
@@ -405,7 +409,7 @@
 (defn update-timezone [db user-id tz]
   (j/execute!
    (:db db)
-   (-> (update :users)
+   (-> (h/update :users)
        (sset {:tz tz})
        (where [:= user-id :users.id])
        sql/format)))
@@ -538,47 +542,104 @@
   (timbre/trace user-id vs)
   (j/execute!
    (:db db)
-   (-> (update :slack)
+   (-> (h/update :slack)
        (sset vs)
        (where [:= :user-id user-id])
        sql/format)))
 
-(def allowed-keys
-  {:macro [:macro/expands-from :macro/expands-to]
-   :goal  [:goal/goal :goal/tags]})
+(def write-keys
+  {:macro/by-id     [:macro/expands-from :macro/expands-to]
+   :goal/by-id      [:goal/goal :goal/tags]
+   :beeminder/by-id [:beeminder/encrypted-token :beeminder/encryption-iv :beeminder/username :beeminder/is-enabled]
+   :slack/by-id     [:slack/channel-id :slack/use-channel :slack/channel-name :slack/use-dm]})
+
+(defn writeable-values [selector entity]
+  (select-keys entity (write-keys selector)))
 
 (def to-table
-  {:macro :macroexpansions
-   :goal  :beeminder-goals})
+  {:macro/by-id     :macroexpansions
+   :goal/by-id      :beeminder-goals
+   :beeminder/by-id :beeminder
+   :slack/by-id     :slack})
 
 (defn to-type [type entity]
-  (select-keys entity (allowed-keys type)))
+  (select-keys entity (write-keys type)))
 
-(defn create! [db user-id type entity]
-  (utils/with-ns
-    (j/db-do-prepared-return-keys
-     (:db db)
-     (-> (insert-into (to-table type))
-         (values [(assoc (to-type type entity) :user-id user-id)])
-         sql/format))
-    (name type)))
+(defn selector-for [[selector id] user-id]
+  (case selector
+    [:and [:= :id id] [:= :user-id user-id]]))
 
-(defn update! [db user-id id type entity]
-  (utils/with-ns
-    (j/db-do-prepared-return-keys
-     (:db db)
-     (-> (update (to-table type))
-         (sset (to-type type entity))
-         (where [:= :user-id user-id]
-                [:= :id id])
-         sql/format))
-    (name type)))
+(defn sql [{:keys [user-id entity selector id path] :as m}]
+  (cond
+    (not entity)
+    (assoc m
+           :action :delete
+           :sql {:delete-from (to-table selector)
+                 :where       (selector-for path user-id)})
 
-(defn delete! [db user-id id type entity]
-  (j/execute!
-   (:db db)
-   (-> (delete-from (to-table type))
-       (where [:= :user-id user-id]
-              [:= :id id])
-       sql/format)))
+    (not (writeable-values selector entity)) nil
+
+    (= id :temp)
+    (assoc m
+           :action :insert
+           :sql {:insert-into (to-table selector)
+                 :values      [(assoc (writeable-values selector entity) :user-id user-id)]})
+
+    :else
+    (assoc m
+           :action :update
+           :sql {:update (to-table selector)
+                 :set    (writeable-values selector entity)
+                 :where  (selector-for path user-id)})))
+
+(defmulti transform :selector)
+
+(defmethod transform :default [m] m)
+
+(defmethod transform :beeminder/by-id [{:as m :keys [db entity]}]
+  (if-let [e (encrypt db (:beeminder/token entity))]
+    (update m :entity (fn [{:keys [token] :as bm}]
+                        (timbre/debug bm)
+                        (assoc bm
+                               :beeminder/encrypted-token (:encrypted e)
+                               :beeminder/encryption-iv (:iv e))))
+    (update m :entity dissoc :beeminder/encrypted-token :beeminder/encryption-iv)))
+
+(defn execute! [db params]
+  (try (j/db-do-prepared-return-keys (:db db) params)
+       (catch org.postgresql.util.PSQLException e
+         (timbre/debug params e)
+         {:error :invalid-data})))
+
+(defn format-sql [m]
+  (assoc m :sql-params (sql/format (:sql m))))
+
+(defn execute-query [{:keys [db sql-params namespace] :as m}]
+  (let [result (execute! db sql-params)]
+    (if-let [error (:error result)]
+      (assoc m :error error)
+      (assoc m :result (utils/with-ns result namespace)))))
+
+(defn make-new-db [db {:keys [result action path error namespace]}]
+  (cond
+    error (assoc-in db (conj path :db/error) error)
+
+    (= action :delete) (assoc-in db path nil)
+
+    (= action :insert) (assoc-in db (vector (first path) (get result (keyword namespace "id"))) result)
+
+    :else (assoc-in db path result)))
+
+(defn persist!
+  "In: db, user-id, and something like: {:macro/by-id {1 {:macro/expands-from \"abc\" :macro/expands-to \"123\"}}}"
+  [db user-id new-db]
+  (let [entities (utils/to-entities new-db)]
+    (->> entities
+         (map #(assoc % :user-id user-id :db db))
+         (map transform)
+         (map sql)
+         (remove nil?)
+         (map format-sql)
+         (map execute-query)
+         (reduce make-new-db {}))))
 

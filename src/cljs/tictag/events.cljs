@@ -295,10 +295,12 @@
  [interceptors]
  (fn [{:keys [db]} [_ type id]]
    (let [path [type id]]
-     {:sente-send {:event      [:db/save (assoc-in {} path nil)]
-                   :timeout    3000
-                   :on-success [:db/delete-success type id]
-                   :on-failure [:db/delete-failure type id]}})))
+     (if (= id :temp)
+       {:db (update-in db (butlast (utils/pending-path path)) dissoc :temp)}
+       {:sente-send {:event      [:db/save (assoc-in {} path nil)]
+                     :timeout    3000
+                     :on-success [:db/delete-success type id]
+                     :on-failure [:db/delete-failure type id]}}))))
 
 (reg-event-db
  :db/delete-success

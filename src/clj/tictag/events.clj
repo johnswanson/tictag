@@ -17,23 +17,7 @@
 (defmethod -event-msg-handler
   :db/save
   [{:keys [db ?reply-fn ?data id] {:keys [user-id]} :ring-req}]
-  (doseq [k    (keys ?data)
-          :let [entity-type (keyword (namespace k))]]
-    (doseq [entity-id (keys (?data k))
-            :let      [entity (get-in ?data [k entity-id])]]
-      (cond
-
-        (nil? entity)
-        (when (db/delete! db user-id entity-id entity-type entity)
-          (?reply-fn {k {entity-id nil}}))
-
-        (= entity-id :temp)
-        (when-let [saved (db/create! db user-id entity-type entity)]
-          (?reply-fn {k {(:id saved) saved}}))
-
-        :else
-        (when-let [saved (db/update! db user-id entity-id entity-type entity)]
-          (?reply-fn {k {(:id saved) saved}}))))))
+  (?reply-fn (db/persist! db user-id ?data)))
 
 (defmethod -event-msg-handler
   :macro/get
