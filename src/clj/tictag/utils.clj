@@ -32,7 +32,7 @@
     (assoc
      user
      :macros
-     (into {} (map (juxt :macro/expands-from #(str/split (:macro/expands-to %) #" ")) (:macros user))))))
+     (into {} (map (juxt :expands_from #(str/split (:expands_to %) #" ")) (:macros user))))))
 
 (defn kebab-str [kw]
   (str/replace (name kw) #"_" "-"))
