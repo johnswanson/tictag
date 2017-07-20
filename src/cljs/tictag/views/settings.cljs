@@ -82,10 +82,7 @@
     (if-let [username (:slack/username slack)]
       (let [{:keys [slack/dm? slack/channel? slack/id slack/channel-name]} slack]
         [re-com/v-box
-         :children [[re-com/title :level :level2 :label "Remove slackbot"]
-                    [re-com/button
-                     :label (str "Delete slack (authed as " username ")")
-                     :on-click #(dispatch [:db/delete :slack/by-id (:slack/id slack)])]
+         :children [[slack-help]
                     [re-com/title :level :level2 :label "Slack notification preferences"]
                     [re-com/checkbox
                      :model (let [[_ dm?] (or (find slack :pending-slack/dm?)
@@ -108,13 +105,18 @@
                       [re-com/input-text
                        :placeholder "#channel"
                        :model (or (:pending-slack/channel-name slack)
-                                  (:slack/channel-name slack))
+                                  (:slack/channel-name slack)
+                                  "")
                        :status (when (and (:pending-slack/channel-name slack)
                                           (:slack/channel-name errors)) :error)
                        :status-tooltip (or (first (:slack/channel-name errors)) "")
                        :status-icon? true
                        :on-change #(dispatch-n [:slack/update id :channel-name %]
-                                               [:db/save :slack/by-id id])]]]]])
+                                               [:db/save :slack/by-id id])]]]
+                    [re-com/title :level :level2 :label "Remove slackbot"]
+                    [re-com/button
+                     :label (str "Delete slack (authed as " username ")")
+                     :on-click #(dispatch [:db/delete :slack/by-id (:slack/id slack)])]]])
         [slack-authorize])))
 
 (defn slack-preferences []
@@ -126,8 +128,7 @@
 (defn slack []
   [re-com/v-box
    :children [[re-com/title :level :level1 :label "Slack"]
-              [slack-preferences]
-              [slack-help]]])
+              [slack-preferences]]])
 
 
 (defn goal-editor [id]
