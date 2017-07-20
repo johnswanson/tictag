@@ -1,6 +1,8 @@
 (ns tictag.db
   (:require [com.stuartsierra.component :as component]
             [taoensso.timbre :as timbre]
+            [cheshire.core :as cheshire]
+            [org.httpkit.client :as http]
             [clj-time.jdbc]
             [clj-time.coerce :as coerce]
             [clj-time.format :as f]
@@ -32,7 +34,10 @@
             [tictag.crypto :as crypto]
             [buddy.hashers :refer [check]]
             [hikari-cp.core :as hikari]
-            [tictag.utils :as utils]))
+            [tictag.utils :as utils]
+            [tictag.slack :as slack]))
+
+(declare replace-key)
 
 (defn encrypt [db t]
   (when t
@@ -347,14 +352,77 @@
                         slack_encrypted_bot_access_token
                         slack_encryption_iv)}))
 
+(defmulti client-trans (fn [a b] a))
+(defmethod client-trans :default [_ v] v)
+(defmethod client-trans :beeminder/by-id
+  [_ v]
+  (replace-key v [:beeminder/is-enabled :beeminder/enabled?]))
+(defmethod client-trans :slack/by-id
+  [_ v]
+  (-> v
+      (replace-key [:slack/use-dm :slack/dm?])
+      (replace-key [:slack/use-channel :slack/channel?])))
+
+(defn client-converter [type]
+  (fn [things]
+    (reduce (fn [accu v]
+              (timbre/debug {:accu accu :v v})
+              (update accu type assoc (:id v) (client-trans type (utils/with-ns v (namespace type)))))
+            {}
+            things)))
+
+(def beeminder-client-converter (client-converter :beeminder/by-id))
+
+(defn beeminder [db id]
+  (j/query
+   (:db db)
+   (-> (select :user-id :id :username :is-enabled)
+       (from :beeminder)
+       (where [:= :user-id id])
+       (limit 1)
+       sql/format)))
+
+(defn goals [db id]
+  (j/query
+   (:db db)
+   (-> (select :user-id :id :goal :tags)
+       (from :beeminder-goals)
+       (where [:= :user-id id])
+       sql/format)))
+
+(defn beeminder-client [db id]
+  (beeminder-client-converter (beeminder db id)))
+
+(def goal-client-converter (client-converter :goal/by-id))
+
+(defn goal-client [db id]
+  (goal-client-converter (goals db id)))
+
+(def macro-client-converter (client-converter :macro/by-id))
+
 (defn macros [db id]
-  (map #(utils/with-ns % "macro")
-       (j/query
-        (:db db)
-        (-> (select :id :expands-from :expands-to :user-id)
-            (from :macroexpansions)
-            (where [:= :user-id id])
-            sql/format))))
+  (j/query
+   (:db db)
+   (-> (select :id :expands-from :expands-to :user-id)
+       (from :macroexpansions)
+       (where [:= :user-id id])
+       sql/format)))
+
+(defn macro-client [db id]
+  (macro-client-converter (macros db id)))
+
+(def slack-client-converter (client-converter :slack/by-id))
+
+(defn slack [db id]
+  (j/query
+   (:db db)
+   (-> (select :id :user-id :slack-user-id :username :channel-id :channel-name :dm-id :use-dm :use-channel)
+       (from :slack)
+       (where [:= :user-id id])
+       sql/format)))
+
+(defn slack-client [db id]
+  (slack-client-converter (slack db id)))
 
 (defn with-macros [db user]
   (when user
@@ -547,82 +615,183 @@
        (where [:= :user-id user-id])
        sql/format)))
 
+(defn encrypt-beeminder-token [{:keys [entity db]}]
+  (when-let [token (:beeminder/token entity)]
+    (let [{:keys [encrypted iv]} (encrypt db token)]
+      {:entity (-> entity
+                   (assoc :beeminder/encrypted-token encrypted
+                          :beeminder/encryption-iv iv)
+                   (dissoc :beeminder/token))})))
+
+(defn check-beeminder-token [{:keys [entity errors path]}]
+  (when-let [token (:beeminder/token entity)]
+    (if-let [bm-user (let [resp (-> (http/request
+                                     {:url          "https://www.beeminder.com/api/v1/users/me.json"
+                                      :method       :get
+                                      :query-params {:auth_token token}})
+                                    (deref))]
+                       (if (= (:status resp) 200)
+                         (cheshire/parse-string (:body resp) true)
+                         nil))]
+      {:entity (assoc entity :beeminder/username (:username bm-user))}
+      {:errors (update-in errors (conj path :beeminder/token) conj "invalid Beeminder token!")
+       :entity nil})))
+
+(defn add-user-id [{:keys [entity user-id action]}]
+  (when (= action :insert)
+    {:entity (when entity (assoc entity :user-id user-id))}))
+
+(defn execute-interceptor [ctx interceptor]
+  (merge ctx (interceptor ctx)))
+
+(defn execute [ctx]
+  (loop [ctx ctx]
+    (let [queue (:queue ctx)]
+      (if (empty? queue)
+        ctx
+        (let [interceptor (peek queue)]
+          (recur (-> ctx
+                     (assoc :queue (pop queue))
+                     (execute-interceptor interceptor))))))))
+
 (def write-keys
-  {:macro/by-id     [:macro/expands-from :macro/expands-to]
-   :goal/by-id      [:goal/goal :goal/tags]
-   :beeminder/by-id [:beeminder/encrypted-token :beeminder/encryption-iv :beeminder/username :beeminder/is-enabled]
-   :slack/by-id     [:slack/channel-id :slack/use-channel :slack/channel-name :slack/use-dm]})
+  {:beeminder [:beeminder/token :beeminder/enabled?]
+   :macro     [:macro/expands-from :macro/expands-to]
+   :goal      [:goal/goal :goal/tags]
+   :slack     [:slack/channel-id :slack/channel? :slack/channel-name :slack/dm?]})
 
-(defn writeable-values [selector entity]
-  (select-keys entity (write-keys selector)))
+(defn filter-keys [keys]
+  (fn [{:keys [entity]}]
+    {:entity (select-keys entity keys)}))
 
-(def to-table
-  {:macro/by-id     :macroexpansions
-   :goal/by-id      :beeminder-goals
-   :beeminder/by-id :beeminder
-   :slack/by-id     :slack})
+(defn replace-key [entity [old-key new-key]]
+  (if (contains? entity old-key)
+    (-> entity (assoc new-key (get entity old-key)) (dissoc old-key))
+    entity))
 
-(defn to-type [type entity]
-  (select-keys entity (write-keys type)))
+(defn replace-keys* [v keys]
+  (reduce replace-key v keys))
 
-(defn selector-for [[selector id] user-id]
-  (case selector
-    [:and [:= :id id] [:= :user-id user-id]]))
+(defn replace-keys [keys]
+  (fn [{:keys [entity]}]
+    {:entity (reduce replace-key entity keys)}))
 
-(defn sql [{:keys [user-id entity selector id path] :as m}]
+(defn lookup-channel-name [{:keys [entity db user-id slack errors path] :as ctx}]
+  (when-let [channel-name (:slack/channel-name entity)]
+    (if-let [id (slack/channel-id
+                 (:bot-access-token
+                  (:slack (get-user-by-id db user-id)))
+                 channel-name)]
+      {:entity (assoc entity :slack/channel-id id)}
+      {:errors (update-in errors (conj path :slack/channel-name) conj "couldn't find Slack channel!")
+       :entity nil})))
+
+(defn table [t]
+  #(assoc % :table t))
+
+(defn set-sql [{:keys [user-id entity where id path table action] :as ctx}]
+  (case action
+    :delete {:sql {:delete-from table :where where}}
+    :insert {:sql {:insert-into table :values [entity]}}
+    :update {:sql {:update table :set entity :where where}}))
+
+(defn set-action [{:keys [entity id user-id]}]
   (cond
-    (not entity)
-    (assoc m
-           :action :delete
-           :sql {:delete-from (to-table selector)
-                 :where       (selector-for path user-id)})
+    (nil? entity) {:action   :delete
+                   :where [:and [:= :user-id user-id] [:= :id id]]}
+    (= id :temp)  {:action :insert}
+    :else         {:action   :update
+                   :where [:and [:= :user-id user-id] [:= :id id]]}))
 
-    (not (writeable-values selector entity)) nil
+(defn set-sql-params [{:keys [sql]}]
+  (when sql {:sql-params (sql/format sql)}))
 
-    (= id :temp)
-    (assoc m
-           :action :insert
-           :sql {:insert-into (to-table selector)
-                 :values      [(assoc (writeable-values selector entity) :user-id user-id)]})
+(defn execute! [{:keys [db sql-params errors id path] :as ctx}]
+  (cond
+    errors ctx
+
+    (not sql-params) (update ctx :errors conj :invalid-data)
 
     :else
-    (assoc m
-           :action :update
-           :sql {:update (to-table selector)
-                 :set    (writeable-values selector entity)
-                 :where  (selector-for path user-id)})))
+    (try (merge ctx {:result (j/db-do-prepared-return-keys (:db db) sql-params)})
+         (catch org.postgresql.util.PSQLException e
+           (timbre/debug sql-params e)
+           (update ctx :errors (fn [errs]
+                                 (assoc-in errors path "an unknown error occurred")))))))
 
-(defmulti transform :selector)
 
-(defmethod transform :default [m] m)
+(defn ->kebab+ns [ns]
+  (fn [{:keys [result]}]
+    {:result (utils/with-ns result (name ns))}))
 
-(defmethod transform :beeminder/by-id [{:as m :keys [db entity]}]
-  (if-let [e (encrypt db (:beeminder/token entity))]
-    (update m :entity (fn [{:keys [token] :as bm}]
-                        (timbre/debug bm)
-                        (assoc bm
-                               :beeminder/encrypted-token (:encrypted e)
-                               :beeminder/encryption-iv (:iv e))))
-    (update m :entity dissoc :beeminder/encrypted-token :beeminder/encryption-iv)))
+(defn debug [entity]
+  (timbre/debug (dissoc entity :db))
+  entity)
 
-(defn execute! [db params]
-  (try (j/db-do-prepared-return-keys (:db db) params)
-       (catch org.postgresql.util.PSQLException e
-         (timbre/debug params e)
-         {:error :invalid-data})))
+(defn select-result-keys [ks]
+  (fn [v]
+    (update v :result select-keys ks)))
 
-(defn format-sql [m]
-  (assoc m :sql-params (sql/format (:sql m))))
+(defn replace-result-keys [ks]
+  (fn [v]
+    (update v :result replace-keys* ks)))
 
-(defn execute-query [{:keys [db sql-params namespace] :as m}]
-  (let [result (execute! db sql-params)]
-    (if-let [error (:error result)]
-      (assoc m :error error)
-      (assoc m :result (utils/with-ns result namespace)))))
+(def beeminder-read
+  [(->kebab+ns :beeminder)
+   (select-result-keys [:beeminder/id :beeminder/user-id :beeminder/username :beeminder/is-enabled])
+   (replace-result-keys {:beeminder/is-enabled :beeminder/enabled?})])
 
-(defn make-new-db [db {:keys [result action path error namespace]}]
+(def macro-read
+  [(->kebab+ns :macro)])
+
+(def slack-read
+  [(->kebab+ns :slack)
+   (select-result-keys [:slack/id :slack/username :slack/use-channel :slack/use-dm :slack/channel-name])
+   (replace-result-keys {:slack/use-channel :slack/channel?
+                         :slack/use-dm      :slack/dm?})])
+
+(def goal-read
+  [(->kebab+ns :goal)])
+
+(def apply-sql [add-user-id set-sql set-sql-params execute!])
+
+(def beeminder-incoming-interceptors
+  [(table :beeminder)
+   set-action
+   (filter-keys [:beeminder/token :beeminder/enabled?])
+   check-beeminder-token
+   encrypt-beeminder-token
+   (replace-keys {:beeminder/enabled? :beeminder/is-enabled})
+   apply-sql
+   beeminder-read])
+
+(def macro-incoming-interceptors
+  [(table :macroexpansions)
+   set-action
+   (filter-keys [:macro/expands-from :macro/expands-to])
+   apply-sql
+   macro-read])
+
+(def goal-incoming-interceptors
+  [(table :beeminder-goals)
+   set-action
+   (filter-keys [:goal/goal :goal/tags])
+   apply-sql
+   goal-read])
+
+(def slack-incoming-interceptors
+  [(table :slack)
+   set-action
+   (filter-keys [:slack/channel-name :slack/channel? :slack/dm?])
+   lookup-channel-name
+   (replace-keys {:slack/channel? :slack/use-channel
+                  :slack/dm?      :slack/use-dm})
+   apply-sql
+   slack-read])
+
+(defn make-new-db [db {:keys [result action path errors namespace]}]
   (cond
-    error (assoc-in db (conj path :db/error) error)
+    (seq errors) (assoc db :db/errors errors)
 
     (= action :delete) (assoc-in db path nil)
 
@@ -630,16 +799,39 @@
 
     :else (assoc-in db path result)))
 
+(def incoming-interceptors
+  {:macro     macro-incoming-interceptors
+   :beeminder beeminder-incoming-interceptors
+   :goal      goal-incoming-interceptors
+   :slack     slack-incoming-interceptors})
+
+(defn make-queue [t]
+  (when-let [is (flatten (incoming-interceptors t))]
+    (into [] (reverse is))))
+
+(defn make-contexts [db user-id diff]
+  (->> diff
+       (map
+        (fn [[k m]]
+          (map (fn [[id entity]]
+                 {:path      [k id]
+                  :db        db
+                  :user-id   user-id
+                  :selector  k
+                  :namespace (namespace k)
+                  :type      (keyword (namespace k))
+                  :queue     (make-queue (keyword (namespace k)))
+                  :id        id
+                  :entity    entity})
+               m)))
+       (flatten)))
+
 (defn persist!
   "In: db, user-id, and something like: {:macro/by-id {1 {:macro/expands-from \"abc\" :macro/expands-to \"123\"}}}"
   [db user-id new-db]
   (let [entities (utils/to-entities new-db)]
-    (->> entities
-         (map #(assoc % :user-id user-id :db db))
-         (map transform)
-         (map sql)
-         (remove nil?)
-         (map format-sql)
-         (map execute-query)
+    (->> (make-contexts db user-id new-db)
+         (map execute)
          (reduce make-new-db {}))))
+
 

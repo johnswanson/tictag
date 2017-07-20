@@ -10,7 +10,7 @@
             [tictag.nav :as nav]
             [tictag.schemas :as schemas]
             [tictag.dates]
-            [tictag.utils :as utils :refer [deep-merge]]
+            [tictag.utils :as utils :refer [deep-merge*]]
             [goog.net.cookies]
             [cljs.spec :as s]
             [cljs-time.format :as f]
@@ -150,41 +150,12 @@
                     :on-failure [:user-me-failure]}
                    (:auth-token db))})))
 
-(defn ref-to-goal [goal]
-  [:goal/by-id (:goal/id goal)])
-
-(defn ref-to-beeminder [beeminder]
-  [:beeminder/by-id (:id beeminder)])
-
-(defn ref-to-slack [slack]
-  [:slack/by-id (:id slack)])
-
 (defn ref-to-user [user]
   [:user/by-id (:id user)])
 
-(defn normalize-goal [user beeminder goal]
-  (-> goal
-      (assoc :beeminder (ref-to-beeminder beeminder))
-      (assoc :user (ref-to-user user))))
-
-(defn normalize-beeminder [user beeminder]
-  (-> beeminder
-      (dissoc :goals)
-      (assoc :user (ref-to-user user))))
-
-(defn normalize-slack [user slack]
-  (-> slack
-      (assoc :user (ref-to-user user))))
-
 (defn normalize-user [user]
   (-> user
-      (dissoc :beeminder)
-      (dissoc :slack)
       (dissoc :pings)))
-
-(defn normalize-goals [user beeminder goals]
-  (into {} (for [g goals]
-             [(:goal/id g) (normalize-goal user beeminder g)])))
 
 (defn normalize-ping [user-ref ping]
   (assoc ping :user user-ref))
@@ -194,16 +165,8 @@
              [(:timestamp p) (normalize-ping user-ref p)])))
 
 (defn normalize-user-to-db [user]
-  (let [slack                (:slack user)
-        beeminder            (:beeminder user)
-        normalized-slack     (normalize-slack user slack)
-        normalized-beeminder (normalize-beeminder user beeminder)
-        normalized-goals     (normalize-goals user beeminder (:goals beeminder))]
-    {:slack/by-id           (when slack {(:id slack) normalized-slack})
-     :beeminder/by-id       (when beeminder {(:id beeminder) normalized-beeminder})
-     :user/by-id            (when user {(:id user) (normalize-user user)})
-     :goal/by-id            normalized-goals
-     :db/authenticated-user (ref-to-user user)}))
+  {:user/by-id            (when user {(:id user) (normalize-user user)})
+   :db/authenticated-user (ref-to-user user)})
 
 (reg-event-fx
  :user-me-success
@@ -216,49 +179,33 @@
                                        true
                                        []
                                        (partition-all 100 (:pings user))]}
-                     {:ms 2 :dispatch [:macro/get]}]}))
+                     {:ms 2 :dispatch [:macro/get]}
+                     {:ms 2 :dispatch [:beeminder/get]}
+                     {:ms 2 :dispatch [:goal/get]}
+                     {:ms 2 :dispatch [:slack/get]}]}))
 
-(reg-event-fx
- :macro/get
- [interceptors]
- (fn [{:keys [db]} _]
-   {:sente-send {:event [:macro/get]
-                 :timeout 3000
-                 :on-success [:macro/get-success]
-                 :on-failure [:macro/get-failure]}}))
 
-(reg-event-fx
- :macro/get-success
- [interceptors]
- (fn [{:keys [db]} [_ resp]]
-   {:db (assoc
-         db
-         :macro/by-id
-         (into
-          {}
-          (map (fn [m]
-                 [(:macro/id m) m])
-               resp)))}))
+(defn register-query! [n]
+  (reg-event-fx
+   n
+   [interceptors]
+   (fn [_ _]
+     {:sente-send {:event [n]
+                   :timeout 3000
+                   :on-success [:db/query-success]
+                   :on-failure [:db/query-failure]}})))
+
+(register-query! :goal/get)
+(register-query! :beeminder/get)
+(register-query! :macro/get)
+(register-query! :slack/get)
 
 (reg-event-db
- :goal/update
+ :db/query-success
  [interceptors]
- (fn [db [_ id k v]]
-   (assoc-in db
-             [:tictag.schemas/ui
-              :pending-goal/by-id id
-              (keyword "pending-goal" (name k))]
-             v)))
-
-(reg-event-db
- :macro/update
- [interceptors]
- (fn [db [_ id k v]]
-   (assoc-in db
-             [:tictag.schemas/ui
-              :pending-macro/by-id id
-              (keyword "pending-macro" (name k))]
-             v)))
+ (fn [db [_ v]]
+   (timbre/debug "merging " v)
+   (deep-merge* db v)))
 
 (defn with-path [db path]
   (assoc-in {} path (get-in db path)))
@@ -276,19 +223,26 @@
  (fn [{:keys [db]} [_ type id]]
    (let [path         [type id]
          pending-path (utils/pending-path path)]
-     {:sente-send {:event      [:db/save (assoc-in {} path (merge-pending (get-in db pending-path) (get-in db path)))]
-                   :timeout    3000
-                   :on-success [:db/save-success type id]
-                   :on-failure [:db/save-failure type id]}})))
+     (when (get-in db pending-path)
+       {:sente-send {:event      [:db/save
+                                  (assoc-in {}
+                                            path
+                                            (merge-pending
+                                             (get-in db pending-path)
+                                             (get-in db path)))]
+                     :timeout    3000
+                     :on-success [:db/save-success type id]
+                     :on-failure [:db/save-failure type id]}}))))
 
 (reg-event-db
  :db/save-success
  [interceptors]
  (fn [db [_ type id saved]]
-   (let [pending-path (utils/pending-path [type id])]
-     (-> db
-         (deep-merge saved)
-         (update-in (butlast pending-path) dissoc (last pending-path))))))
+   (let [pending-path (utils/pending-path [type id])
+         merged (deep-merge* db saved)]
+     (if (:db/errors saved)
+       merged
+       (update-in merged (butlast pending-path) dissoc (last pending-path))))))
 
 (reg-event-fx
  :db/delete
@@ -374,92 +328,9 @@
                    :token val
                    :user (:db/authenticated-user db))}))
 
-(reg-event-fx
- :beeminder/enable?
- [interceptors]
- (fn [{:keys [db]} [_ enable?]]
-   (let [user      (:db/authenticated-user db)
-         beeminder [:beeminder/by-id
-                    (:id
-                     (first (filter #(= user (:user %))
-                                    (vals (:beeminder/by-id db)))))]]
-     {:http-xhrio (authenticated-xhrio
-                   {:method          :post
-                    :uri             "/api/user/me/beeminder/enable"
-                    :params          {:enable? enable?}
-                    :format          (transit-request-format {})
-                    :response-format (transit-response-format {})
-                    :on-success      [:beeminder/enable-succeed]
-                    :on-failure      [:beeminder/enable-fail]}
-                   (:auth-token db))
-      :db (assoc-in db (conj beeminder :enabled?) enable?)})))
-
-(reg-event-db
- :beeminder/enable-succeed
- [interceptors]
- (fn [db _] db))
-
-(reg-event-db
- :beeminder/enable-fail
- [interceptors]
- (fn [db _] db))
-
-(reg-event-db
- :beeminder-token/add-fail
- [interceptors]
- (fn [db [_ val]]
-   (assoc-in db [:beeminder/by-id :temp] nil)))
-
-(reg-event-db
- :beeminder-token/add-succeed
- [interceptors]
- (fn [db [_ val]]
-   (let [{:keys [id]} val]
-     (-> db
-         (update-in [:beeminder/by-id :temp] dissoc :user)
-         (assoc-in [:beeminder/by-id id] (assoc val :user (:db/authenticated-user db)))))))
-
-(reg-event-fx
- :slack/delete
- [interceptors]
- (fn [{:keys [db]} _]
-   {:http-xhrio (authenticated-xhrio
-                 {:method          :delete
-                  :uri             "/api/user/me/slack"
-                  :timeout         8000
-                  :format          (transit-request-format {})
-                  :response-format (transit-response-format {})
-                  :on-success      [:slack/delete-succeed]
-                  :on-failure      [:slack/delete-fail]}
-                 (:auth-token db))
-    :db (assoc db :slack/by-id nil)}))
-
 (defn goals [db]
   (let [user (:db/authenticated-user db)]
     (filter #(= (:user %) user) (vals (:goal/by-id db)))))
-
-(reg-event-fx
- :beeminder-token/delete
- [interceptors]
- (fn [{:keys [db]} [_ path]]
-   (if-not (seq (goals db))
-     {:http-xhrio (authenticated-xhrio
-                   {:method          :delete
-                    :uri             "/api/user/me/beeminder"
-                    :timeout         8000
-                    :format          (transit-request-format {})
-                    :response-format (transit-response-format {})
-                    :on-success      [:beeminder-token/delete-succeed]
-                    :on-failure      [:beeminder-token/delete-fail path]}
-                   (:auth-token db))
-      :db (assoc db :beeminder/by-id nil)}
-     {})))
-
-(reg-event-db
- :beeminder-token/delete-fail
- [interceptors]
- (fn [db [_ path val]]
-   (assoc-in db (conj (:db/authenticated-user db) :beeminder) path)))
 
 (reg-fx
  :set-cookie
@@ -669,32 +540,30 @@
                :success? true
                :error? []})))
 
-(reg-event-fx
- :slack/update
- [interceptors]
- (fn [{:keys [db]} [_ id k v]]
-   {:db         (assoc-in db [:slack/by-id id k] v)
-    :http-xhrio (authenticated-xhrio
-                 {:method          :put
-                  :params          {k v}
-                  :uri             "/api/user/me/slack"
-                  :format          (transit-request-format {})
-                  :response-format (transit-response-format {})
-                  :on-success      [:slack/update-success k v]
-                  :on-failure      [:slack/update-failure k v]}
-                 (:auth-token db))}))
+(defn register-update [t]
+  (reg-event-db
+   (keyword (name t) "update")
+   [interceptors]
+   (fn [db [_ id k v]]
+     (-> db
+         (assoc-in [:tictag.schemas/ui
+                    (keyword (str "pending-" (name t))
+                             "by-id")
+                    id
+                    (keyword (str "pending-" (name t))
+                             (name k))]
+                   v)
+         (assoc-in [:db/errors
+                    (keyword (name t) "by-id")
+                    id
+                    (keyword (str (name t) (name k)))]
+                   nil)))))
 
-(reg-event-db
- :slack/update-success
- [interceptors]
- (fn [db [_ k v]]
-   (assoc-in db [:errors :slack k] nil)))
+(register-update :slack)
+(register-update :beeminder)
+(register-update :goal)
+(register-update :macro)
 
-(reg-event-db
- :slack/update-failure
- [interceptors]
- (fn [db [_ k v r]]
-   (assoc-in db [:errors :slack k] (:error (:response r)))))
 
 (reg-event-db
  :tagtime-import/fail

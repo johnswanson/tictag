@@ -336,26 +336,15 @@ Separate commands with a newline to apply multiple commands at once
 
 (defn sanitize [user]
   (-> user
-      (select-keys [:username :email :tz :beeminder :slack :id :pings])
-      (update :beeminder #(select-keys % [:username :enabled? :token :goals :id]))
+      (select-keys [:username :email :tz :slack :id :pings])
       (update :slack #(select-keys % [:username :id :channel? :dm? :channel-id :dm-id :channel-name]))
-      (update :beeminder #(if (seq %) % nil))
       (update :slack #(if (seq %) % nil))))
 
 (defn my-user [{:keys [db]} {:keys [user-id]}]
   (if user-id
     (let [user  (db/get-user-by-id db user-id)
-          goals (db/get-goals-raw db (:beeminder user))
           pings (unjoda (db/get-pings-by-user-id (:db db) user-id))]
-      (response (sanitize (-> user
-                              (assoc-in [:beeminder :goals] goals)
-                              (assoc :pings pings)))))
-    UNAUTHORIZED))
-
-(defn delete-beeminder [{:keys [db]} {:keys [user-id]}]
-  (if user-id
-    (do (db/delete-beeminder db user-id)
-        (response {}))
+      (response (sanitize (-> user (assoc :pings pings)))))
     UNAUTHORIZED))
 
 (defn delete-slack [{:keys [db]} {:keys [user-id]}]
@@ -363,19 +352,6 @@ Separate commands with a newline to apply multiple commands at once
     (do
       (db/delete-slack db user-id)
       (response {}))
-    UNAUTHORIZED))
-
-(defn add-beeminder [{:keys [db]} {:keys [params user-id]}]
-  (if-let [bm-user (beeminder/user-for (:token params))]
-    (try
-      (response
-       (db/write-beeminder
-        db
-        {:id user-id}
-        (:username bm-user)
-        (:token params)
-        false))
-      (catch Exception e UNAUTHORIZED))
     UNAUTHORIZED))
 
 (defn update-tz [{:keys [db]} {:keys [params user-id]}]
@@ -408,10 +384,6 @@ Separate commands with a newline to apply multiple commands at once
                                      :processed (inc idx)}])))
      (debugf "Invalid tagtime data received from user-id %d" user-id)))
   (response {:accepted true}))
-
-(defn enable-beeminder [{:keys [db]} {:keys [params user-id]}]
-  (let [{:keys [enable?]} params]
-    (db/enable-beeminder db user-id enable?)))
 
 (defn wrap-log [handler]
   (fn [req]
@@ -479,12 +451,7 @@ Separate commands with a newline to apply multiple commands at once
        (context "/api" []
                 (GET "/timezones" _ (partial timezone-list component))
                 (GET "/user/me" _ (partial my-user component))
-                (POST "/user/me/beeminder" _ (partial add-beeminder component))
-                (POST "/user/me/beeminder/enable" _ (partial enable-beeminder component))
-                (POST "/user/me/tz" _ (partial update-tz component))
-                (DELETE "/user/me/beeminder" _ (partial delete-beeminder component))
-                (DELETE "/user/me/slack" _ (partial delete-slack component))
-                (PUT "/user/me/slack" _ (partial update-slack component))))
+                (POST "/user/me/tz" _ (partial update-tz component))))
       (wrap-defaults (-> api-defaults (assoc :proxy true)))))
 
 

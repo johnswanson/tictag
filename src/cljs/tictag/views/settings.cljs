@@ -8,6 +8,10 @@
             [cljs.reader :as edn]
             [taoensso.timbre :as timbre]))
 
+(defn dispatch-n [& events]
+  (doall (map dispatch (remove nil? events)))
+  nil)
+
 (defn tagtime-upload-progress-view [name u]
   [re-com/v-box
    :children [[re-com/title :level :level3 :label name]
@@ -73,40 +77,51 @@
     [re-com/p "You can also send " [:code "help"] " to the slackbot if you need it."]]])
 
 (defn slack-preferences-component [dispatch slack slack-errors]
-  (let [{:keys [dm-id channel-id dm? channel? username channel-name] :as slack} @slack
-        errors                                                                  @slack-errors]
-    (if username
-      [re-com/v-box
-       :children [[re-com/title :level :level2 :label "Remove slackbot"]
-                  [re-com/button
-                   :label (str "Delete slack (authed as " username ")")
-                   :on-click #(dispatch [:slack/delete])]
-                  [re-com/title :level :level2 :label "Slack notification preferences"]
-                  [re-com/checkbox
-                   :model (or dm? false)
-                   :on-change #(dispatch [:slack/update (:id slack) :dm? %])
-                   :label "Direct message"]
-                  [re-com/h-box
-                   :align :center
-                   :children
-                   [[re-com/checkbox
-                     :model (or channel? false)
-                     :on-change #(dispatch [:slack/update (:id slack) :channel? %])]
-                    [re-com/label :label "Channel" :style {:padding-left  "8px"
-                                                           :padding-right "8px"}]
-                    [re-com/input-text
-                     :placeholder "#channel"
-                     :model (or channel-name "")
-                     :status (when (:channel-name errors) :error)
-                     :status-tooltip (or (:channel-name errors) "")
-                     :status-icon? true
-                     :on-change #(dispatch [:slack/update (:id slack) :channel-name %])]]]]]
-      [slack-authorize])))
+  (let [slack  @slack
+        errors @slack-errors]
+    (if-let [username (:slack/username slack)]
+      (let [{:keys [slack/dm? slack/channel? slack/id slack/channel-name]} slack]
+        [re-com/v-box
+         :children [[re-com/title :level :level2 :label "Remove slackbot"]
+                    [re-com/button
+                     :label (str "Delete slack (authed as " username ")")
+                     :on-click #(dispatch [:db/delete :slack/by-id (:slack/id slack)])]
+                    [re-com/title :level :level2 :label "Slack notification preferences"]
+                    [re-com/checkbox
+                     :model (let [[_ dm?] (or (find slack :pending-slack/dm?)
+                                              (find slack :slack/dm?))]
+                              dm?)
+                     :on-change #(dispatch-n [:slack/update id :dm? %]
+                                             [:db/save :slack/by-id id])
+                     :label "Direct message"]
+                    [re-com/h-box
+                     :align :center
+                     :children
+                     [[re-com/checkbox
+                       :model (let [[_ ch?] (or (find slack :pending-slack/channel?)
+                                                (find slack :slack/channel?))]
+                                ch?)
+                       :on-change #(dispatch-n [:slack/update id :channel? %]
+                                               [:db/save :slack/by-id id])]
+                      [re-com/label :label "Channel" :style {:padding-left  "8px"
+                                                             :padding-right "8px"}]
+                      [re-com/input-text
+                       :placeholder "#channel"
+                       :model (or (:pending-slack/channel-name slack)
+                                  (:slack/channel-name slack))
+                       :status (when (and (:pending-slack/channel-name slack)
+                                          (:slack/channel-name errors)) :error)
+                       :status-tooltip (or (first (:slack/channel-name errors)) "")
+                       :status-icon? true
+                       :on-change #(dispatch-n [:slack/update id :channel-name %]
+                                               [:db/save :slack/by-id id])]]]]])
+        [slack-authorize])))
 
 (defn slack-preferences []
-  (let [slack        (subscribe [:slack])
-        slack-errors (subscribe [:slack-errors])]
-    [slack-preferences-component dispatch slack slack-errors]))
+  (let [slack-id (subscribe [:slack-id])
+        slack    (subscribe [:slack @slack-id])
+        errors   (subscribe [:slack-errors @slack-id])]
+    [slack-preferences-component dispatch slack errors]))
 
 (defn slack []
   [re-com/v-box
@@ -149,55 +164,75 @@
                 [goal-editor id])]
    [goal-editor :temp]])
 
-(defn beeminder-token-input []
-  (let [val (reagent/atom "")]
-    [re-com/v-box
-     :children [[re-com/label :label [:span
-                                      "Add your Beeminder token here! (get your token "
-                                      [re-com/hyperlink-href
-                                       :href "https://www.beeminder.com/api/v1/auth_token.json"
-                                       :label "here"
-                                       :target "_blank"]
-                                      ")"]]
-                [re-com/h-box
-                 :children [[re-com/input-text
-                             :model val
-                             :placeholder "Beeminder Token"
-                             :on-change #(reset! val %)]
-                            [re-com/button
-                             :on-click #(dispatch [:beeminder-token/add @val])
-                             :label "Save"]]]]]))
+(defn beeminder-token-input [errs]
+  (timbre/error errs)
+  [re-com/v-box
+   :children [[re-com/label :label [:span
+                                    "Add your Beeminder token here! (get your token "
+                                    [re-com/hyperlink-href
+                                     :href "https://www.beeminder.com/api/v1/auth_token.json"
+                                     :label "here"
+                                     :target "_blank"]
+                                    ")"]]
+              [re-com/h-box
+               :children [[re-com/input-text
+                           :model ""
+                           :placeholder "Beeminder Token"
+                           :status (when (:beeminder/token errs) :error)
+                           :status-tooltip (or (first (:beeminder/token errs)) "")
+                           :status-icon? true
+                           :on-change #(dispatch [:beeminder/update :temp :beeminder/token %])]
+                          [re-com/button
+                           :on-click #(dispatch [:db/save :beeminder/by-id :temp])
+                           :label "Save"]]]]])
 
-(defn delete-beeminder-button []
+(defn delete-beeminder-button [id]
   [re-com/button
-   :on-click #(dispatch [:beeminder-token/delete])
+   :on-click #(dispatch [:db/delete :beeminder/by-id id])
    :label "Delete Beeminder"])
 
+(defn beeminder-create [id]
+  (let [errs (subscribe [:beeminder-errors id])]
+    [beeminder-token-input @errs]))
+
+(defn beeminder-edit [id]
+  (let [bm     (subscribe [:beeminder id])
+        errors (subscribe [:beeminder-errors id])
+        goals  (subscribe [:goals])]
+    [re-com/v-box
+     :children [
+                [re-com/v-box
+                 :children [[re-com/title :level :level2 :label "Warning!"]
+                            [re-com/p "Pointing TicTag at an existing Beeminder goal is dangerous!"]
+                            [re-com/p
+                             "TicTag assumes we're the only source of truth for data within the past week. "
+                             "This basically means that your last week's worth of Beeminder data (whatever its source) will be replaced "
+                             "with the last week's worth of TicTag's data."]
+                            [re-com/checkbox
+                             :model (or (:pending-beeminder/enabled? @bm)
+                                        (:beeminder/enabled? @bm))
+                             :on-change #(dispatch-n [:beeminder/update
+                                                      (:beeminder/id @bm)
+                                                      :beeminder/enabled?
+                                                      %]
+                                                     [:db/save :beeminder/by-id (:beeminder/id @bm)])
+                             :label-style {:font-weight "bold"}
+                             :label "I have read the above and want to enable Beeminder sync."]
+                            [re-com/label
+                             :label [:span "Beeminder user: " [:b (:beeminder/username @bm)]]]
+                            [beeminder-goals goals]
+                            [delete-beeminder-button (:beeminder/id @bm)]]]]]))
+
 (defn beeminder []
-  (let [beeminder-sub (subscribe [:beeminder])
-        goals         (subscribe [:goals])]
+  (let [id (subscribe [:beeminder-id])]
     [re-com/v-box
      :children [[re-com/title
-                 :level :level1
+                :level :level1
                  :label "Beeminder"]
-                (if (:token @beeminder-sub)
-                  [re-com/v-box
-                   :children [[re-com/title :level :level2 :label "Warning!"]
-                              [re-com/p "Pointing TicTag at an existing Beeminder goal is dangerous!"]
-                              [re-com/p
-                               "TicTag assumes we're the only source of truth for data within the past week. "
-                               "This basically means that your last week's worth of Beeminder data (whatever its source) will be replaced "
-                               "with the last week's worth of TicTag's data."]
-                              [re-com/checkbox
-                               :model (:enabled? @beeminder-sub)
-                               :on-change #(dispatch [:beeminder/enable? %])
-                               :label-style {:font-weight "bold"}
-                               :label "I have read the above and want to enable Beeminder sync."]
-                              [re-com/label
-                               :label [:span "Beeminder user: " [:b (:username @beeminder-sub)]]]
-                              [beeminder-goals goals]
-                              [delete-beeminder-button]]]
-                  [beeminder-token-input])]]))
+                (if @id
+                  [beeminder-edit @id]
+                  [beeminder-create :temp])]]))
+
 
 (defn timezone []
   (let [timezone          (subscribe [:timezone])
@@ -238,12 +273,14 @@
        :model (or pending-expands-from expands-from "")
        :status (when (and (seq pending-expands-from) (not= expands-from pending-expands-from))
                  :warning)
+       :change-on-blur? false
        :on-change #(dispatch [:macro/update id :expands-from %])]
       [re-com/input-text
        :placeholder "expands to"
        :model (or pending-expands-to expands-to "")
        :status (when (and (seq pending-expands-to) (not= expands-to pending-expands-to))
                  :warning)
+       :change-on-blur? false
        :on-change #(dispatch [:macro/update id :expands-to %])]
       [re-com/button
        :on-click #(dispatch [:db/save :macro/by-id id])

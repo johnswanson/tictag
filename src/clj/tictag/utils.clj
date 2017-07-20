@@ -52,11 +52,12 @@
        (map
         (fn [[k m]]
           (map (fn [[id entity]]
-                 {:path [k id]
-                  :selector k
+                 {:path      [k id]
+                  :selector  k
                   :namespace (namespace k)
-                  :id id
-                  :entity entity})
+                  :type      (keyword (namespace k))
+                  :id        id
+                  :entity    entity})
                m)))
        (flatten)))
 

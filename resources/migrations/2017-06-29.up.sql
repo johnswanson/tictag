@@ -18,3 +18,4 @@ WHERE beeminder.id = beeminder_goals.beeminder_id;
 ALTER TABLE beeminder_goals DROP COLUMN beeminder_id;
 ALTER TABLE beeminder_goals ALTER COLUMN user_id SET NOT NULL;
 
+ALTER TABLE beeminder ALTER COLUMN is_enabled SET DEFAULT FALSE;

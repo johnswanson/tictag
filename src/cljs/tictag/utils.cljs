@@ -32,6 +32,10 @@
     (apply merge-with deep-merge vs)
     (last vs)))
 
+(defn deep-merge*
+  [v1 v2]
+  (if (nil? v2) v1 (deep-merge v1 v2)))
+
 (defn deep-merge-with
   "Deeply merges like `deep-merge`, but uses `f` to produce a value from the
   conflicting values for a key in multiple maps."

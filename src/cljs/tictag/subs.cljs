@@ -259,12 +259,19 @@
    (unnormalize db (:db/authenticated-user db))))
 
 (reg-sub
- :beeminder
+ :beeminder-id
  (fn [db _]
-   (let [user (:db/authenticated-user db)]
-     (first
-      (filter #(= (:user %) user)
-              (vals (:beeminder/by-id db)))))))
+   (first (keys (:beeminder/by-id db)))))
+
+(reg-sub
+ :beeminder
+ (fn [db [_ id]]
+   (get-in db [:beeminder/by-id id])))
+
+(reg-sub
+ :beeminder-errors
+ (fn [db [_ id]]
+   (get-in db [:db/errors :beeminder/by-id id])))
 
 (reg-sub
  :timezone
@@ -282,17 +289,21 @@
             (catch js/Error _ nil)))))
 
 (reg-sub
- :slack
+ :slack-id
  (fn [db _]
-   (let [user (:db/authenticated-user db)]
-     (first
-      (filter #(= (:user %) user)
-              (vals (:slack/by-id db)))))))
+   (first (keys (:slack/by-id db)))))
+
+(reg-sub
+ :slack
+ (fn [db [_ id]]
+   (let [pending-slack (get-in db [:tictag.schemas/ui :pending-slack/by-id id])
+         saved-slack   (get-in db [:slack/by-id id])]
+     (merge saved-slack pending-slack))))
 
 (reg-sub
  :slack-errors
- (fn [db _]
-   (get-in db [:errors :slack])))
+ (fn [db [_ id]]
+   (get-in db [:db/errors :slack/by-id id])))
 
 (reg-sub
  :goal/by-id
