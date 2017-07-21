@@ -169,20 +169,21 @@
    :db/authenticated-user (ref-to-user user)})
 
 (reg-event-fx
+ :sente-connected
+ [interceptors]
+ (fn [{:keys [db]} ]))
+
+(reg-event-fx
  :user-me-success
  [interceptors]
  (fn [{:keys [db]} [_ user]]
    {:db             (merge db (normalize-user-to-db user))
     :sente-connect  (:auth-token db)
-    :dispatch-later [{:ms 2 :dispatch [:pings/receive
-                                       (ref-to-user user)
-                                       true
-                                       []
-                                       (partition-all 100 (:pings user))]}
-                     {:ms 2 :dispatch [:macro/get]}
-                     {:ms 2 :dispatch [:beeminder/get]}
-                     {:ms 2 :dispatch [:goal/get]}
-                     {:ms 2 :dispatch [:slack/get]}]}))
+    :dispatch [:pings/receive
+               (ref-to-user user)
+               true
+               []
+               (partition-all 100 (:pings user))]}))
 
 
 (defn register-query! [n]
@@ -204,7 +205,6 @@
  :db/query-success
  [interceptors]
  (fn [db [_ v]]
-   (timbre/debug "merging " v)
    (deep-merge* db v)))
 
 (defn with-path [db path]
@@ -343,11 +343,15 @@
 (defonce !chsk-send! (atom nil))
 (defonce !chsk-state (atom nil))
 
-(reg-event-db
+(reg-event-fx
  :chsk/state
  [interceptors]
- (fn [db [_ v]]
-   db))
+ (fn [{:keys [db]} [_ [old new]]]
+   (when (:first-open? new)
+     {:dispatch-n [[:macro/get]
+                   [:beeminder/get]
+                   [:goal/get]
+                   [:slack/get]]})))
 
 (reg-event-fx
  :chsk/recv
@@ -592,3 +596,4 @@
         (fn [id]
           (js/clearTimeout (@timeouts id))
           (swap! timeouts dissoc id)))
+
