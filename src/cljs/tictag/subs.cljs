@@ -68,6 +68,17 @@
    (sort #(> (:ping/ts %1) (:ping/ts %2)) pings)))
 
 (reg-sub
+ :sorted-ping-ids
+ (fn [_ _] (subscribe [:sorted-pings]))
+ (fn [pings _]
+   (map :ping/id pings)))
+
+(reg-sub
+ :ping-by-id
+ (fn [db [_ id]]
+   (get-in db [:ping/by-id id])))
+
+(reg-sub
  :pings
  (fn [_ _] [(subscribe [:sorted-pings])
             (subscribe [:query-fn])])
