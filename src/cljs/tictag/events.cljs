@@ -168,13 +168,13 @@
     :sente-connect  (:auth-token db)}))
 
 
-(defn register-query! [n]
+(defn register-query! [n & [timeout]]
   (reg-event-fx
    n
    [interceptors]
    (fn [_ _]
      {:sente-send {:event [n]
-                   :timeout 3000
+                   :timeout (or timeout 3000)
                    :on-success [:db/query-success]
                    :on-failure [:db/query-failure]}})))
 
@@ -182,7 +182,7 @@
 (register-query! :beeminder/get)
 (register-query! :macro/get)
 (register-query! :slack/get)
-(register-query! :ping/get)
+(register-query! :ping/get 15000)
 
 (reg-event-db
  :db/query-success

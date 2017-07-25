@@ -34,7 +34,7 @@
             [tictag.crypto :as crypto]
             [buddy.hashers :refer [check]]
             [hikari-cp.core :as hikari]
-            [tictag.utils :as utils :refer [deep-merge*]]
+            [tictag.utils :as utils :refer [deep-merge* compare-by descending]]
             [tictag.slack :as slack]))
 
 (declare replace-key)
@@ -463,7 +463,12 @@
 (def ping-client-converter (client-converter :ping/by-id))
 
 (defn ping-client [db id]
-  (ping-client-converter (ping db id)))
+  (let [db     (ping-client-converter (ping db id))
+        pings  (vals (:ping/by-id db))
+        sorted (time (sort (compare-by :ping/ts descending) pings))]
+    (assoc db
+           :ping/sorted-ids
+           (map :ping/id sorted))))
 
 (defn with-macros [db user]
   (when user

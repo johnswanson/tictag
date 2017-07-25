@@ -77,3 +77,16 @@
 (defn deep-merge*
   [v1 v2]
   (if (nil? v2) v1 (deep-merge v1 v2)))
+
+(def ascending compare)
+(def descending #(compare %2 %1))
+
+(defn compare-by [& key-cmp-pairs]
+  (fn [x y]
+    (loop [[k cmp & more] key-cmp-pairs]
+      {:pre [(keyword? k), (fn? cmp), (even? (count more))]}
+      (let [result (cmp (k x) (k y))]
+        (if (and (zero? result) more)
+          (recur more)
+          result)))))
+

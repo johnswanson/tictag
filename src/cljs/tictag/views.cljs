@@ -27,7 +27,7 @@
             [re-com.core :as re-com])
   (:import [goog.date.Interval]))
 
-(def simple-formatter (f/formatter "MM-dd"))
+(def simple-formatter (f/formatter "yyyy-MM"))
 
 (defn format-day-to-time [day]
   (let [in-seconds (* day 24 60 60 1000)]

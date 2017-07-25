@@ -96,10 +96,10 @@
                                                 (find slack :slack/channel?))]
                                 ch?)
                        :on-change #(dispatch-n [:slack/update id :channel? %]
-                                               [:db/save :slack/by-id id])]
-                      [re-com/label :label "Channel" :style {:padding-left  "8px"
-                                                             :padding-right "8px"}]
+                                               [:db/save :slack/by-id id])
+                       :label "Channel"]
                       [re-com/input-text
+                       :style {:margin-left "1em"}
                        :placeholder "#channel"
                        :model (or (:pending-slack/channel-name slack)
                                   (:slack/channel-name slack)

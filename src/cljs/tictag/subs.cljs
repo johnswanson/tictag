@@ -53,25 +53,39 @@
 
 (reg-sub
  :max-ping-day
- (fn [_ _] (subscribe [:ping-days]))
- (fn [days _] (apply max days)))
+ (fn [_ _] (subscribe [:sorted-pings]))
+ (fn [pings _]
+   (:ping/days-since-epoch (first pings))))
 
 (reg-sub
  :min-ping-day
- (fn [_ _] (subscribe [:ping-days]))
- (fn [days _] (apply min days)))
+ (fn [_ _] (subscribe [:sorted-pings]))
+ (fn [pings _] (:ping/days-since-epoch (last pings))))
 
 (reg-sub
- :sorted-pings
- (fn [_ _] (subscribe [:raw-pings]))
- (fn [pings _]
-   (sort #(> (:ping/ts %1) (:ping/ts %2)) pings)))
+ :ping-count
+ (fn [_ _] 35040))
 
 (reg-sub
  :sorted-ping-ids
- (fn [_ _] (subscribe [:sorted-pings]))
- (fn [pings _]
-   (map :ping/id pings)))
+ (fn [db _]
+   (:ping/sorted-ids db)))
+
+(reg-sub
+ :ping-map
+ (fn [db _]
+   (:ping/by-id db)))
+
+(reg-sub
+ :sorted-pings
+ (fn [_ _]
+   [(subscribe [:ping-map])
+    (subscribe [:ping-count])
+    (subscribe [:sorted-ping-ids])])
+ (fn [[m count ids] _]
+   (take count
+         (for [id ids]
+           (get m id)))))
 
 (reg-sub
  :ping-by-id
