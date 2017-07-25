@@ -363,7 +363,6 @@
 
 (defmethod client-trans :ping/by-id
   [_ v]
-  (timbre/debug v)
   (let [local-time (:ping/local-time v)
         [y m d]    ((juxt t/year t/month t/day) local-time)]
     (-> v
@@ -394,7 +393,6 @@
 
 (defn client-converter [type]
   (fn [things]
-    (timbre/debug things)
     (reduce
      (fn [accu v]
        (update accu type assoc (:id v) (client-trans type (utils/with-ns v (namespace type)))))
@@ -852,9 +850,6 @@
    ping-read])
 
 (defn make-new-db [db {:keys [result action path errors namespace]}]
-  (timbre/debug result)
-  (timbre/debug path)
-  (timbre/debug namespace)
   (cond
     (seq errors) (assoc db :db/errors errors)
 
@@ -862,7 +857,7 @@
 
     (= action :insert) (deep-merge* db result)
 
-    :else (assoc-in db path result)))
+    :else (deep-merge* db result)))
 
 (def incoming-interceptors
   {:macro     macro-incoming-interceptors
