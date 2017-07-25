@@ -81,30 +81,7 @@
                                 :is_enabled      true}])
                       (upsert (-> (on-conflict :user_id)
                                   (do-update-set :encrypted_token :encryption_iv)))
-                      sql/format)))
-    (let [{:keys [encrypted iv]} (crypto/encrypt
-                                  (env :dev-slack-bot-token)
-                                  (-> system :db :crypto-key))]
-      (j/execute! tx
-                  (-> (insert-into :slack)
-                      (values [{:user_id                    my-user-id
-                                :username                   (env :dev-slack-username)
-                                :encrypted_bot_access_token encrypted
-                                :encryption_iv              iv
-                                :channel_id                 (env :dev-slack-channel-id)
-                                :slack_user_id              (env :dev-slack-user-id)}])
-                      (upsert (-> (on-conflict :user_id)
-                                  (do-update-set :encrypted_bot_access_token
-                                                 :encryption_iv)))
-                      sql/format)))
-    (j/execute! tx
-                (-> (insert-into :beeminder_goals)
-                    (values [{:beeminder_id my-beeminder-id
-                              :goal         "test"
-                              :tags         (pr-str [:and :this :that])}])
-                    (upsert (-> (on-conflict :beeminder_id :goal)
-                                (do-nothing)))
-                    sql/format))))
+                      sql/format)))))
 
 (def p (insta/parser (clojure.java.io/resource "parser.bnf")))
 (defn e [v] (evaluate {:db (:db system) :user (dev-user)} v))

@@ -4,13 +4,10 @@
             [reagent.core :as reagent]
             [tictag.constants :refer [ENTER]]
             [tictag.views.inputs :refer [input-timezone]]
+            [tictag.utils :refer [dispatch-n]]
             [goog.string :as str]
             [cljs.reader :as edn]
             [taoensso.timbre :as timbre]))
-
-(defn dispatch-n [& events]
-  (doall (map dispatch (remove nil? events)))
-  nil)
 
 (defn tagtime-upload-progress-view [name u]
   [re-com/v-box

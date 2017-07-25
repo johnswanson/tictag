@@ -34,7 +34,7 @@
             [tictag.crypto :as crypto]
             [buddy.hashers :refer [check]]
             [hikari-cp.core :as hikari]
-            [tictag.utils :as utils]
+            [tictag.utils :as utils :refer [deep-merge*]]
             [tictag.slack :as slack]))
 
 (declare replace-key)
@@ -354,22 +354,52 @@
 
 (defmulti client-trans (fn [a b] a))
 (defmethod client-trans :default [_ v] v)
+
+(defn format-date [d]
+  (f/unparse utils/wtf d))
+
+(defn days-since-epoch [date]
+  (t/in-days (t/interval (t/epoch) date)))
+
+(defmethod client-trans :ping/by-id
+  [_ v]
+  (timbre/debug v)
+  (let [local-time (:ping/local-time v)
+        [y m d]    ((juxt t/year t/month t/day) local-time)]
+    (-> v
+        (assoc :ping/days-since-epoch (t/in-days (t/interval (t/epoch) (:ping/local-time v))))
+        (assoc :ping/seconds-since-midnight (t/in-seconds (t/interval (t/date-time y m d) local-time)))
+        (assoc :ping/tag-set (set (str/split (:ping/tags v) #" "))))))
+
 (defmethod client-trans :beeminder/by-id
   [_ v]
-  (replace-key v [:beeminder/is-enabled :beeminder/enabled?]))
+  (-> v
+      (replace-key [:beeminder/is-enabled :beeminder/enabled?])
+      (select-keys [:beeminder/id :beeminder/user-id :beeminder/username :beeminder/enabled?])))
+
 (defmethod client-trans :slack/by-id
   [_ v]
   (-> v
       (replace-key [:slack/use-dm :slack/dm?])
-      (replace-key [:slack/use-channel :slack/channel?])))
+      (replace-key [:slack/use-channel :slack/channel?])
+      (select-keys [:slack/id
+                    :slack/user-id
+                    :slack/username
+                    :slack/channel-id
+                    :slack/channel?
+                    :slack/channel-name
+                    :slack/dm?
+                    :slack/dm-id
+                    :slack/slack-user-id])))
 
 (defn client-converter [type]
   (fn [things]
-    (reduce (fn [accu v]
-              (timbre/debug {:accu accu :v v})
-              (update accu type assoc (:id v) (client-trans type (utils/with-ns v (namespace type)))))
-            {}
-            things)))
+    (timbre/debug things)
+    (reduce
+     (fn [accu v]
+       (update accu type assoc (:id v) (client-trans type (utils/with-ns v (namespace type)))))
+     {}
+     things)))
 
 (def beeminder-client-converter (client-converter :beeminder/by-id))
 
@@ -423,6 +453,19 @@
 
 (defn slack-client [db id]
   (slack-client-converter (slack db id)))
+
+(defn ping [db id]
+  (j/query
+   (:db db)
+   (-> (select :id :ts :tags :user-id [(sql/call :+ :tz_offset :ts) :local-time])
+       (from :pings)
+       (where [:= :user-id id])
+       sql/format)))
+
+(def ping-client-converter (client-converter :ping/by-id))
+
+(defn ping-client [db id]
+  (ping-client-converter (ping db id)))
 
 (defn with-macros [db user]
   (when user
@@ -689,11 +732,20 @@
 (defn table [t]
   #(assoc % :table t))
 
-(defn set-sql [{:keys [user-id entity where id path table action] :as ctx}]
+(def select-for
+  {:ping [:id
+          :ts
+          :tags
+          :user-id
+          [(sql/call :+ :tz-offset :ts) :local-time]]})
+
+(defn set-sql [{:keys [user-id entity where id path table action type] :as ctx}]
   (case action
     :delete {:sql {:delete-from table :where where}}
-    :insert {:sql {:insert-into table :values [entity]}}
-    :update {:sql {:update table :set entity :where where}}))
+    :insert {:sql {:insert-into table :values [entity] :returning (or (select-for type)
+                                                                      [:*])}}
+    :update {:sql {:update table :set entity :where where :returning (or (select-for type)
+                                                                         [:*])}}))
 
 (defn set-action [{:keys [entity id user-id]}]
   (cond
@@ -736,22 +788,25 @@
   (fn [v]
     (update v :result replace-keys* ks)))
 
+(defn apply-client-converter [converter]
+  (fn [{:keys [result]}]
+    (timbre/debug result)
+    {:result (timbre/spy (converter [result]))}))
+
 (def beeminder-read
-  [(->kebab+ns :beeminder)
-   (select-result-keys [:beeminder/id :beeminder/user-id :beeminder/username :beeminder/is-enabled])
-   (replace-result-keys {:beeminder/is-enabled :beeminder/enabled?})])
+  [(apply-client-converter beeminder-client-converter)])
 
 (def macro-read
-  [(->kebab+ns :macro)])
+  [(apply-client-converter macro-client-converter)])
+
+(def ping-read
+  [(apply-client-converter ping-client-converter)])
 
 (def slack-read
-  [(->kebab+ns :slack)
-   (select-result-keys [:slack/id :slack/username :slack/use-channel :slack/use-dm :slack/channel-name])
-   (replace-result-keys {:slack/use-channel :slack/channel?
-                         :slack/use-dm      :slack/dm?})])
+  [(apply-client-converter slack-client-converter)])
 
 (def goal-read
-  [(->kebab+ns :goal)])
+  [(apply-client-converter goal-client-converter)])
 
 (def apply-sql [add-user-id set-sql set-sql-params execute!])
 
@@ -789,13 +844,23 @@
    apply-sql
    slack-read])
 
+(def ping-incoming-interceptors
+  [(table :pings)
+   set-action
+   (filter-keys [:ping/tags])
+   apply-sql
+   ping-read])
+
 (defn make-new-db [db {:keys [result action path errors namespace]}]
+  (timbre/debug result)
+  (timbre/debug path)
+  (timbre/debug namespace)
   (cond
     (seq errors) (assoc db :db/errors errors)
 
     (= action :delete) (assoc-in db path nil)
 
-    (= action :insert) (assoc-in db (vector (first path) (get result (keyword namespace "id"))) result)
+    (= action :insert) (deep-merge* db result)
 
     :else (assoc-in db path result)))
 
@@ -803,7 +868,8 @@
   {:macro     macro-incoming-interceptors
    :beeminder beeminder-incoming-interceptors
    :goal      goal-incoming-interceptors
-   :slack     slack-incoming-interceptors})
+   :slack     slack-incoming-interceptors
+   :ping      ping-incoming-interceptors})
 
 (defn make-queue [t]
   (when-let [is (flatten (incoming-interceptors t))]

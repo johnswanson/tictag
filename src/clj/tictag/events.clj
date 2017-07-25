@@ -46,6 +46,12 @@
   (?reply-fn
    (db/slack-client db user-id)))
 
+(defmethod -event-msg-handler
+  :ping/get
+  [{:keys [db ?reply-fn] {:keys [user-id]} :ring-req}]
+  (?reply-fn
+   (db/ping-client db user-id)))
+
 (defn event-msg-handler [db jwt]
   (fn [event]
     (-event-msg-handler (assoc event :db db :jwt jwt))))

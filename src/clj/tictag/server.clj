@@ -334,17 +334,10 @@ Separate commands with a newline to apply multiple commands at once
         UNAUTHORIZED))
     UNAUTHORIZED))
 
-(defn sanitize [user]
-  (-> user
-      (select-keys [:username :email :tz :slack :id :pings])
-      (update :slack #(select-keys % [:username :id :channel? :dm? :channel-id :dm-id :channel-name]))
-      (update :slack #(if (seq %) % nil))))
-
 (defn my-user [{:keys [db]} {:keys [user-id]}]
   (if user-id
-    (let [user  (db/get-user-by-id db user-id)
-          pings (unjoda (db/get-pings-by-user-id (:db db) user-id))]
-      (response (sanitize (-> user (assoc :pings pings)))))
+    (let [user (db/get-user-by-id db user-id)]
+      (response (select-keys user [:username :email :tz :id])))
     UNAUTHORIZED))
 
 (defn delete-slack [{:keys [db]} {:keys [user-id]}]
@@ -401,6 +394,7 @@ Separate commands with a newline to apply multiple commands at once
        (GET "/devcards" _ (devcards component))
        (GET "/" _ (index component))
        (GET "/signup" _ (index component))
+       (GET "/editor" _ (index component))
        (GET "/login" _ (index component))
        (GET "/logout" _ (index component))
        (GET "/about" _ (index component))

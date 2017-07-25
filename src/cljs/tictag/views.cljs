@@ -8,6 +8,7 @@
             [tictag.nav :refer [route-for]]
             [tictag.dates :refer [weeks-since-epoch days-since-epoch seconds-since-midnight]]
             [tictag.views.settings]
+            [tictag.views.editor]
             [tictag.views.signup]
             [tictag.views.inputs]
             [tictag.views.login]
@@ -32,7 +33,7 @@
   (let [in-seconds (* day 24 60 60 1000)]
     (f/unparse simple-formatter (tc/from-long in-seconds))))
 
-(defn circle-for-ping [{:keys [active?]}]
+(defn circle-for-ping [{:keys [active?] :as ping}]
   [:ellipse {:rx    2
              :ry    12
              :style (if active?
@@ -116,9 +117,9 @@
     [:g
      (doall
       (for [ping @pings]
-        ^{:key (:timestamp ping)}
-        [:g {:transform (c2.svg/translate [(xscale (:days-since-epoch ping))
-                                           (yscale (:seconds-since-midnight ping))])}
+        ^{:key (:ping/id ping)}
+        [:g {:transform (c2.svg/translate [(xscale (:ping/days-since-epoch ping))
+                                           (yscale (:ping/seconds-since-midnight ping))])}
          [circle-for-ping ping]]))]))
 
 (defn cumulative [xscale yscale width height margin]
@@ -150,9 +151,9 @@
     [:svg {:style {:width (str width "px") :height (str height "px")}}
      [axes xscale yscale density-yscale count-scale width height margin min-day max-day]
      [:g
-      [histogram xscale density-yscale height margin]
-      [matrix xscale yscale]
-      [cumulative xscale count-scale width height margin]]]))
+      ^{:key "hist"} [histogram xscale density-yscale height margin]
+      ^{:key "matrix"} [matrix xscale yscale]
+      ^{:key "cumulative"} [cumulative xscale count-scale width height margin]]]))
 
 (defn tag-table-row-view [tag count tag-% minutes active? time-per-day]
   [:tr (if active?
@@ -217,6 +218,7 @@
          :dashboard [logged-in-app]
          :settings  [tictag.views.settings/settings]
          :about     [tictag.views.about/about]
+         :editor    [tictag.views.editor/editor]
          ;; if :active-panel not set yet, just wait for pushy to initialize
          [:div])])))
 

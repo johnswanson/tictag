@@ -6,6 +6,7 @@
             [re-frame.core :refer [reg-event-fx reg-event-db reg-fx reg-cofx inject-cofx]]
             [taoensso.timbre :as timbre]
             [ajax.core :refer [transit-response-format transit-request-format]]
+            [taoensso.sente.packers.transit :as sente-transit]
             [ajax.protocols]
             [tictag.nav :as nav]
             [tictag.schemas :as schemas]
@@ -150,23 +151,9 @@
                     :on-failure [:user-me-failure]}
                    (:auth-token db))})))
 
-(defn ref-to-user [user]
-  [:user/by-id (:id user)])
-
-(defn normalize-user [user]
-  (-> user
-      (dissoc :pings)))
-
-(defn normalize-ping [user-ref ping]
-  (assoc ping :user user-ref))
-
-(defn normalize-pings [user-ref pings]
-  (into {} (for [p pings]
-             [(:timestamp p) (normalize-ping user-ref p)])))
-
 (defn normalize-user-to-db [user]
-  {:user/by-id            (when user {(:id user) (normalize-user user)})
-   :db/authenticated-user (ref-to-user user)})
+  {:user/by-id            (when user {(:id user) user})
+   :db/authenticated-user [:user/by-id (:id user)]})
 
 (reg-event-fx
  :sente-connected
@@ -178,12 +165,7 @@
  [interceptors]
  (fn [{:keys [db]} [_ user]]
    {:db             (merge db (normalize-user-to-db user))
-    :sente-connect  (:auth-token db)
-    :dispatch [:pings/receive
-               (ref-to-user user)
-               true
-               []
-               (partition-all 100 (:pings user))]}))
+    :sente-connect  (:auth-token db)}))
 
 
 (defn register-query! [n]
@@ -200,6 +182,7 @@
 (register-query! :beeminder/get)
 (register-query! :macro/get)
 (register-query! :slack/get)
+(register-query! :ping/get)
 
 (reg-event-db
  :db/query-success
@@ -266,22 +249,7 @@
 
 (defn process [pings]
   (->> pings
-       (map #(assoc % :parsed-time (f/parse formatter (:local-time %))))
-       (map #(assoc % :days-since-epoch (tictag.dates/days-since-epoch (:parsed-time %))))
-       (map #(assoc % :weeks-since-epoch (tictag.dates/weeks-since-epoch (:parsed-time %))))
-       (map #(assoc % :seconds-since-midnight (tictag.dates/seconds-since-midnight (:parsed-time %))))))
-
-(reg-event-fx
- :pings/receive
- (fn [{db :db} [_ user first-time? processed to-process]]
-   (if first-time?
-     {:dispatch [:pings/receive user false processed to-process]}
-     (if-not (seq? to-process)
-       {:db (assoc db :pings/by-timestamp (normalize-pings user processed))}
-       (let [[n & rest] to-process]
-         {:dispatch-later [{:ms 2
-                            :dispatch [:pings/receive user false (concat (process n)
-                                                                                processed) rest]}]})))))
+       (map #(assoc % :parsed-time (f/parse formatter (:local-time %))))))
 
 (reg-event-db
  :user-me-failure
@@ -351,7 +319,8 @@
      {:dispatch-n [[:macro/get]
                    [:beeminder/get]
                    [:goal/get]
-                   [:slack/get]]})))
+                   [:slack/get]
+                   [:ping/get]]})))
 
 (reg-event-fx
  :chsk/recv
@@ -373,7 +342,7 @@
    (let [{:keys [chsk ch-recv send-fn state]}
          (sente/make-channel-socket! "/chsk"
                                      {:type :auto
-                                      :packer :edn
+                                      :packer (sente-transit/get-transit-packer)
                                       :params {:authorization auth-token}})]
      (go-loop []
        (let [{:keys [event id ?data send-fn]} (<! ch-recv)]
@@ -567,7 +536,7 @@
 (register-update :beeminder)
 (register-update :goal)
 (register-update :macro)
-
+(register-update :ping)
 
 (reg-event-db
  :tagtime-import/fail

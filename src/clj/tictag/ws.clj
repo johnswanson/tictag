@@ -3,7 +3,21 @@
             [taoensso.sente.server-adapters.http-kit :refer [get-sch-adapter]]
             [com.stuartsierra.component :as component]
             [taoensso.timbre :as timbre]
-            [compojure.core :refer [GET POST]]))
+            [taoensso.sente.packers.transit :as sente-transit]
+            [cognitect.transit :as transit]
+            [compojure.core :refer [GET POST]])
+  (:import [org.joda.time DateTime ReadableInstant]))
+
+(def joda-time-writer
+  (transit/write-handler
+    (constantly "m")
+    (fn [v] (-> ^ReadableInstant v .getMillis))
+    (fn [v] (-> ^ReadableInstant v .getMillis .toString))))
+
+
+(def custom-transit-writers {DateTime joda-time-writer})
+
+(def packer (sente-transit/->TransitPacker :json {:handlers custom-transit-writers} {}))
 
 (defrecord Sente []
   component/Lifecycle
@@ -12,7 +26,7 @@
                   ajax-post-fn ajax-get-or-ws-handshake-fn]}
           (sente/make-channel-socket-server! (get-sch-adapter)
                                              {:user-id-fn :user-id
-                                              :packer     :edn
+                                              :packer     packer
                                               :handshake-fn (fn [req]
                                                               {:arb :data})})]
       (assoc component

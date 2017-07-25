@@ -11,7 +11,8 @@
              [trace debug info warn error fatal report
               tracef debugf infof warnf errorf fatalf reportf
               spy]]
-            [taoensso.timbre :as timbre]))
+            [taoensso.timbre :as timbre]
+            [clojure.string :as str]))
 
 
 (def formatter (f/formatters :basic-date-time))
@@ -26,9 +27,8 @@
      (let [q (try
                (edn/read-string ping-query)
                (catch js/Error _ ping-query))]
-       (fn [{:keys [tags]}]
-         (beeminder-matching/match? q tags)))
-
+       (fn [{:keys [ping/tag-set]}]
+         (beeminder-matching/match? q tag-set)))
      (constantly false))))
 
 
@@ -43,13 +43,13 @@
  :raw-pings
  (fn [db _]
    (let [user (:db/authenticated-user db)]
-     (filter #(= (:user %) user)
-             (vals (:pings/by-timestamp db))))))
+     (vals (:ping/by-id db)))))
 
 (reg-sub
  :ping-days
  (fn [_ _] (subscribe [:raw-pings]))
- (fn [pings _] (map :days-since-epoch pings)))
+ (fn [pings _]
+   (map :ping/days-since-epoch pings)))
 
 (reg-sub
  :max-ping-day
@@ -65,8 +65,7 @@
  :sorted-pings
  (fn [_ _] (subscribe [:raw-pings]))
  (fn [pings _]
-   (sort #(t/after? (:parsed-time %1) (:parsed-time %2)) pings)))
-
+   (sort #(> (:ping/ts %1) (:ping/ts %2)) pings)))
 
 (reg-sub
  :pings
@@ -118,11 +117,11 @@
  (fn [_ _]
    (subscribe [:sorted-active-pings]))
  (fn [pings _]
-   (let [first-day       (:days-since-epoch (last pings))
-         last-day        (:days-since-epoch (first pings))
+   (let [first-day       (:ping/days-since-epoch (last pings))
+         last-day        (:ping/days-since-epoch (first pings))
          freqs           (->> pings
                               (filter :active?)
-                              (map :days-since-epoch)
+                              (map :ping/days-since-epoch)
                               (frequencies))]
      (when (seq freqs)
        (reduce (daily-total freqs) [] (range first-day (inc last-day)))))))
@@ -134,7 +133,7 @@
    (subscribe [:active-pings]))
  (fn [pings _]
    (->> pings
-        (map :days-since-epoch)
+        (map :ping/days-since-epoch)
         (frequencies))))
 
 (reg-sub
@@ -201,7 +200,7 @@
    (subscribe [:pings]))
  (fn [pings _]
    (->> pings
-        (map :tags)
+        (map :ping/tag-set)
         (map frequencies)
         (apply merge-with +))))
 

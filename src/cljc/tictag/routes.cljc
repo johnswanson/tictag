@@ -4,6 +4,7 @@
   ["/" {"login"          :login
         "signup"         :signup
         "settings"       :settings
+        "editor"         :editor
         "logout"         :logout
         "slack-callback" :slack-callback
         "about"          :about

@@ -1,6 +1,12 @@
 (ns tictag.utils
   (:require [taoensso.timbre :as timbre]
+            [re-frame.core :refer [dispatch]]
             [clojure.string :as str]))
+
+(defn dispatch-n [& events]
+  (doall (map dispatch (remove nil? events)))
+  nil)
+
 
 (defn get-thing [db cursor thing]
   (let [source (if (vector? cursor)

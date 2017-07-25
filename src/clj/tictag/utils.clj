@@ -61,3 +61,19 @@
                m)))
        (flatten)))
 
+(defn deep-merge
+  "Deeply merges maps so that nested maps are combined rather than replaced.
+  For example:
+  (deep-merge {:foo {:bar :baz}} {:foo {:fuzz :buzz}})
+  ;;=> {:foo {:bar :baz, :fuzz :buzz}}
+  ;; contrast with clojure.core/merge
+  (merge {:foo {:bar :baz}} {:foo {:fuzz :buzz}})
+  ;;=> {:foo {:fuzz :quzz}} ; note how last value for :foo wins"
+  [& vs]
+  (if (every? map? vs)
+    (apply merge-with deep-merge vs)
+    (last vs)))
+
+(defn deep-merge*
+  [v1 v2]
+  (if (nil? v2) v1 (deep-merge v1 v2)))

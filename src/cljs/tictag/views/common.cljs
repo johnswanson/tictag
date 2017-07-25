@@ -25,7 +25,9 @@
               (when-not user [link :signup current-page])
               (when user [link :dashboard current-page])
               (when user [link :settings current-page])
+              (when user [link :editor current-page])
               (when user [link :logout current-page])]])
+
 
 (defn- nav []
   (let [user         (subscribe [:authorized-user])
@@ -41,7 +43,6 @@
                  :children [[re-com/p
                              "Feel free to contact me at "
                              [re-com/hyperlink-href :href "mailto:tictag@agh.io" :label "tictag@agh.io"]
-
                              " with any suggestions, comments, or questions!"]]])
 
 (defn page
