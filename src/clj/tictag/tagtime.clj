@@ -62,7 +62,7 @@
        (reduce (fn [accu {:keys [local-time ts] :as m}]
                  (if local-time
                    (conj accu m)
-                   (if-let [{prev :local-time} (peek accu)]
+                   (if-let [prev (peek accu)]
                      (conj accu (assoc m :local-time (t/plus ts (offset prev))))
                      accu)))
                [])
