@@ -19,11 +19,12 @@
               (str/replace #"\[[^\[\]]*\]" "")
               (str/split #" "))))
 
-(def formatter (f/formatter "yyyy.MM.dd HH:mm:ss E"))
+(def formatter (f/formatter t/utc "yyyy.MM.dd HH:mm:ss E" "yyyy-MM-dd HH:mm:ss E"))
 
 (defn parse-local-time [time-str]
   (when (= (count time-str) 23)
-    (f/parse formatter time-str)))
+    (try (f/parse formatter time-str)
+         (catch Exception e nil))))
 
 
 (defn sanity-check [ts tags]
