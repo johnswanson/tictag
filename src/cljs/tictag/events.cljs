@@ -513,30 +513,43 @@
                :success? true
                :error? []})))
 
+(defn update-db [t db id k v]
+  (-> db
+      (assoc-in [:tictag.schemas/ui
+                 (keyword (str "pending-" (name t))
+                          "by-id")
+                 id
+                 (keyword (str "pending-" (name t))
+                          (name k))]
+                v)
+      (assoc-in [:db/errors
+                 (keyword (name t) "by-id")
+                 id
+                 (keyword (str (name t) (name k)))]
+                nil)))
+
 (defn register-update [t]
   (reg-event-db
    (keyword (name t) "update")
    [interceptors]
    (fn [db [_ id k v]]
-     (-> db
-         (assoc-in [:tictag.schemas/ui
-                    (keyword (str "pending-" (name t))
-                             "by-id")
-                    id
-                    (keyword (str "pending-" (name t))
-                             (name k))]
-                   v)
-         (assoc-in [:db/errors
-                    (keyword (name t) "by-id")
-                    id
-                    (keyword (str (name t) (name k)))]
-                   nil)))))
+     (update-db t db id k v))))
+
+(reg-event-db
+ :ping/update
+ [interceptors]
+ (fn [db [_ id k v]]
+   (if (= k :ping/tags)
+     (let [tags     (str/split (str/lower-case v) #" ")
+           macros   (into {} (map (juxt :macro/expands-from :macro/expands-to) (vals (:macro/by-id db))))
+           new-tags (str/join " " (map #(get macros % %) tags))]
+       (update-db :ping db id k new-tags))
+     (update-db :ping db id k v))))
 
 (register-update :slack)
 (register-update :beeminder)
 (register-update :goal)
 (register-update :macro)
-(register-update :ping)
 
 (reg-event-db
  :tagtime-import/fail

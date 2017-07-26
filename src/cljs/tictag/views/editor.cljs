@@ -18,8 +18,9 @@
                                       (goog.date.DateTime. (:ping/ts @ping)))]
                 [re-com/input-text
                  :model (:ping/tags @ping)
-                 :on-change #(dispatch-n [:ping/update id :ping/tags %]
-                                         [:db/save :ping/by-id id])]]]))
+                 :on-change #(dispatch-n
+                              [:ping/update id :ping/tags %]
+                              [:db/save :ping/by-id id])]]]))
 
 (defn ping-editors [ids display]
   [re-com/v-box
