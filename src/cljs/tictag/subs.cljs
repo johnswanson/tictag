@@ -63,10 +63,6 @@
  (fn [pings _] (:ping/days-since-epoch (last pings))))
 
 (reg-sub
- :ping-count
- (fn [_ _] 35040))
-
-(reg-sub
  :sorted-ping-ids
  (fn [db _]
    (:ping/sorted-ids db)))
@@ -80,12 +76,10 @@
  :sorted-pings
  (fn [_ _]
    [(subscribe [:ping-map])
-    (subscribe [:ping-count])
     (subscribe [:sorted-ping-ids])])
- (fn [[m count ids] _]
-   (take count
-         (for [id ids]
-           (get m id)))))
+ (fn [[m ids] _]
+   (for [id ids]
+     (get m id))))
 
 (reg-sub
  :ping-by-id

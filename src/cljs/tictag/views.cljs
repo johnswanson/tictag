@@ -33,13 +33,11 @@
   (let [in-seconds (* day 24 60 60 1000)]
     (f/unparse simple-formatter (tc/from-long in-seconds))))
 
-(defn circle-for-ping [{:keys [active?] :as ping}]
+(defn circle-for-ping [ping]
   [:ellipse {:rx    2
              :ry    12
-             :style (if active?
-                      {:opacity "0.6"}
-                      {:opacity "0.1"})
-             :fill  (if active? "#cc0000" "black")}])
+             :style {:opacity "0.1"}
+             :fill  "black"}])
 
 (declare matrix-plot-view)
 
@@ -67,7 +65,7 @@
   (c2.svg/axis
    xscale
    (let [[r0 r1] (:domain xscale)]
-     (range r0 r1 30))
+     (range r0 r1 (js/Math.round (/ (- r1 r0) 10))))
    :orientation :bottom
    :formatter format-day-to-time
    :label "Day"))
@@ -117,10 +115,11 @@
     [:g
      (doall
       (for [ping @pings]
-        ^{:key (:ping/id ping)}
-        [:g {:transform (c2.svg/translate [(xscale (:ping/days-since-epoch ping))
-                                           (yscale (:ping/seconds-since-midnight ping))])}
-         [circle-for-ping ping]]))]))
+        (when (:active? ping)
+          ^{:key (:ping/id ping)}
+          [:g {:transform (c2.svg/translate [(xscale (:ping/days-since-epoch ping))
+                                             (yscale (:ping/seconds-since-midnight ping))])}
+           [circle-for-ping ping]])))]))
 
 (defn cumulative [xscale yscale width height margin]
   (let [totals          (subscribe [:day-cum-totals])]
