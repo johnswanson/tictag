@@ -772,7 +772,7 @@
          (catch org.postgresql.util.PSQLException e
            (timbre/debug sql-params e)
            (update ctx :errors (fn [errs]
-                                 (assoc-in errors path "an unknown error occurred")))))))
+                                 (assoc-in errors (conj path :error) "an unknown error occurred")))))))
 
 
 (defn ->kebab+ns [ns]
