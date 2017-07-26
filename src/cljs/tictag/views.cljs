@@ -27,7 +27,7 @@
             [re-com.core :as re-com])
   (:import [goog.date.Interval]))
 
-(def simple-formatter (f/formatter "yyyy-MM"))
+(def simple-formatter (f/formatter "yyyy-MM-dd"))
 
 (defn format-day-to-time [day]
   (let [in-seconds (* day 24 60 60 1000)]
@@ -35,9 +35,9 @@
 
 (defn circle-for-ping [ping]
   [:ellipse {:rx    2
-             :ry    12
-             :style {:opacity "0.1"}
-             :fill  "black"}])
+             :ry    2
+             :style {:opacity "0.5"}
+             :fill  "#396AB1"}])
 
 (declare matrix-plot-view)
 
@@ -50,32 +50,40 @@
     (matrix-plot-view @count @width @height @min-day @max-day)))
 
 (defn time-axis [yscale]
-  (c2.svg/axis yscale
-               (range 0 (* 24 60 60) (* 60 60))
-               :orientation :right
-               :formatter #(str (/ % 60 60) ":00")))
+  [:g {:style {:stroke "#396AB1"}}
+   (c2.svg/axis yscale
+                (range 0 (* 24 60 60) (* 4 60 60))
+                :orientation :right
+                :formatter #(str (/ % 60 60) ":00"))])
 
 (defn hist-axis [density-yscale]
-  (c2.svg/axis density-yscale
-               (range 0 25)
-               :orientation :left
-               :label "Hours (per day)"))
+  [:g {:style {:stroke "#DA7C30"}}
+   (c2.svg/axis density-yscale
+                [0 8 16 24]
+                :orientation :left
+                :text-margin 25
+                :label-margin 40
+                :label "Hours (per day)")])
 
 (defn days-axis [xscale]
   (c2.svg/axis
    xscale
    (let [[r0 r1] (:domain xscale)]
-     (range r0 r1 (js/Math.round (/ (- r1 r0) 10))))
+     (butlast (range r0 r1 (js/Math.round (/ (- r1 r0) 10)))))
    :orientation :bottom
+   :text-margin 25
+   :label-margin 43
+   :major-tick-width 12
    :formatter format-day-to-time
-   :label "Day"))
+   :label "Date"))
 
 (defn cum-axis [yscale]
-  (c2.svg/axis
-   yscale
-   (conj (:ticks (c2.ticks/search (:domain yscale))) (second (:domain yscale)))
-   :orientation :right
-   :label "Hours (cum)"))
+  [:g {:style {:stroke "#3E9651"}}
+   (c2.svg/axis
+    yscale
+    (timbre/spy (conj (:ticks (c2.ticks/search (:domain yscale))) (second (:domain yscale))))
+    :orientation :right
+    :label "Hours (cum)")])
 
 (defn axes [xscale yscale density-yscale count-scale width height margin min-day max-day]
   [:g {:style       {:stroke       "black"
@@ -83,12 +91,11 @@
                      :font-weight  "100"}
        :font-size   "14px"
        :font-family "sans-serif"}
-   (when-not (= (:domain count-scale) [0 0])
      [:g
       [:g {:transform (c2.svg/translate [(- width margin) 0])}
        [cum-axis count-scale]]
       [:g {:transform (c2.svg/translate [margin 0])}
-       [hist-axis density-yscale]]])
+       [hist-axis density-yscale]]]
    [:g {:transform (c2.svg/translate [(/ width 2) 0])}
     [time-axis yscale]]
    [:g {:transform (c2.svg/translate [0 (- height margin)])}
@@ -96,7 +103,8 @@
 
 (defn histogram [xscale density-yscale height margin]
   (let [day-totals (subscribe [:day-totals])]
-    [:g
+    [:g {:style {:fill    "#DA7C30"
+                 :opacity "0.8"}}
      (doall
       (for [[d freq] @day-totals]
         (let [hours  (* freq 0.75)
@@ -106,9 +114,7 @@
            {:x      (xscale d)
             :y      scaled
             :height (- height scaled margin)
-            :style  {:opacity "0.2"}
-            :fill   "#0000cc"
-            :width  5}])))]))
+            :width  1}])))]))
 
 (defn matrix [xscale yscale]
   (let [pings (subscribe [:pings])]
@@ -127,9 +133,9 @@
       (when @totals
         [:g
          [:g {:style {:fill :none
-                      :stroke "black"
-                      :stroke-width "3"
-                      :opacity "0.5"}}
+                      :stroke "#3E9651"
+                      :stroke-width "1"
+                      :opacity "0.8"}}
           (c2.svg/line
            (map
             (fn [[day total]]
@@ -145,14 +151,18 @@
                                         :range [margin (- height margin)])
         density-yscale (c2.scale/linear :domain [0 24]
                                         :range [(- height margin) margin])
-        count-scale    (c2.scale/linear :domain [0 (js/Math.round (* 0.75 count))]
+        count-scale    (c2.scale/linear :domain [0 (js/Math.ceil (* 0.75 count))]
                                         :range [(- height margin) margin])]
-    [:svg {:style {:width (str width "px") :height (str height "px")}}
-     [axes xscale yscale density-yscale count-scale width height margin min-day max-day]
-     [:g
-      ^{:key "hist"} [histogram xscale density-yscale height margin]
-      ^{:key "matrix"} [matrix xscale yscale]
-      ^{:key "cumulative"} [cumulative xscale count-scale width height margin]]]))
+    (if-not (= (:domain count-scale) [0 0])
+      [:svg {:style {:width (str width "px") :height (str height "px")
+                     :background-color "#eee"
+                     :border "1px solid black"}}
+       [axes xscale yscale density-yscale count-scale width height margin min-day max-day]
+       [:g
+        ^{:key "hist"} [histogram xscale density-yscale height margin]
+        ^{:key "matrix"} [matrix xscale yscale]
+        ^{:key "cumulative"} [cumulative xscale count-scale width height margin]]]
+      [:svg {:style {:width (str width "px") :height "1px"}}])))
 
 (defn tag-table-row-view [tag count tag-% minutes active? time-per-day]
   [:tr (if active?
@@ -185,16 +195,17 @@
   (let [tag-counts            (subscribe [:sorted-tag-counts])
         ping-query            (subscribe [:ping-query])]
     [re-com/v-box
+     :gap "1em"
      :align :center
      :children
-     [[matrix-plot]
-      [re-com/input-text
+     [[re-com/input-text
        :style {:border-radius "0px"}
        :width "100%"
        :placeholder "Query"
        :model (reagent/atom "")
        :change-on-blur? false
        :on-change #(dispatch [:debounced-update-ping-query %])]
+      [matrix-plot]
       [re-com/box
        :child
        [:table
