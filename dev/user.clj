@@ -50,39 +50,6 @@
 
 (defn dev-user [] (db/get-user (:db system) "test"))
 
-(def my-user-id (-> (select :id)
-                    (from :users)
-                    (where [:= :username "test"])
-                    (limit 1)))
-
-(def my-beeminder-id (-> (select :beeminder.id)
-                         (from :beeminder)
-                         (join :users [:= :users.id my-user-id])))
-
-(defn make-dev-user []
-  (j/with-db-transaction [tx (-> system :db :db)]
-    (j/execute! tx
-                (-> (insert-into :users)
-                    (values [{:username "test"
-                              :email    "tictag-test@agh.io"
-                              :pass     (db/hashp "test")
-                              :tz       "America/Los_Angeles"}])
-                    (upsert (-> (on-conflict :username)
-                                (do-nothing)))
-                    sql/format))
-    (let [{:keys [encrypted iv]} (crypto/encrypt (env :dev-beeminder-token)
-                                                 (-> system :db :crypto-key))]
-      (j/execute! tx
-                  (-> (insert-into :beeminder)
-                      (values [{:user_id         my-user-id
-                                :username        "tictagtest"
-                                :encrypted_token encrypted
-                                :encryption_iv   iv
-                                :is_enabled      true}])
-                      (upsert (-> (on-conflict :user_id)
-                                  (do-update-set :encrypted_token :encryption_iv)))
-                      sql/format)))))
-
 (def p (insta/parser (clojure.java.io/resource "parser.bnf")))
 (defn e [v] (evaluate {:db (:db system) :user (dev-user)} v))
 

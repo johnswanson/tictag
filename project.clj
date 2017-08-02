@@ -102,4 +102,6 @@
                  [hikari-cp "1.7.5"]
                  [bidi "2.0.17"]
                  [kibu/pushy "0.3.7"]
-                 [com.cognitect/transit-clj "0.8.300"]])
+                 [com.cognitect/transit-clj "0.8.300"]
+                 [io.clojure/liberator-transit "0.3.1"]
+                 [liberator "0.15.1"]])

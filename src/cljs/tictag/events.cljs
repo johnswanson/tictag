@@ -21,6 +21,8 @@
             [cljs.core.async :as a :refer [<! >! put! chan]]
             [taoensso.sente :as sente :refer [cb-success?]]))
 
+(declare merge-pending)
+
 (extend-type goog.net.XhrIo
   ajax.protocols/AjaxImpl
   (-js-ajax-request
@@ -55,13 +57,13 @@
   (merge m {:headers {"Authorization" token}}))
 
 (reg-event-fx
- :login/submit-login
+ :token/create
  [interceptors]
  (fn [{:keys [db]} [_ params]]
    ;; TODO edit DB to say we're pending login and add UI
    {:http-xhrio {:method          :post
-                 :uri             "/token"
-                 :params          params
+                 :uri             "/api/token"
+                 :params          (get-in db [:tictag.schemas/ui :pending-user/by-id :temp])
                  :timeout         8000
                  :format          (transit-request-format {})
                  :response-format (transit-response-format {})
@@ -72,117 +74,183 @@
   (let [tzs (:allowed-timezones db)]
     (set (map :name tzs))))
 
-(reg-event-fx
- :settings/changed-timezone
- [interceptors]
- (fn [{:keys [db]} [_ tz]]
-   (if ((allowed-timezones db) tz)
-     {:http-xhrio (authenticated-xhrio
-
-                   {:method          :post
-                    :params          {:tz tz}
-                    :uri             "/api/user/me/tz"
-                    :format          (transit-request-format {})
-                    :response-format (transit-response-format {})
-                    :on-success      [:change-tz-success]
-                    :on-failure      [:change-tz-failure]}
-                   (:auth-token db))}
-     {:db db})))
-
-(reg-event-db
- :change-tz-success
- [interceptors]
- (fn [db [_ {:keys [tz]}]]
-   (assoc-in db (conj (:db/authenticated-user db) :tz) tz)))
-
-(reg-event-db
- :change-tz-fail
- [interceptors]
- (fn [db _]
-   ;; TODO
-   db))
-
-(reg-event-fx
- :login/submit-signup
- [interceptors]
- (fn [{:keys [db]} [_ params]]
-   (let [[errs? params] (schemas/validate params
-                                          (schemas/+new-user-schema+
-                                           (allowed-timezones db)))]
-     (if-not errs?
-       {:http-xhrio {:method          :post
-                     :uri             "/signup"
-                     :params          params
-                     :timeout         8000
-                     :format          (transit-request-format {})
-                     :response-format (transit-response-format {})
-                     :on-success      [:login/successful]
-                     :on-failure      [:login/failed]}}
-       {:db (assoc-in db [:signup :errors] errs?)}))))
-
-(reg-event-fx
- :login/successful
- [interceptors]
- (fn [{:keys [db]} [_ result]]
-   {:db             (-> db
-                        (assoc :auth-token (:token result))
-                        (dissoc :signup))
-    :dispatch       [:fetch-user-info]
-    :pushy-navigate :dashboard
-    :set-cookie     {:auth-token (:token result)}}))
+(defn user-uri [db]
+  (str "/api/user/" (second (:db/authenticated-user db))))
 
 (reg-event-db
  :login/failed
  [interceptors]
  (fn [db [_ result]]
-   ; TODO add handling of failure here
    db))
-
-(reg-event-fx
- :fetch-user-info
- [interceptors]
- (fn [{:keys [db]} _]
-   (when-not (:db/authenticated-user db)
-     {:http-xhrio (authenticated-xhrio
-                   {:method :get
-                    :uri "/api/user/me"
-                    :response-format (transit-response-format {})
-                    :on-success [:user-me-success]
-                    :on-failure [:user-me-failure]}
-                   (:auth-token db))})))
-
-(defn normalize-user-to-db [user]
-  {:user/by-id            (when user {(:id user) user})
-   :db/authenticated-user [:user/by-id (:id user)]})
 
 (reg-event-fx
  :sente-connected
  [interceptors]
- (fn [{:keys [db]} ]))
+ (fn [{:keys [db]}] db))
+
+(defn register-rest! [t]
+  (reg-event-fx
+   (keyword (name t) "get")
+   [interceptors]
+   (fn [{:keys [db]} _]
+     (let [user-id (second (:db/authenticated-user db))]
+       {:http-xhrio (authenticated-xhrio
+                     {:method          :get
+                      :uri             (str "/api/" (name t))
+                      :response-format (transit-response-format {})
+                      :request-format  (transit-request-format {})
+                      :on-success      [(keyword (name t) "get-success")]
+                      :on-failure      [(keyword (name t) "get-failure")]}
+                     (:auth-token db))})))
+  (reg-event-fx
+   (keyword (name t) "save")
+   [interceptors]
+   (fn [{:keys [db]} [_ id]]
+     (let [path         [(keyword (name t) "by-id") id]
+           pending-path (utils/pending-path path)]
+       (when (get-in db pending-path)
+         {:http-xhrio (authenticated-xhrio
+                       {:method          (if (= id :temp) :post :put)
+                        :uri             (if (= id :temp)
+                                           (str "/api/" (name t))
+                                           (str "/api/" (name t) "/" id))
+                        :response-format (transit-response-format {})
+                        :format          (transit-request-format {})
+                        :params          (merge-pending
+                                          (get-in db pending-path)
+                                          (get-in db path))
+                        :on-success      [(keyword (name t) "save-success") id]
+                        :on-failure      [(keyword (name t) "save-failure") id]}
+                       (:auth-token db))}))))
+  (reg-event-fx
+   (keyword (name t) "delete")
+   [interceptors]
+   (fn [{:keys [db]} [_ id]]
+     (if (= id :temp)
+       {:db (assoc-in db (utils/pending-path [(keyword (name t) "by-id") id]) {})}
+       {:http-xhrio (authenticated-xhrio
+                     {:method :delete
+                      :uri (str "/api/" (name t) "/" id)
+                      :response-format (transit-response-format {})
+                      :format (transit-request-format {})
+                      :on-success [(keyword (name t) "delete-success")]
+                      :on-failure [(keyword (name t) "delete-failure")]}
+                     (:auth-token db))})))
+  (reg-event-fx
+   (keyword (name t) "save-success")
+   [interceptors]
+   (fn [{:keys [db]} [_ id v]]
+     {:db (-> db
+              (assoc-in [(keyword (name t) "by-id") (get v (keyword (name t) "id"))] v)
+              (assoc-in [:tictag.schemas/ui (keyword (str "pending-" (name t)) "by-id") :temp] {}))
+      :dispatch [(keyword (name t) "save-success-custom") v]}))
+  (reg-event-db
+   (keyword (name t) "save-failure")
+   [interceptors]
+   (fn [db [_ id v]]
+     (timbre/debug (:response v))
+     (assoc-in db
+               [:db/errors (keyword (name t) "by-id") id]
+               (:response v))))
+  (reg-event-db
+   (keyword (name t) "delete-success")
+   [interceptors]
+   (fn [db [_ v]]
+     (-> db
+         (update (keyword (name t) "by-id") dissoc ((keyword (name t) "id") v))))))
+
+(register-rest! :ping)
+(register-rest! :macro)
+(register-rest! :goal)
+(register-rest! :beeminder)
+(register-rest! :slack)
+(register-rest! :user)
+
+(reg-event-db
+ :beeminder/get-success
+ [interceptors]
+ (fn [db [_ v]]
+   (assoc db :beeminder/by-id (into {} (map (juxt :beeminder/id identity) v)))))
+
+(reg-event-db
+ :goal/get-success
+ [interceptors]
+ (fn [db [_ v]]
+   (assoc db :goal/by-id (into {} (map (juxt :goal/id identity) v)))))
+
+(reg-event-db
+ :slack/get-success
+ [interceptors]
+ (fn [db [_ v]]
+   (assoc db :slack/by-id (into {} (map (juxt :slack/id identity) v)))))
+
+(reg-event-db
+ :macro/get-success
+ [interceptors]
+ (fn [db [_ v]]
+   (assoc db :macro/by-id (into {} (map (juxt :macro/id identity) v)))))
 
 (reg-event-fx
- :user-me-success
+ :ping/get-failure
  [interceptors]
- (fn [{:keys [db]} [_ user]]
-   {:db             (merge db (normalize-user-to-db user))
-    :sente-connect  (:auth-token db)}))
+ (fn [_ evt] (timbre/error evt)))
 
+(reg-event-db
+ :ping/get-success
+ [interceptors]
+ (fn [db [_ v]]
+   (assoc db
+          :ping/sorted-ids (map :ping/id v)
+          :ping/by-id (into {} (map (juxt :ping/id identity) v)))))
 
-(defn register-query! [n & [timeout]]
-  (reg-event-fx
-   n
-   [interceptors]
-   (fn [_ _]
-     {:sente-send {:event [n]
-                   :timeout (or timeout 3000)
-                   :on-success [:db/query-success]
-                   :on-failure [:db/query-failure]}})))
+(reg-event-db
+ :user/get-success
+ [interceptors]
+ (fn [db [_ v]]
+   (-> db
+       (assoc :user/by-id (into {} (map (juxt :user/id identity) v)))
+       (assoc :db/authenticated-user [:user/by-id (:user/id (first v))]))))
 
-(register-query! :goal/get)
-(register-query! :beeminder/get)
-(register-query! :macro/get)
-(register-query! :slack/get)
-(register-query! :ping/get 15000)
+(reg-event-fx
+ :login/successful
+ [interceptors]
+ (fn [{:keys [db]} [_ v]]
+   (when-let [auth-token (:token v)]
+     {:db             (-> db
+                          (assoc :auth-token auth-token))
+      :sente-connect  auth-token
+      :dispatch-n     [[:user/get]
+                       [:macro/get]
+                       [:beeminder/get]
+                       [:goal/get]
+                       [:slack/get]
+                       [:ping/get]]
+      :pushy-navigate :dashboard
+      :set-cookie     {:auth-token auth-token}})))
+
+(reg-event-fx
+ :user/save-success-custom
+ [interceptors]
+ (fn [{:keys [db]} [_ v]]
+   (when-let [auth-token (:user/auth-token v)]
+     {:db             (-> db
+                          (assoc :auth-token auth-token)
+                          (assoc :db/authenticated-user [:user/by-id (:user/id v)]))
+      :sente-connect  auth-token
+      :dispatch-n     [[:macro/get]
+                       [:beeminder/get]
+                       [:goal/get]
+                       [:slack/get]
+                       [:ping/get]]
+      :pushy-navigate :dashboard
+      :set-cookie     {:auth-token auth-token
+                       :user-id    (:user/id v)}})))
+
+(reg-event-fx
+ :db/query-failure
+ [interceptors]
+ (fn [_ evt]
+   (timbre/error evt)))
 
 (reg-event-db
  :db/query-success
@@ -200,63 +268,7 @@
     (apply merge saved (for [[k v] pending]
                          [(keyword type (name k)) v]))))
 
-(reg-event-fx
- :db/save
- [interceptors]
- (fn [{:keys [db]} [_ type id]]
-   (let [path         [type id]
-         pending-path (utils/pending-path path)]
-     (when (get-in db pending-path)
-       {:sente-send {:event      [:db/save
-                                  (assoc-in {}
-                                            path
-                                            (merge-pending
-                                             (get-in db pending-path)
-                                             (get-in db path)))]
-                     :timeout    3000
-                     :on-success [:db/save-success type id]
-                     :on-failure [:db/save-failure type id]}}))))
-
-(reg-event-db
- :db/save-success
- [interceptors]
- (fn [db [_ type id saved]]
-   (let [pending-path (utils/pending-path [type id])
-         merged (deep-merge* db saved)]
-     (if (:db/errors saved)
-       merged
-       (update-in merged (butlast pending-path) dissoc (last pending-path))))))
-
-(reg-event-fx
- :db/delete
- [interceptors]
- (fn [{:keys [db]} [_ type id]]
-   (let [path [type id]]
-     (if (= id :temp)
-       {:db (update-in db (butlast (utils/pending-path path)) dissoc :temp)}
-       {:sente-send {:event      [:db/save (assoc-in {} path nil)]
-                     :timeout    3000
-                     :on-success [:db/delete-success type id]
-                     :on-failure [:db/delete-failure type id]}}))))
-
-(reg-event-db
- :db/delete-success
- [interceptors]
- (fn [db [_ type id saved]]
-   (update db type dissoc id)))
-
 (def formatter (f/formatters :basic-date-time))
-
-(defn process [pings]
-  (->> pings
-       (map #(assoc % :parsed-time (f/parse formatter (:local-time %))))))
-
-(reg-event-db
- :user-me-failure
- [interceptors]
- (fn [db _]
-   ;; TODO
-   db))
 
 (reg-event-fx
  :debounced-update-ping-query
@@ -277,29 +289,6 @@
  (fn [_]
    (nav/start!)))
 
-(reg-event-fx
- :beeminder-token/add
- [interceptors]
- (fn [{:keys [db]} [_ val]]
-   {:http-xhrio (authenticated-xhrio
-                 {:method          :post
-                  :uri             "/api/user/me/beeminder"
-                  :params          {:token val}
-                  :format          (transit-request-format {})
-                  :response-format (transit-response-format {})
-                  :on-success      [:beeminder-token/add-succeed]
-                  :on-failure      [:beeminder-token/add-fail]}
-                 (:auth-token db))
-    :db (update-in db
-                   [:beeminder/by-id :temp]
-                   assoc
-                   :token val
-                   :user (:db/authenticated-user db))}))
-
-(defn goals [db]
-  (let [user (:db/authenticated-user db)]
-    (filter #(= (:user %) user) (vals (:goal/by-id db)))))
-
 (reg-fx
  :set-cookie
  (fn [kv]
@@ -316,11 +305,7 @@
  [interceptors]
  (fn [{:keys [db]} [_ [old new]]]
    (when (:first-open? new)
-     {:dispatch-n [[:macro/get]
-                   [:beeminder/get]
-                   [:goal/get]
-                   [:slack/get]
-                   [:ping/get]]})))
+     )))
 
 (reg-event-fx
  :chsk/recv
@@ -364,8 +349,9 @@
 
 (reg-fx
  :delete-cookie
- (fn [k]
-   (.remove goog.net.cookies (name k))))
+ (fn [ks]
+   (doseq [k ks]
+     (.remove goog.net.cookies (name k)))))
 
 
 (reg-fx
@@ -391,6 +377,7 @@
 (reg-event-fx
  :initialize
  [(inject-cofx :cookie :auth-token)
+  (inject-cofx :cookie :user-id)
   (inject-cofx :window-dimensions nil)
   interceptors]
  (fn [{:keys [cookies db window-dimensions]} _]
@@ -402,12 +389,21 @@
                                        :response-format (transit-response-format {})
                                        :on-success      [:success-timezones]
                                        :on-failure      [:failed-timezones]}
-    :dispatch-n                       [[:fetch-user-info]]
+    :sente-connect                    (:auth-token cookies)
+    :dispatch-n                       [[:user/get]
+                                       [:macro/get]
+                                       [:beeminder/get]
+                                       [:goal/get]
+                                       [:slack/get]
+                                       [:ping/get]]
     :add-window-resize-event-listener nil
-    :db                               {:auth-token (:auth-token cookies)
-                                       :db/window  window-dimensions
-                                       :macro/by-id {}
-                                       :schemas/ui {:pending-macro/by-id {:temp {}}}}}))
+    :db                               (let [db {:auth-token  (:auth-token cookies)
+                                                :db/window   window-dimensions
+                                                :macro/by-id {}
+                                                :schemas/ui  {:pending-macro/by-id {:temp {}}}}]
+                                        (if-let [uid (some-> cookies :user-id js/parseInt)]
+                                          (assoc db :db/authenticated-user [:user/by-id uid])
+                                          db))}))
 
 (reg-event-fx
  :window-resize
@@ -419,12 +415,12 @@
  :success-timezones
  [interceptors]
  (fn [db [_ timezones]]
-   (assoc db :allowed-timezones timezones)))
+   (assoc db :allowed-timezones (:timezones timezones))))
 
 (def logging-out
   {:pushy-replace-token! :login
    :db {:auth-token nil :db/authenticated-user nil}
-   :delete-cookie :auth-token})
+   :delete-cookie [:auth-token :user-id]})
 
 (def not-logged-in-but-at-auth-page
   {:pushy-replace-token! :login})
@@ -525,7 +521,7 @@
       (assoc-in [:db/errors
                  (keyword (name t) "by-id")
                  id
-                 (keyword (str (name t) (name k)))]
+                 (keyword (name t) (name k))]
                 nil)))
 
 (defn register-update [t]
@@ -550,6 +546,7 @@
 (register-update :beeminder)
 (register-update :goal)
 (register-update :macro)
+(register-update :user)
 
 (reg-event-db
  :tagtime-import/fail

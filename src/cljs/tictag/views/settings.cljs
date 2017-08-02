@@ -3,7 +3,6 @@
             [re-com.core :as re-com]
             [reagent.core :as reagent]
             [tictag.constants :refer [ENTER]]
-            [tictag.views.inputs :refer [input-timezone]]
             [tictag.utils :refer [dispatch-n]]
             [goog.string :as str]
             [cljs.reader :as edn]
@@ -86,7 +85,7 @@
                                               (find slack :slack/dm?))]
                               dm?)
                      :on-change #(dispatch-n [:slack/update id :dm? %]
-                                             [:db/save :slack/by-id id])
+                                             [:slack/save id])
                      :label "Direct message"]
                     [re-com/h-box
                      :align :center
@@ -96,7 +95,7 @@
                                                 (find slack :slack/channel?))]
                                 ch?)
                        :on-change #(dispatch-n [:slack/update id :channel? %]
-                                               [:db/save :slack/by-id id])
+                                               [:slack/save id])
                        :label "Channel"]
                       [re-com/input-text
                        :style {:margin-left "1em"}
@@ -106,14 +105,14 @@
                                   "")
                        :status (when (and (:pending-slack/channel-name slack)
                                           (:slack/channel-name errors)) :error)
-                       :status-tooltip (or (first (:slack/channel-name errors)) "")
+                       :status-tooltip (or (:slack/channel-name errors) "")
                        :status-icon? true
                        :on-change #(dispatch-n [:slack/update id :channel-name %]
-                                               [:db/save :slack/by-id id])]]]
+                                               [:slack/save id])]]]
                     [re-com/title :level :level2 :label "Remove slackbot"]
                     [re-com/button
                      :label (str "Delete slack (authed as " username ")")
-                     :on-click #(dispatch [:db/delete :slack/by-id (:slack/id slack)])]]])
+                     :on-click #(dispatch [:slack/delete (:slack/id slack)])]]])
         [slack-authorize])))
 
 (defn slack-preferences []
@@ -148,10 +147,10 @@
                  :warning)
        :on-change #(dispatch [:goal/update id :tags %])]
       [re-com/button
-       :on-click #(dispatch [:db/save :goal/by-id id])
+       :on-click #(dispatch [:goal/save id])
        :label "Save"]
       [re-com/button
-       :on-click #(dispatch [:db/delete :goal/by-id id])
+       :on-click #(dispatch [:goal/delete id])
        :label "Delete"]]]))
 
 (defn beeminder-goals [goals]
@@ -163,7 +162,6 @@
    [goal-editor :temp]])
 
 (defn beeminder-token-input [errs]
-  (timbre/error errs)
   [re-com/v-box
    :children [[re-com/label :label [:span
                                     "Add your Beeminder token here! (get your token "
@@ -177,16 +175,16 @@
                            :model ""
                            :placeholder "Beeminder Token"
                            :status (when (:beeminder/token errs) :error)
-                           :status-tooltip (or (first (:beeminder/token errs)) "")
+                           :status-tooltip (or (:beeminder/token errs) "")
                            :status-icon? true
                            :on-change #(dispatch [:beeminder/update :temp :beeminder/token %])]
                           [re-com/button
-                           :on-click #(dispatch [:db/save :beeminder/by-id :temp])
+                           :on-click #(dispatch [:beeminder/save :temp])
                            :label "Save"]]]]])
 
 (defn delete-beeminder-button [id]
   [re-com/button
-   :on-click #(dispatch [:db/delete :beeminder/by-id id])
+   :on-click #(dispatch [:beeminder/delete id])
    :label "Delete Beeminder"])
 
 (defn beeminder-create [id]
@@ -213,7 +211,7 @@
                                                       (:beeminder/id @bm)
                                                       :beeminder/enabled?
                                                       %]
-                                                     [:db/save :beeminder/by-id (:beeminder/id @bm)])
+                                                     [:beeminder/save (:beeminder/id @bm)])
                              :label-style {:font-weight "bold"}
                              :label "I have read the above and want to enable Beeminder sync."]
                             [re-com/label
@@ -233,16 +231,17 @@
 
 
 (defn timezone []
-  (let [timezone          (subscribe [:timezone])
+  (let [user              (subscribe [:authorized-user])
         allowed-timezones (subscribe [:allowed-timezones])]
     [re-com/v-box
      :children [[re-com/title :level :level1 :label "Change time zone"]
                 [re-com/single-dropdown
                  :width "100%"
                  :choices (map (fn [tz] {:id tz :label tz}) @allowed-timezones)
-                 :model @timezone
+                 :model (:user/tz @user)
                  :filter-box? true
-                 :on-change #(dispatch [:settings/changed-timezone %])]]]))
+                 :on-change #(dispatch-n [:user/update (:user/id @user) :user/tz %]
+                                         [:user/save (:user/id @user)])]]]))
 
 (defn download []
   (let [pings (subscribe [:raw-pings])
@@ -281,10 +280,10 @@
        :change-on-blur? false
        :on-change #(dispatch [:macro/update id :expands-to %])]
       [re-com/button
-       :on-click #(dispatch [:db/save :macro/by-id id])
+       :on-click #(dispatch [:macro/save id])
        :label "Save"]
       [re-com/button
-       :on-click #(dispatch [:db/delete :macro/by-id id])
+       :on-click #(dispatch [:macro/delete id])
        :label "Delete"]]]))
 
 (defn macros []

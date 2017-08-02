@@ -17,10 +17,11 @@
                                       (tf/formatter "yyyy-MM-dd HH:mm")
                                       (goog.date.DateTime. (:ping/ts @ping)))]
                 [re-com/input-text
-                 :model (:ping/tags @ping)
+                 :model (or (:pending-ping/tags @ping)
+                            (:ping/tags @ping))
                  :on-change #(dispatch-n
                               [:ping/update id :ping/tags %]
-                              [:db/save :ping/by-id id])]]]))
+                              [:ping/save id])]]]))
 
 (defn ping-editors [ids display]
   [re-com/v-box

@@ -9,22 +9,28 @@
             [tictag.schemas :as schemas]
             [tictag.tagtime :as tagtime]
             [tictag.events]
+            [tictag.resources.config]
+            [tictag.resources.timezone]
+            [tictag.resources.user]
+            [tictag.resources.macro]
+            [tictag.resources.ping]
+            [tictag.resources.slack]
+            [tictag.resources.beeminder]
+            [tictag.resources.goal]
+            [tictag.resources.token]
             [taoensso.sente :as sente]
             [clj-time.format :as f]
-            [clj-time.core :as t]
             [com.stuartsierra.component :as component]
             [org.httpkit.server :as http]
-            [compojure.core :refer [GET PUT POST DELETE context]]
+            [compojure.core :refer [GET PUT POST ANY context]]
             [ring.util.response :refer [response]]
             [ring.middleware.defaults :refer [wrap-defaults api-defaults site-defaults]]
-            [ring.middleware.format :refer [wrap-restful-format]]
+            [ring.middleware.format-params :refer [wrap-restful-params]]
             [clojure.string :as str]
             [hiccup.core :refer [html]]
             [hiccup.page :refer [html5]]
-            [clojure.spec.alpha :as s]
             [taoensso.timbre :as timbre]
-            [instaparse.core :as insta]
-            [clj-time.coerce :as tc]))
+            [instaparse.core :as insta]))
 
 (timbre/refer-timbre)
 
@@ -78,15 +84,6 @@
   (when-let [uid (get-in slack-message [:event :user])]
     (db/get-user-from-slack-id db uid)))
 
-(defn unjoda [pings]
-  (map #(update % :local-time
-                (partial f/unparse
-                         (f/formatter :basic-date-time))) pings))
-
-(defn pings [{:keys [db]} {:keys [user-id]}]
-  (when user-id
-    (response (unjoda (db/get-pings-by-user-id (:db db) user-id)))))
-
 (defn slack-text [slack-message]
   (str
    (str/replace (get-in slack-message [:event :text]) #"^<.+> " "") "\n"))
@@ -106,7 +103,9 @@
     (do (slack/send-message user (format "Warning: can't find ping with id: `%s`" id-str)) nil)))
 
 (defmethod evaluate :LT [{:keys [db user]} [_ lt-str]]
-  (if-let [ping (db/ping-from-long-time db user (Long. lt-str))]
+  (if-let [ping (db/get-ping db [:and
+                                 [:= :user-id (:id user)]
+                                 [:= :ts (Long. lt-str)]])]
     ping
     (do (slack/send-message user (format "Warning: can't find ping from time: `%s`" lt-str)) nil)))
 
@@ -219,7 +218,7 @@ Separate commands with a newline to apply multiple commands at once
            (catch Exception e
              (timbre/error "EVAL ERROR" (:user ctx) e s parse-result))))))
 
-(defn slack [{:keys [db tagtime] :as component} {:keys [params]}]
+(defn slack-msg [{:keys [db tagtime] :as component} {:keys [params]}]
   (taoensso.timbre/logged-future
    (when-let [user (and (valid-slack? component params)
                         (utils/with-macros
@@ -248,29 +247,6 @@ Separate commands with a newline to apply multiple commands at once
          (beeminder/sync! component user)))))
   {:status 200 :body ""})
 
-(defn timestamp [{:keys [db] :as component} {:keys [params user-id]}]
-  (if-let [user (utils/with-macros (db/get-user-by-id db user-id))]
-    (do
-      (taoensso.timbre/logged-future
-       (debug [:timestamp {:user-id   (:id user)
-                           :timestamp (:timestamp params)
-                           :tags      (:tags params)}])
-       (let [ping     (db/ping-from-long-time db user (Long. (:timestamp params)))
-             tags     (flatten (map #(get (:macros user) % %) (:tags params)))
-             new-ping (-> ping
-                          (assoc :tags (set tags)
-                                 :_old-tags (:tags ping)))]
-         (if ping
-           (do (save-pings (assoc component :user user)
-                           [new-ping])
-               (beeminder/sync! component user))
-           (slack/send-message
-            user
-            (format "WARNING: couldn't find ping with timestamp: `%s`"
-                    (:timestamp params))))))
-      (response {:status 200}))
-    UNAUTHORIZED))
-
 (defn health-check [component]
   (fn [request]
     (let [db (:db component)]
@@ -282,79 +258,28 @@ Separate commands with a newline to apply multiple commands at once
          :headers {"Content-Type" "text/plain"}
          :body "ERROR - NO DB CONNECTION"}))))
 
-(defn token [{:keys [db jwt]} {:keys [params]}]
-  (let [[valid? token] (users/get-token
-                        {:db db :jwt jwt}
-                        (:username params)
-                        (:password params))]
-    (if valid?
-      {:status 200 :headers {} :body token}
-      {:status 401 :headers {} :body nil})))
-
-(defn config [component req]
-  (if-let [user-id (:user-id req)]
-    {:headers {"Content-Type" "application/edn"}
-     :status 200
-     :body (pr-str {:tagtime-seed (-> component :tagtime :seed)
-                    :tagtime-gap  (-> component :tagtime :gap)})}
-    UNAUTHORIZED))
-
-(defn signup [{:keys [db jwt]} {:keys [params]}]
-  (let [[invalid? user] (schemas/validate
-                         params
-                         (schemas/+new-user-schema+ (set (map :name (db/timezones db)))))]
-    (if invalid?
-      UNAUTHORIZED
-      (let [written? (db/write-user db user)
-            [valid? token] (users/get-token
-                            {:db db :jwt jwt}
-                            (:username params)
-                            (:password params))]
-        {:status 200 :headers {} :body token}))))
-
-(defn timezone-list [component _]
-  (db/timezones (:db component)))
-
 (defn slack-callback [{:keys [config db] :as component} {:keys [params user-id]}]
   (if user-id
-    (let [code              (:code params)
-          token-resp        (slack/oauth-access-token (:slack-client-id config)
-                                                      (:slack-client-secret config)
-                                                      code
-                                                      (:slack-redirect-uri config))
-          access-token      (token-resp :access-token)
-          bot-access-token  (-> token-resp :bot :bot-access-token)
-          slack-user-id     (:user-id token-resp)
-          {:keys [user]}    (slack/users-info access-token slack-user-id)
-          {:keys [channel]} (slack/im-open bot-access-token slack-user-id)]
+    (let [code                   (:code params)
+          token-resp             (slack/oauth-access-token (:slack-client-id config)
+                                                           (:slack-client-secret config)
+                                                           code
+                                                           (:slack-redirect-uri config))
+          access-token           (token-resp :access-token)
+          bot-access-token       (-> token-resp :bot :bot-access-token)
+          slack-user-id          (:user-id token-resp)
+          {:keys [user]}         (slack/users-info access-token slack-user-id)
+          {:keys [channel]}      (slack/im-open bot-access-token slack-user-id)
+          {:keys [encrypted iv]} (db/encrypt db bot-access-token)]
       (if (and user-id user bot-access-token channel (:id channel) slack-user-id)
         (do
-          (db/write-slack db {:id user-id} (:name user) bot-access-token (:id channel) slack-user-id)
+          (db/create-slack db user-id {:slack/username                   (:name user)
+                                       :slack/encrypted-bot-access-token encrypted
+                                       :slack/encryption-iv              iv
+                                       :slack/dm-id                      (:id channel)
+                                       :slack/slack-user-id              slack-user-id})
           (index component))
         UNAUTHORIZED))
-    UNAUTHORIZED))
-
-(defn my-user [{:keys [db]} {:keys [user-id]}]
-  (if user-id
-    (let [user (db/get-user-by-id db user-id)]
-      (response (select-keys user [:username :email :tz :id])))
-    UNAUTHORIZED))
-
-(defn delete-slack [{:keys [db]} {:keys [user-id]}]
-  (if user-id
-    (do
-      (db/delete-slack db user-id)
-      (response {}))
-    UNAUTHORIZED))
-
-(defn update-tz [{:keys [db]} {:keys [params user-id]}]
-  (if user-id
-    (try (response (do
-                     (db/update-timezone db user-id (:tz params))
-                     params))
-         (catch Exception e
-           (error e)
-           UNAUTHORIZED))
     UNAUTHORIZED))
 
 (defn tagtime-import-from-file [{:keys [db ws]} {:keys [multipart-params user-id params] :as req}]
@@ -405,54 +330,35 @@ Separate commands with a newline to apply multiple commands at once
                          (assoc-in [:security :anti-forgery] false)
                          (assoc :proxy true)))))
 
-(defn strip-hashtag [s]=
-  (if (= (first s) \#)
-    (subs s 1)
-    s))
-
-(defn update-slack [{:keys [db]} {:keys [user-id params]}]
-  (let [trimmed      (select-keys params [:dm? :channel? :channel-name])
-        dm?          (:dm? params)
-        channel?     (:channel? params)
-        channel-name (strip-hashtag (:channel-name params))
-        channel-id   (slack/channel-id
-                      (:bot-access-token
-                       (:slack (db/get-user-by-id db user-id)))
-                      channel-name)]
-    (when (seq (keys trimmed))
-      (if (and channel-name (not channel-id))
-        {:status 400
-         :body   {:error "Channel not found"}}
-        (do
-          (db/update-slack!
-           db
-           user-id
-           (cond-> {}
-             (contains? params :dm?)          (assoc :use-dm dm?)
-             (contains? params :channel?)     (assoc :use-channel channel?)
-             (contains? params :channel-name) (assoc :channel-id channel-id
-                                                     :channel-name channel-name)))
-          {:body trimmed})))))
 
 (defn api-routes [component]
   (-> (compojure.core/routes
-       (POST "/signup" _ (partial signup component))
-       (POST "/slack" _ (partial slack component))
-       (PUT "/time/:timestamp" _ (partial timestamp component))
-       (POST "/token" _ (partial token component))
-       (GET "/pings" _ (partial pings component))
-       (GET "/config" _ (partial config component))
+       (POST "/slack" _ (partial slack-msg component))
        (context "/api" []
-                (GET "/timezones" _ (partial timezone-list component))
-                (GET "/user/me" _ (partial my-user component))
-                (POST "/user/me/tz" _ (partial update-tz component))))
+                (GET "/timezones" _ (tictag.resources.timezone/timezones component))
+                (GET "/config" _ (tictag.resources.config/config component))
+                (ANY "/user" _ (tictag.resources.user/users component))
+                (ANY "/user/:id" _ (tictag.resources.user/user component))
+                (ANY "/token" _ (tictag.resources.token/token component))
+                (ANY "/ping" _ (tictag.resources.ping/pings component))
+                (ANY "/ping/:id" _ (tictag.resources.ping/ping component))
+                (ANY "/ping-by-ts/:timestamp" _ (tictag.resources.ping/ping-by-ts component))
+                (ANY "/macro" _ (tictag.resources.macro/macros component))
+                (ANY "/macro/:id" _ (tictag.resources.macro/macro component))
+                (ANY "/beeminder" _ (tictag.resources.beeminder/beeminders component))
+                (ANY "/beeminder/:id" _ (tictag.resources.beeminder/beeminder component))
+                (ANY "/slack" _ (tictag.resources.slack/slacks component))
+                (ANY "/slack/:id" _ (tictag.resources.slack/slack component))
+                (ANY "/goal" _ (tictag.resources.goal/goal component))
+                (ANY "/goal/:id" _ (tictag.resources.goal/goal component))))
+      (wrap-restful-params)
       (wrap-defaults (-> api-defaults (assoc :proxy true)))))
 
 
 (defn my-routes [component]
-  (wrap-restful-format
-   (compojure.core/routes (site-routes component) (api-routes component))
-   :formats [:json-kw :edn :transit-json :transit-msgpack]))
+  (compojure.core/routes
+   (site-routes component)
+   (api-routes component)))
 
 (defrecord Server [db config tagtime ws jwt]
   component/Lifecycle

@@ -7,11 +7,10 @@
             [tictag.beeminder-matching :as beeminder-matching]
             [tictag.schemas :as schemas]
             [cljs.tools.reader.edn :as edn]
-            [taoensso.timbre :refer-macros
+            [taoensso.timbre :as timbre :refer-macros
              [trace debug info warn error fatal report
               tracef debugf infof warnf errorf fatalf reportf
               spy]]
-            [taoensso.timbre :as timbre]
             [clojure.string :as str]))
 
 
@@ -31,13 +30,6 @@
          (beeminder-matching/match? q tag-set)))
      (constantly false))))
 
-
-(defn unnormalize [db thing & [other]]
-  (if (not (vector? thing))
-    (error "unnormalize: " thing))
-  (if thing
-    (get-in db thing other)
-    other))
 
 (reg-sub
  :raw-pings
@@ -84,7 +76,9 @@
 (reg-sub
  :ping-by-id
  (fn [db [_ id]]
-   (get-in db [:ping/by-id id])))
+   (let [pending-ping (get-in db [:tictag.schemas/ui :pending-ping/by-id id])
+         saved-ping   (get-in db [:ping/by-id id])]
+     (merge pending-ping saved-ping))))
 
 (reg-sub
  :pings
@@ -218,6 +212,7 @@
  (fn [_ _]
    (subscribe [:pings]))
  (fn [pings _]
+   (timbre/debug (map :ping/tags pings))
    (->> pings
         (map :ping/tag-set)
         (map frequencies)
@@ -274,7 +269,8 @@
 (reg-sub
  :authorized-user
  (fn [db _]
-   (unnormalize db (:db/authenticated-user db))))
+   (when-let [u (:db/authenticated-user db)]
+     (get-in db u))))
 
 (reg-sub
  :beeminder-id
@@ -290,13 +286,6 @@
  :beeminder-errors
  (fn [db [_ id]]
    (get-in db [:db/errors :beeminder/by-id id])))
-
-(reg-sub
- :timezone
- (fn [_ _] (subscribe [:authorized-user]))
- (fn [user _]
-   (:tz user)))
-
 
 (defn valid-goal [{:keys [goal/tags] :as goal}]
   (assoc goal
@@ -317,6 +306,12 @@
    (let [pending-slack (get-in db [:tictag.schemas/ui :pending-slack/by-id id])
          saved-slack   (get-in db [:slack/by-id id])]
      (merge saved-slack pending-slack))))
+
+(reg-sub
+ :pending-user
+ (fn [db _]
+   (let [pending-user (get-in db [:tictag.schemas/ui :pending-user/by-id :temp])]
+     pending-user)))
 
 (reg-sub
  :slack-errors

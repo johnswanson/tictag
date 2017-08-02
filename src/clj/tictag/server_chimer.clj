@@ -38,7 +38,7 @@
      component
      :stop
      (chime-at
-      (db/pings db)
+      (db/all-pings db)
       (chime! component))))
   (stop [component]
     (when-let [stop (:stop component)]

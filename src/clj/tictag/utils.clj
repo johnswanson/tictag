@@ -38,11 +38,12 @@
   (str/replace (name kw) #"_" "-"))
 
 (defn with-ns [m ns]
-  (into {}
-        (map
-         (fn [[k v]]
-           [(keyword ns (kebab-str k)) v])
-         m)))
+  (when m
+    (into {}
+          (map
+           (fn [[k v]]
+             [(keyword ns (kebab-str k)) v])
+           m))))
 
 (defn without-ns [m]
   (into {} (map (fn [[k v]] [(keyword (name k)) v]) m)))
@@ -89,4 +90,18 @@
         (if (and (zero? result) more)
           (recur more)
           result)))))
+
+(defn ignore-trailing-slash
+  "Modifies the request uri before calling the handler.
+  Removes a single trailing slash from the end of the uri if present.
+
+  Useful for handling optional trailing slashes until Compojure's route matching syntax supports regex.
+  Adapted from http://stackoverflow.com/questions/8380468/compojure-regex-for-matching-a-trailing-slash"
+  [handler]
+  (fn [request]
+    (let [uri (:uri request)]
+      (handler (assoc request :uri (if (and (not (= "/" uri))
+                                            (.endsWith uri "/"))
+                                     (subs uri 0 (dec (count uri)))
+                                     uri))))))
 

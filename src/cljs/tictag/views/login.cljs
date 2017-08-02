@@ -1,18 +1,12 @@
 (ns tictag.views.login
   (:require [re-com.core :as re-com]
             [re-frame.core :refer [dispatch subscribe]]
-            [reagent.core :as reagent]
-            [tictag.views.inputs :refer [input input-password]]))
+            [reagent.core :as reagent]))
 
 (defn login []
-  (let [username        (reagent/atom "")
-        username-errors (subscribe [:login-errors :username])
-        password        (reagent/atom "")
-        password-errors (subscribe [:login-errors :password])
+  (let [user (subscribe [:pending-user])
         submit          #(do
-                           (dispatch [:login/submit-login
-                                      {:username @username
-                                       :password @password}])
+                           (dispatch [:token/create])
                            (.preventDefault %))]
     (fn []
       [re-com/box
@@ -22,9 +16,19 @@
          :width "400px"
          :justify :center
          :children [[:label "Username"
-                     [input username username-errors "Username"]]
+                     [re-com/input-text
+                      :style {:border-radius "0px"}
+                      :width "100%"
+                      :placeholder "Username"
+                      :model (or (:pending-user/username @user) "")
+                      :on-change #(dispatch [:user/update :temp :username %])]]
                     [:label "Password"
-                     [input-password password password-errors]]
+                     [re-com/input-text
+                      :style {:border-radius "0px"}
+                      :width "100%"
+                      :placeholder "Password"
+                      :model (or (:pending-user/pass @user) "")
+                      :on-change #(dispatch [:user/update :temp :pass %])]]
                     [re-com/gap :size "10px"]
                     [:input {:type  :submit
                              :style {:display :none}}]

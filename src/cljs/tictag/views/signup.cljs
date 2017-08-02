@@ -2,24 +2,13 @@
   (:require [re-com.core :as re-com]
             [re-frame.core :refer [dispatch subscribe]]
             [reagent.core :as reagent]
-            [goog.string :as gstr]
-            [tictag.views.inputs :refer [input input-password input-timezone]]))
+            [goog.string :as gstr]))
 
 
 (defn signup []
-  (let [username          (reagent/atom "")
-        username-errors   (subscribe [:login-errors :username])
-        password          (reagent/atom "")
-        password-errors   (subscribe [:login-errors :password])
-        email             (reagent/atom "")
-        email-errors      (subscribe [:login-errors :email])
-        timezone          (reagent/atom "America/Los_Angeles")
+  (let [user              (subscribe [:pending-user])
         allowed-timezones (subscribe [:allowed-timezones])
-        submit            #(do (dispatch [:login/submit-signup
-                                          {:username @username
-                                           :password @password
-                                           :email    @email
-                                           :tz       @timezone}])
+        submit            #(do (dispatch [:user/save :temp])
                                (.preventDefault %))]
     [re-com/box
      :child
@@ -28,13 +17,34 @@
        :width "400px"
        :justify :center
        :children [[:label "Username"
-                   [input username username-errors "Username"]]
+                   [re-com/input-text
+                    :style {:border-radius "0px"}
+                    :width "100%"
+                    :placeholder "Username"
+                    :model (or (:pending-user/username @user) "")
+                    :on-change #(dispatch [:user/update :temp :username %])]]
                   [:label "Password"
-                   [input-password password password-errors]]
+                   [re-com/input-text
+                    :style {:border-radius "0px"}
+                    :width "100%"
+                    :placeholder "Password"
+                    :model (or (:pending-user/pass @user) "")
+                    :on-change #(dispatch [:user/update :temp :pass %])]]
                   [:label "Email"
-                   [input email email-errors "Email"]]
+                   [re-com/input-text
+                    :style {:border-radius "0px"}
+                    :width "100%"
+                    :placeholder "Email"
+                    :model (or (:pending-user/email @user) "")
+                    :on-change #(dispatch [:user/update :temp :email %])]]
                   [:label "Timezone"
-                   [input-timezone timezone allowed-timezones]]
+                   [:div
+                    [re-com/single-dropdown
+                     :width "100%"
+                     :choices (map (fn [tz] {:id tz :label tz}) @allowed-timezones)
+                     :model (:pending-user/tz @user)
+                     :filter-box? true
+                     :on-change #(dispatch [:user/update :temp :tz %])]]]
                   [re-com/gap :size "10px"]
                   [re-com/button
                    :on-click submit
