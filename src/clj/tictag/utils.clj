@@ -27,13 +27,6 @@
   (let [status (:status ?http-resp)]
     (and status (<= 200 status 299))))
 
-(defn with-macros [user]
-  (when user
-    (assoc
-     user
-     :macros
-     (into {} (map (juxt :expands_from #(str/split (:expands_to %) #" ")) (:macros user))))))
-
 (defn kebab-str [kw]
   (str/replace (name kw) #"_" "-"))
 

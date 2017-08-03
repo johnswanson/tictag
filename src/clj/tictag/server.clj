@@ -220,31 +220,39 @@ Separate commands with a newline to apply multiple commands at once
 
 (defn slack-msg [{:keys [db tagtime] :as component} {:keys [params]}]
   (taoensso.timbre/logged-future
-   (when-let [user (and (valid-slack? component params)
-                        (utils/with-macros
-                          (slack-user db params)))]
-     (let [evt       (:event params)
-           channel   (:channel evt)
-           me        (first (:authed_users params))
-           dm?       (str/starts-with? (or channel "") "D")
-           to-me?    (str/starts-with? (:text evt)
-                                       (str "<@" me ">"))
-           thread-ts (some-> params :event :thread_ts)
-           db        (if thread-ts (db/with-last-ping db user thread-ts) db)]
-       (timbre/debug [:slack-message
-                      {:user    (:id user)
-                       :dm?     dm?
-                       :to-me?  to-me?
-                       :message (get-in params [:event :text])}])
-       (when (or dm? to-me? thread-ts)
-         (eval-command
-          (-> component
-              (assoc :user user)
-              (assoc :db db)
-              (assoc :thread-ts thread-ts)
-              (assoc :channel channel))
-          (slack-text params))
-         (beeminder/sync! component user)))))
+   (when (valid-slack? component params)
+     (let [user* (slack-user db params)
+           user (when user*
+                  (assoc
+                   user*
+                   :macros
+                   (into {} (map
+                             (juxt :macro/expands-from
+                                   #(str/split (:macro/expands-to %) #" "))
+                             (db/get-macros db (:id user*))))))]
+       (when user
+         (let [evt       (:event params)
+               channel   (:channel evt)
+               me        (first (:authed_users params))
+               dm?       (str/starts-with? (or channel "") "D")
+               to-me?    (str/starts-with? (:text evt)
+                                           (str "<@" me ">"))
+               thread-ts (some-> params :event :thread_ts)
+               db        (if thread-ts (db/with-last-ping db user thread-ts) db)]
+           (timbre/debug [:slack-message
+                          {:user    (:id user)
+                           :dm?     dm?
+                           :to-me?  to-me?
+                           :message (get-in params [:event :text])}])
+           (when (or dm? to-me? thread-ts)
+             (eval-command
+              (-> component
+                  (assoc :user user)
+                  (assoc :db db)
+                  (assoc :thread-ts thread-ts)
+                  (assoc :channel channel))
+              (slack-text params))
+             (beeminder/sync! component user)))))))
   {:status 200 :body ""})
 
 (defn health-check [component]
