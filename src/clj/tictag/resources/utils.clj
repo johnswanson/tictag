@@ -8,7 +8,7 @@
 (defn uid [ctx] (some-> ctx :request :user-id))
 
 (defn params [ctx]
-  (get-in ctx [:request :params]))
+  (get-in ctx [:request :body-params]))
 
 (defn replace-key [e [k1 k2]]
   (if-let [[_ old] (find e k1)]

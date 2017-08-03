@@ -353,12 +353,15 @@
       :values      [(assoc v :user-id uid)]
       :returning   (columns-for type)}))))
 
-(defn delete [type {db :db} uid id]
-  (j/execute!
-   db
-   (sql/format
-    {:delete-from (table-for type)
-     :where       (where-for type uid id)})))
+(defn delete
+  ([type {db :db} where]
+   (j/execute!
+    db
+    (sql/format
+     {:delete-from (table-for type)
+      :where       where})))
+  ([type db uid id]
+   (delete type db (where-for type uid id))))
 
 (defn with-beeminder [db user]
   (when user (assoc user :beeminder (beeminder-from-db db user))))

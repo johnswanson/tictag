@@ -59,6 +59,52 @@
    :respond-with-entity? true
    :handle-ok ::macro))
 
+(defn macro-expands-from [{:keys [db]}]
+  (resource
+   resource-defaults
+   :authorized?
+   (fn [ctx]
+     (when-let [uid (uid ctx)]
+       {::user-id uid
+        ::from    (some-> ctx :request :route-params :from)}))
+   :can-put-to-missing? true
+   :exists? ::macro
+   :delete!
+   (fn [ctx]
+     (when (::macro ctx)
+       (db/delete-macro db [:and
+                            [:= :user-id (::user-id ctx)]
+                            [:= :expands-from (::from ctx)]])))
+   :processable?
+   (fn [ctx]
+     (let [old-macro  (db/get-macro
+                       db
+                       [:and
+                        [:= :user-id (::user-id ctx)]
+                        [:= :expands-from (::from ctx)]])
+           expands-to (:macro/expands-to (params ctx))
+           new-macro  {:macro/expands-to   (:macro/expands-to (params ctx))
+                       :macro/expands-from (::from ctx)}]
+       (if expands-to
+         {::changes   new-macro
+          ::macro     old-macro
+          ::old-macro old-macro}
+         [false {::unprocessable "Must specify :macro/expands-to"}])))
+   :handle-unprocessable-entity ::unprocessable
+   :put!
+   (fn [ctx]
+     (if (::macro ctx)
+       {::macro (db/update-macro db
+                                 [:and
+                                  [:= :user-id (::user-id ctx)]
+                                  [:= :expands-from (::from ctx)]]
+                                 (::changes ctx))}
+       {::macro (db/create-macro db (::user-id ctx) (::changes ctx))}))
+   :new? #(not (::old-macro %))
+   :respond-with-entity? true
+   :handle-created ::macro
+   :handle-ok ::macro))
+
 (defn macros [{:keys [db]}]
   (resource
    collection-defaults
