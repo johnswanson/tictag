@@ -350,7 +350,6 @@ Separate commands with a newline to apply multiple commands at once
                 (ANY "/token" _ (tictag.resources.token/token component))
                 (ANY "/ping" _ (tictag.resources.ping/pings component))
                 (ANY "/ping/:id" _ (tictag.resources.ping/ping component))
-                (ANY "/ping-by-ts/:timestamp" _ (tictag.resources.ping/ping-by-ts component))
                 (ANY "/macro" _ (tictag.resources.macro/macros component))
                 (ANY "/macro/expands-from/:from" _ (tictag.resources.macro/macro-expands-from component))
                 (ANY "/macro/:id" _ (tictag.resources.macro/macro component))

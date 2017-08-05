@@ -40,7 +40,9 @@
 (declare replace-key replace-keys*)
 
 (defn is-ping? [{tagtime :tagtime} long-time]
-  (tagtime/is-ping? tagtime long-time))
+  (and
+   (< long-time 4657567534313)
+   (tagtime/is-ping? tagtime long-time)))
 
 (defn encrypt [db t]
   (when t
@@ -100,6 +102,17 @@
    (-> (insert-into :pings)
        (values pings)
        sql/format)))
+
+(defn tz-offset [uid time]
+  (-> (select (sql/call :-
+                    (sql/call :timezone
+                              :users.tz
+                              time)
+                    (sql/call :timezone
+                              "UTC"
+                              time)))
+      (from :users)
+      (where [:= :id uid])))
 
 (defn add-afk-pings! [db time]
   (j/execute!
@@ -592,4 +605,16 @@
      {:insert-into :users
       :values      [v]
       :returning   [:*]}))))
+
+(defn upsert-ping [db uid ping]
+  (with-ns
+    :ping
+    (j/db-do-prepared-return-keys
+     (:db db)
+     (sql/format
+      {:insert-into (table-for :ping)
+       :values      [(assoc ping :user-id uid)]
+       :returning   (columns-for :ping)
+       :upsert      {:on-conflict   [:user-id :ts]
+                     :do-update-set [:tags :tz-offset]}}))))
 

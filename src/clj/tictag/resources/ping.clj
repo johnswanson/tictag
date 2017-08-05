@@ -20,52 +20,25 @@
 (s/def ::existing-ping
   (s/keys :opt [:ping/tags]))
 
+(s/def ::new-ping
+  (s/keys :req [:ping/tags :ping/ts]))
+
+(defn is-valid-ping [db ping]
+  (if (db/is-ping? db (:ping/ts ping))
+    (update ping :ping/ts tc/from-long)
+    :tictag.resources/unprocessable))
+
 (defn update! [db uid id ping]
   (db/update-ping db uid id ping))
-
-(defn update-ts! [db uid ts ping]
-  (db/update-ping
-   db
-   [:and [:= :ts ts] [:= :user-id uid]]
-   ping))
 
 (defn create! [db uid ping]
   (db/create-ping db uid ping))
 
+(defn upsert! [db uid ping]
+  (db/upsert-ping db uid ping))
+
 (defn location [e]
   (str "/api/ping/" (:ping/id e)))
-
-(defn ping-by-ts [{:keys [db]}]
-  (resource
-   resource-defaults
-   :allowed-methods [:put]
-   :authorized?
-   (fn [ctx]
-     (when-let [uid (uid ctx)]
-       {::user-id uid
-        ::ping-long (some-> ctx :request :route-params :ts Long.)
-        ::ping-ts (some-> ctx :request :route-params :ts Long. tc/from-long)}))
-   :can-put-to-missing? (fn [ctx]
-                          (db/is-ping? db (::ping-long ctx)))
-   :exists?
-   (fn [ctx]
-     (when-let [ping (out (db/get-ping db [:and
-                                           [:= :user-id (::user-id ctx)]
-                                           [:= :ts (::ping-ts ctx)]]))]
-       {::ping ping}))
-   :processable?
-   (fn [ctx]
-     (let [e (process ::existing-ping ctx [:ping/tags])]
-       (if (= e :tictag.resources/unprocessable)
-         [false nil]
-         [true {::changes e}])))
-   :put!
-   (fn [ctx]
-     (fn []
-       (assoc ctx ::ping (out (update-ts! db (::user-id ctx) (::ping-ts ctx) (::changes ctx))))))
-   :new? false
-   :respond-with-entity? true
-   :handle-ok ::ping))
 
 (defn ping [{:keys [db]}]
   (resource
@@ -97,16 +70,31 @@
 (defn pings [{:keys [db]}]
   (resource
    collection-defaults
-   :allowed-methods [:get]
+   :allowed-methods [:get :post]
    :authorized?
    (fn [ctx]
      (when-let [uid (uid ctx)]
        {::user-id uid}))
-   :exists?
+   :handle-created ::ping
+   :handle-ok (fn [ctx]
+                (or (::ping ctx)
+                    (map out (db/get-pings db (::user-id ctx)))))
+   :new? #(if (::old-ping %) false true)
+   :respond-with-entity? true
+   :processable?
    (fn [ctx]
-     (fn []
-       (when-let [pings (map out (db/get-pings db (::user-id ctx)))]
-         (assoc ctx ::pings pings))))
-   :handle-ok ::pings))
+     (let [e (process ::new-ping ctx [:ping/ts :ping/tags] [(partial is-valid-ping db)])]
+       (if (= e :tictag.resources/unprocessable)
+         [false {::unprocessable "Invalid ping"}]
+         [true {::ping e
+                ::old-ping (db/get-ping db [:and
+                                            [:= :user-id (::user-id ctx)]
+                                            [:= :ts (:ping/ts e)]])}])))
+   :post!
+   (fn [ctx]
+     {::ping (upsert! db
+                      (::user-id ctx)
+                      (assoc (::ping ctx)
+                             :tz-offset (db/tz-offset (::user-id ctx) (:ping/ts (::ping ctx)))))})))
 
 
