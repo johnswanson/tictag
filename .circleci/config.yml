@@ -6,6 +6,7 @@ jobs:
       - image: clojure:lein-2.7.1
     environment:
       LEIN_ROOT=nbd
+      TIMBRE_LEVEL=':warn'
     steps:
       - checkout
       - restore_cache:
