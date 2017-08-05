@@ -58,7 +58,7 @@
                                (from :ping-threads)
                                (where [:= :ping-threads.slack-ts ts])
                                sql/format))]
-    (assoc db :_last-ping (:ping-ts ping))
+    (assoc db :_last-ping (:ping_ts ping))
     db))
 
 (defn beeminder-id [user-id]
@@ -175,7 +175,7 @@
        (where [:= :user_id (:id user)])
        (merge-where
         (when-let [now (:_last-ping db)]
-          [:<= :ts now]))
+          [:= :ts now]))
        (order-by [:ts :desc])
        (limit count))))
 
