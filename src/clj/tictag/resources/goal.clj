@@ -41,7 +41,8 @@
      (when-let [goal (:goal/goal (params ctx))]
        (db/get-goal db [:and
                         [:= :user-id (::user-id ctx)]
-                        [:= :goal goal]])))
+                        [:= :goal goal]
+                        [:not= :id (::goal-id ctx)]])))
    :delete!
    (fn [ctx]
      (db/delete-goal db (::user-id ctx) (::goal-id ctx)))

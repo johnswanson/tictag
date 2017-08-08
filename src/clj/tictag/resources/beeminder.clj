@@ -58,8 +58,8 @@
    (fn [ctx]
      (when-let [beeminder (:beeminder/beeminder (params ctx))]
        (db/get-beeminder db [:and
-                        [:= :user-id (::user-id ctx)]
-                        [:= :beeminder beeminder]])))
+                             [:= :user-id (::user-id ctx)]
+                             [:= :beeminder beeminder]])))
    :delete!
    (fn [ctx]
      (db/delete-beeminder db (::user-id ctx) (::beeminder-id ctx)))

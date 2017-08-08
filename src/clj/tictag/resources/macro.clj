@@ -44,7 +44,8 @@
      (when-let [expands-from (:macro/expands-from (params ctx))]
        (db/get-macro db [:and
                          [:= :user-id (::user-id ctx)]
-                         [:= :expands-from expands-from]])))
+                         [:= :expands-from expands-from]
+                         [:not= :id (::macro-id ctx)]])))
    :delete!
    (fn [ctx]
      (db/delete-macro db (::user-id ctx) (::macro-id ctx)))
