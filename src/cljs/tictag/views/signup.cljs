@@ -2,11 +2,13 @@
   (:require [re-com.core :as re-com]
             [re-frame.core :refer [dispatch subscribe]]
             [reagent.core :as reagent]
-            [goog.string :as gstr]))
+            [goog.string :as gstr]
+            [taoensso.timbre :as timbre]))
 
 
 (defn signup []
   (let [user              (subscribe [:pending-user])
+        errors            (subscribe [:pending-user-errors])
         allowed-timezones (subscribe [:allowed-timezones])
         submit            #(do (dispatch [:user/save :temp])
                                (.preventDefault %))]
@@ -19,12 +21,17 @@
        :children [[:label "Username"
                    [re-com/input-text
                     :style {:border-radius "0px"}
+                    :status (when (:user/username @errors)
+                              (timbre/debug (:user/username @errors))
+                              :warning)
+                    :status-tooltip (or (:user/username @errors) "")
+                    :status-icon? true
                     :width "100%"
                     :placeholder "Username"
                     :model (or (:pending-user/username @user) "")
                     :on-change #(dispatch [:user/update :temp :username %])]]
                   [:label "Password"
-                   [re-com/input-text
+                   [re-com/input-password
                     :style {:border-radius "0px"}
                     :width "100%"
                     :placeholder "Password"
@@ -35,6 +42,10 @@
                     :style {:border-radius "0px"}
                     :width "100%"
                     :placeholder "Email"
+                    :status (when (:user/email @errors)
+                              :warning)
+                    :status-icon? true
+                    :status-tooltip (or (:user/email @errors) "")
                     :model (or (:pending-user/email @user) "")
                     :on-change #(dispatch [:user/update :temp :email %])]]
                   [:label "Timezone"

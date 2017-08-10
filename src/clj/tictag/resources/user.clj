@@ -39,12 +39,13 @@
      ;; this endpoint only allows the creation of a new user (which is authorized for anyone)
      ;; or the fetching of 'my user' (which is determined by the token).
      (case (get-in ctx [:request :request-method])
-       :get (when-let [uid (uid ctx)] {::user-id uid})
+       :get  (when-let [uid (uid ctx)] {::user-id uid})
        :post true))
    :exists?
    (fn [ctx]
-     (when (::user-id ctx)
-       {::users (map out (db/get-users db (::user-id ctx)))}))
+     (if (::user-id ctx)
+       {::users (map out (db/get-users db (::user-id ctx)))}
+       true))
    :handle-ok ::users
    :processable?
    (fn [ctx]
@@ -53,11 +54,16 @@
          [false {::not-processable (s/explain-data ::new-user (params ctx))}]
          [true {::user e}])))
    :handle-unprocessable-entity ::not-processable
-   :conflict
+   :conflict?
    (fn [ctx]
-     (let [{:keys [user/username user/email]} (::user ctx)]
-       (when (db/get-user-by-username-or-email db username email)
-         true)))
+     (let [{:keys [user/username user/email]}
+           (::user ctx)
+
+           existing
+           (db/get-user-by-username-or-email db username email)]
+       (when (seq existing)
+         {::conflict existing})))
+   :handle-conflict ::conflict
    :post!
    (fn [ctx]
      (let [result (create! db (::user ctx))]

@@ -312,6 +312,11 @@
  (fn [db _]
    (let [pending-user (get-in db [:tictag.schemas/ui :pending-user/by-id :temp])]
      pending-user)))
+(reg-sub
+ :pending-user-errors
+ (fn [db _]
+   (let [errs (get-in db [:db/errors :user/by-id :temp])]
+     errs)))
 
 (reg-sub
  :slack-errors

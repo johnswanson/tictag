@@ -552,15 +552,20 @@
        sql/format)))
 
 (defn get-user-by-username-or-email [{db :db} username email]
-  (first
+  (timbre/spy (reduce
+   (fn [accu v]
+     (timbre/spy (cond-> accu
+       (:email_match v) (assoc :user/email "Email conflict")
+       (:username_match v) (assoc :user/username "Username conflict"))))
+   {}
    (j/query
     db
-    (-> (select 1)
-        (from :users)
-        (where [:or
-                [:= :username username]
-                [:= :email email]])
-        sql/format))))
+    ["SELECT username = ? AS username_match,
+             email = ? AS email_match
+      FROM users
+      WHERE username = ? OR email = ?"
+     username email
+     username email]))))
 
 (def get-macros (partial get-by-owner-id :macro))
 (def get-macro (partial get-one :macro))
