@@ -7,6 +7,12 @@
             [taoensso.timbre :as timbre]
             [tictag.jwt :as jwt]))
 
+(def email-regexp #"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,63}$")
+(def user-regexp #"^[a-zA-Z0-9._-]+$")
+
+(s/def :user/email (s/and string? #(re-matches email-regexp %)))
+(s/def :user/username (s/and string? #(re-matches user-regexp %)))
+
 (s/def ::new-user
   (s/keys :req [:user/tz
                 :user/username

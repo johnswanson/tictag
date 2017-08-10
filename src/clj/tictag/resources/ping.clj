@@ -17,6 +17,8 @@
         (assoc :ping/seconds-since-midnight (t/in-seconds (t/interval (t/date-time y m d) local-time)))
         (assoc :ping/tag-set (set (str/split tags #" "))))))
 
+(s/def :ping/tags (s/and string? #(re-matches #"^[-:.\p{L}][-:.\p{L}0-9 ]*$" %)))
+
 (s/def ::existing-ping
   (s/keys :opt [:ping/tags]))
 

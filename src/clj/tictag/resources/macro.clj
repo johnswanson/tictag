@@ -17,6 +17,9 @@
 
 (def macro-keys [:macro/expands-from :macro/expands-to])
 
+(s/def :macro/expands-from (s/and string? #(re-matches #"^[-:.\p{L}][-:.\p{L}0-9]*$" %)))
+(s/def :macro/expands-to (s/and string? #(re-matches #"^[-:.\p{L}][-:.\p{L}0-9 ]*$" %)))
+
 (s/def ::new-macro
   (s/keys :req [:macro/expands-from :macro/expands-to]))
 

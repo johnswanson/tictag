@@ -2,9 +2,11 @@
   (:require [tictag.resources.defaults :refer [collection-defaults resource-defaults]]
             [tictag.resources.utils :refer [id uid params processable?]]
             [tictag.db :as db]
+            [tictag.beeminder-matching :as bm]
             [liberator.core :refer [resource]]
             [clojure.spec.alpha :as s]
-            [taoensso.timbre :as timbre]))
+            [taoensso.timbre :as timbre]
+            [clojure.edn :as edn]))
 
 (defn update! [db uid id goal]
   (db/update-goal db uid id goal))
@@ -16,6 +18,11 @@
   (str "/api/goal/" (:goal/id e)))
 
 (def goal-keys [:goal/goal :goal/tags])
+
+(s/def :goal/goal (s/and string? #(re-matches #"^[a-zA-Z0-9_-]+$" %)))
+(s/def :goal/tags (s/and string?
+                         #(try (bm/valid? (edn/read-string %))
+                               (catch Exception _ nil))))
 
 (s/def ::existing-goal
   (s/keys :opt [:goal/goal :goal/tags]))
