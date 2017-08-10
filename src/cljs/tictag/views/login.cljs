@@ -5,6 +5,7 @@
 
 (defn login []
   (let [user (subscribe [:pending-user])
+        errs (subscribe [:login-errors])
         submit          #(do
                            (dispatch [:token/create])
                            (.preventDefault %))]
@@ -29,6 +30,10 @@
                       :placeholder "Password"
                       :model (or (:pending-user/pass @user) "")
                       :on-change #(dispatch [:user/update :temp :pass %])]]
+                    (when @errs
+                      [re-com/alert-box
+                       :alert-type :danger
+                       :heading "Unauthorized!"])
                     [re-com/gap :size "10px"]
                     [:input {:type  :submit
                              :style {:display :none}}]

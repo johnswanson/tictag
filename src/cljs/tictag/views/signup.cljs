@@ -8,7 +8,7 @@
 
 (defn signup []
   (let [user              (subscribe [:pending-user])
-        errors            (subscribe [:pending-user-errors])
+        errors            (subscribe [:signup-errors])
         allowed-timezones (subscribe [:allowed-timezones])
         submit            #(do (dispatch [:user/save :temp])
                                (.preventDefault %))]

@@ -80,8 +80,8 @@
 (reg-event-db
  :login/failed
  [interceptors]
- (fn [db [_ result]]
-   db))
+ (fn [db [_ v]]
+   (assoc-in db [:db/errors :login] :unauthorized)))
 
 (reg-event-fx
  :sente-connected
@@ -530,6 +530,18 @@
    [interceptors]
    (fn [db [_ id k v]]
      (update-db t db id k v))))
+
+(reg-event-db
+ :user/update
+ [interceptors]
+ (fn [db [_ id k v]]
+   (-> db
+       (assoc-in [:tictag.schemas/ui
+                  :pending-user/by-id
+                  id
+                  (keyword (str "pending-user" (name k)))]
+                 v)
+       (assoc-in [:db/errors :login] nil))))
 
 (reg-event-db
  :ping/update

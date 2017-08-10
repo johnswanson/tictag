@@ -313,10 +313,15 @@
    (let [pending-user (get-in db [:tictag.schemas/ui :pending-user/by-id :temp])]
      pending-user)))
 (reg-sub
- :pending-user-errors
+ :signup-errors
  (fn [db _]
    (let [errs (get-in db [:db/errors :user/by-id :temp])]
      errs)))
+
+(reg-sub
+ :login-errors
+ (fn [db _]
+   (get-in db [:db/errors :login])))
 
 (reg-sub
  :slack-errors
@@ -332,11 +337,6 @@
  :active-panel
  (fn [db _]
    (some-> db :nav :handler)))
-
-(reg-sub
- :login-errors
- (fn [db [_ field]]
-   (some-> db :signup :errors field)))
 
 (reg-sub
  :allowed-timezones
