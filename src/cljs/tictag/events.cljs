@@ -193,7 +193,7 @@
 (reg-event-fx
  :ping/get-failure
  [interceptors]
- (fn [_ evt] (timbre/error evt)))
+ (fn [_ evt] nil))
 
 (reg-event-db
  :ping/get-success
@@ -245,18 +245,6 @@
       :pushy-navigate :dashboard
       :set-cookie     {:auth-token auth-token
                        :user-id    (:user/id v)}})))
-
-(reg-event-fx
- :db/query-failure
- [interceptors]
- (fn [_ evt]
-   (timbre/error evt)))
-
-(reg-event-db
- :db/query-success
- [interceptors]
- (fn [db [_ v]]
-   (deep-merge* db v)))
 
 (defn with-path [db path]
   (assoc-in {} path (get-in db path)))
