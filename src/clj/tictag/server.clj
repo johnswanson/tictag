@@ -52,7 +52,7 @@
      [:link {:href "https://fonts.googleapis.com/css?family=Roboto+Condensed:300,400"
              :rel "stylesheet"
              :type "text/css"}]
-     [:link {:rel "stylesheet" :href "//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap.css"}]
+     [:link {:rel "stylesheet" :href "//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap.min.css"}]
      [:link {:rel "stylesheet" :href "/css/re-com.css"}]
      [:link {:rel "stylesheet" :href "/css/material-design-iconic-font.min.css"}]
      [:link {:rel "stylesheet" :href "/css/main.css"}]]
