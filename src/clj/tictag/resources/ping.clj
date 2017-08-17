@@ -9,14 +9,6 @@
             [clj-time.core :as t]
             [clojure.string :as str]))
 
-(defn out [ping]
-  (let [{:keys [:ping/local-time :ping/tags]} ping
-        [y m d]                               ((juxt t/year t/month t/day) local-time)]
-    (-> ping
-        (assoc :ping/days-since-epoch (t/in-days (t/interval (t/epoch) local-time)))
-        (assoc :ping/seconds-since-midnight (t/in-seconds (t/interval (t/date-time y m d) local-time)))
-        (assoc :ping/tag-set (set (str/split tags #" "))))))
-
 (s/def :ping/tags (s/and string? #(re-matches #"^[-:.\p{L}][-:.\p{L}0-9 ]*$" %)))
 
 (s/def ::existing-ping
@@ -54,7 +46,7 @@
    :can-put-to-missing? false
    :exists?
    (fn [ctx]
-     (when-let [ping (out (db/get-ping db (::user-id ctx) (::ping-id ctx)))]
+     (when-let [ping (db/get-ping db (::user-id ctx) (::ping-id ctx))]
        {::ping ping}))
    :processable?
    (fn [ctx]
@@ -64,7 +56,7 @@
          [true {::changes e}])))
    :put!
    (fn [ctx]
-     (fn [] (assoc ctx ::ping (out (update! db (::user-id ctx) (::ping-id ctx) (::changes ctx))))))
+     (fn [] (assoc ctx ::ping (update! db (::user-id ctx) (::ping-id ctx) (::changes ctx)))))
    :new? false
    :respond-with-entity? true
    :handle-ok ::ping))
@@ -80,7 +72,7 @@
    :handle-created ::ping
    :handle-ok (fn [ctx]
                 (or (::ping ctx)
-                    (map out (db/get-pings db (::user-id ctx)))))
+                    (db/get-pings db (::user-id ctx))))
    :new? #(if (::old-ping %) false true)
    :respond-with-entity? true
    :processable?

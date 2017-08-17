@@ -304,35 +304,49 @@
   (when-let [v (utils/with-ns v (name t))]
     v))
 
+(defn convert [t]
+  (case t
+    :ping (fn [ping]
+            (when ping
+              (let [{:keys [:ping/local-time :ping/tags]} ping
+                    [y m d]                               ((juxt t/year t/month t/day) local-time)]
+                (-> ping
+                    (assoc :ping/days-since-epoch (t/in-days (t/interval (t/epoch) local-time)))
+                    (assoc :ping/seconds-since-midnight (t/in-seconds (t/interval (t/date-time y m d) local-time)))
+                    (assoc :ping/tag-set (set (str/split tags #" ")))))))
+    identity))
+
 (defn get-one
   ([type {db :db} where]
-   (with-ns
-    type
-    (first
-     (j/query
-      db
-      (sql/format
-       {:select (columns-for type)
-        :from [(table-for type)]
-        :where where})))))
+   ((convert type)
+    (with-ns
+      type
+      (first
+       (j/query
+        db
+        (sql/format
+         {:select (columns-for type)
+          :from [(table-for type)]
+          :where where}))))))
   ([type db uid id]
    (get-one type db (where-for type uid id))))
 
 (defn get-by-id [type {db :db} uid id]
-  (with-ns
-   type
-   (first
-    (j/query
-     db
-     (sql/format
-      {:select (columns-for type)
-       :from   [(table-for type)]
-       :where  (where-for type uid id)})))))
+  ((convert type)
+   (with-ns
+     type
+     (first
+      (j/query
+       db
+       (sql/format
+        {:select (columns-for type)
+         :from   [(table-for type)]
+         :where  (where-for type uid id)}))))))
 
 (def sql-overrides {:ping {:order-by [[:ts :desc]]}})
 
 (defn get-by-owner-id [type {db :db} uid]
-  (map (partial with-ns type)
+  (map (comp (convert type) (partial with-ns type))
        (j/query
         db
         (sql/format
@@ -346,25 +360,27 @@
   ([type db uid id v]
    (update-entity type db (where-for type uid id) v))
   ([type {db :db} where v]
-   (with-ns
-    type
-    (j/db-do-prepared-return-keys
-     db
-     (sql/format
-      {:update    (table-for type)
-       :set       v
-       :where     where
-       :returning (columns-for type)})))))
+   ((convert type)
+    (with-ns
+      type
+      (j/db-do-prepared-return-keys
+       db
+       (sql/format
+        {:update    (table-for type)
+         :set       v
+         :where     where
+         :returning (columns-for type)}))))))
 
 (defn create [type {db :db} uid v]
-  (with-ns
-   type
-   (j/db-do-prepared-return-keys
-    db
-    (sql/format
-     {:insert-into (table-for type)
-      :values      [(assoc v :user-id uid)]
-      :returning   (columns-for type)}))))
+  ((convert type)
+   (with-ns
+     type
+     (j/db-do-prepared-return-keys
+      db
+      (sql/format
+       {:insert-into (table-for type)
+        :values      [(assoc v :user-id uid)]
+        :returning   (columns-for type)})))))
 
 (defn delete
   ([type {db :db} where]
@@ -602,24 +618,26 @@
 (defn get-users [db uid]
   [(get-one :user db [:= :id uid])])
 (defn create-user [{db :db} v]
-  (with-ns
-   :user
-   (j/db-do-prepared-return-keys
-    db
-    (sql/format
-     {:insert-into :users
-      :values      [v]
-      :returning   [:*]}))))
+  ((convert :user)
+   (with-ns
+     :user
+     (j/db-do-prepared-return-keys
+      db
+      (sql/format
+       {:insert-into :users
+        :values      [v]
+        :returning   [:*]})))))
 
 (defn upsert-ping [db uid ping]
-  (with-ns
-    :ping
-    (j/db-do-prepared-return-keys
-     (:db db)
-     (sql/format
-      {:insert-into (table-for :ping)
-       :values      [(assoc ping :user-id uid)]
-       :returning   (columns-for :ping)
-       :upsert      {:on-conflict   [:user-id :ts]
-                     :do-update-set [:tags :tz-offset]}}))))
+  ((convert :ping)
+   (with-ns
+     :ping
+     (j/db-do-prepared-return-keys
+      (:db db)
+      (sql/format
+       {:insert-into (table-for :ping)
+        :values      [(assoc ping :user-id uid)]
+        :returning   (columns-for :ping)
+        :upsert      {:on-conflict   [:user-id :ts]
+                      :do-update-set [:tags :tz-offset]}})))))
 
