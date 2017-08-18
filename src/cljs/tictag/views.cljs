@@ -74,7 +74,7 @@
        :on-change #(dispatch [:debounced-update-ping-query %])]
       [re-com/box
        :child [:img {:src    @graph-src
-                     :width  "70%"
+                     :width  "100%"
                      :style {:margin :auto}}]]
       [re-com/box
        :child
