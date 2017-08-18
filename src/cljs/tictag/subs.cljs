@@ -2,6 +2,7 @@
   (:require [re-frame.core :refer [reg-sub subscribe]]
             [cljs-time.format :as f]
             [cljs-time.core :as t]
+            [goog.crypt.base64 :as b64]
             [tictag.dates :refer [seconds-since-midnight days-since-epoch]]
             [tictag.utils :refer [descend]]
             [tictag.beeminder-matching :as beeminder-matching]
@@ -97,16 +98,6 @@
  (fn [db _] (:db/window db)))
 
 (reg-sub
- :matrix-plot-height
- (fn [_ _] (subscribe [:window-size]))
- (fn [{:keys [height]} _] (* 0.7 height)))
-
-(reg-sub
- :matrix-plot-width
- (fn [_ _] (subscribe [:window-size]))
- (fn [{:keys [width]} _] (* 0.7 width)))
-
-(reg-sub
  :count-meeting-query
  (fn [_ _]
    (subscribe [:active-pings]))
@@ -194,10 +185,12 @@
 
 (reg-sub
  :total-time-in-days
- (fn [_ _]
-   (subscribe [:pings]))
- (fn [pings _]
-   (/ (* (count pings) 45) 60 24)))
+ (fn [db _]
+   (when-let [u (:db/authenticated-user db)]
+     (/ (* (get-in db (conj u :user/ping-count))
+           45)
+        60
+        24))))
 
 (reg-sub
  :meeting-query-per-day
@@ -209,21 +202,16 @@
 
 (reg-sub
  :tag-counts
- (fn [_ _]
-   (subscribe [:pings]))
- (fn [pings _]
-   (timbre/debug (map :ping/tags pings))
-   (->> pings
-        (map :ping/tag-set)
-        (map frequencies)
-        (apply merge-with +))))
+ (fn [db _]
+   (:freq/by-tag db)))
 
 (reg-sub
  :tag-count
  (fn [_ _]
    (subscribe [:tag-counts]))
  (fn [tag-counts [_ tag]]
-   (get tag-counts tag 0)))
+   (or (get tag-counts tag)
+       0)))
 
 (reg-sub
  :tag-active?
@@ -234,10 +222,9 @@
 
 (reg-sub
  :total-ping-count
- (fn [_ _]
-   (subscribe [:pings]))
- (fn [pings _]
-   (count pings)))
+ (fn [db _]
+   (when-let [u (:db/authenticated-user db)]
+     (get-in db (conj u :user/ping-count)))))
 
 (reg-sub
  :query-%
@@ -257,14 +244,8 @@
 
 (reg-sub
  :sorted-tag-counts
- (fn [_ _]
-   (subscribe [:tag-counts]))
- (fn [tag-counts _]
-   (keys
-    (into (sorted-map-by (fn [key1 key2]
-                           (compare [(get tag-counts key2) key2]
-                                    [(get tag-counts key1) key1])))
-          tag-counts))))
+ (fn [db _]
+   (:freq/sorted-tags db)))
 
 (reg-sub
  :authorized-user
@@ -376,4 +357,19 @@
  :goals
  (fn [db]
    (sort (keys (:goal/by-id db)))))
+
+(reg-sub
+ :auth-token
+ (fn [db _]
+   (:auth-token db)))
+
+(reg-sub
+ :query-graph
+ (fn [_ _] [(subscribe [:ping-query])
+            (subscribe [:auth-token])])
+ (fn [[ping-query auth-token] _]
+   (str "/api/graph?query=" (b64/encodeString (or ping-query ""))
+        "&auth-token=" auth-token
+        "&height=1000"
+        "&width=2000")))
 

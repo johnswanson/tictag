@@ -72,7 +72,7 @@
    :handle-created ::ping
    :handle-ok (fn [ctx]
                 (or (::ping ctx)
-                    (db/get-pings db (::user-id ctx))))
+                    (take 1000 (db/get-pings db (::user-id ctx)))))
    :new? #(if (::old-ping %) false true)
    :respond-with-entity? true
    :processable?

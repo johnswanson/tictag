@@ -4,7 +4,8 @@
             [clj-time.format :as f]
             [clj-time.core :as t]
             [clj-time.coerce :as tc]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [taoensso.timbre :as timbre]))
 
 (def wtf (f/formatter "yyyy-MM-dd HH:mm:ss"))
 

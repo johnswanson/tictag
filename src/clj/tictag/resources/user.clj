@@ -28,9 +28,6 @@
 (defn create! [db user]
   (db/create-user db user))
 
-(defn out [user]
-  (select-keys user [:user/id :user/username :user/email :user/tz]))
-
 (def hashp #(buddy.hashers/derive % {:algorithm :bcrypt+blake2b-512}))
 
 (defn hash-password [u]
@@ -50,7 +47,7 @@
    :exists?
    (fn [ctx]
      (if (::user-id ctx)
-       {::users (map out (db/get-users db (::user-id ctx)))}
+       {::users (db/get-users db (::user-id ctx))}
        true))
    :handle-ok ::users
    :processable?
@@ -73,7 +70,7 @@
    :post!
    (fn [ctx]
      (let [result (create! db (::user ctx))]
-       {::user (assoc (out result)
+       {::user (assoc result
                       :user/auth-token
                       (jwt/sign
                        jwt {:user-id (:user/id result)}))}))
@@ -90,7 +87,7 @@
          {::user-id uid})))
    :exists?
    (fn [ctx]
-     {::user (out (first (db/get-users db (::user-id ctx))))})
+     {::user (first (db/get-users db (::user-id ctx)))})
    :handle-ok ::user
    :processable?
    (fn [ctx]
@@ -102,4 +99,4 @@
    :new? false
    :put!
    (fn [ctx]
-     {::user (out (update! db (::user-id ctx) (::changes ctx)))})))
+     {::user (update! db (::user-id ctx) (::changes ctx))})))

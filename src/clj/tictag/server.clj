@@ -9,12 +9,14 @@
             [tictag.schemas :as schemas]
             [tictag.tagtime :as tagtime]
             [tictag.events]
+            [tictag.resources.freq]
             [tictag.resources.config]
             [tictag.resources.timezone]
             [tictag.resources.user]
             [tictag.resources.macro]
             [tictag.resources.ping]
             [tictag.resources.slack]
+            [tictag.resources.graph]
             [tictag.resources.beeminder]
             [tictag.resources.goal]
             [tictag.resources.token]
@@ -359,6 +361,8 @@ Separate commands with a newline to apply multiple commands at once
                 (ANY "/beeminder/:id" _ (tictag.resources.beeminder/beeminder component))
                 (ANY "/slack" _ (tictag.resources.slack/slacks component))
                 (ANY "/slack/:id" _ (tictag.resources.slack/slack component))
+                (ANY "/graph" _ (tictag.resources.graph/graph component))
+                (ANY "/freq" _ (tictag.resources.freq/freq component))
                 (ANY "/goal" _ (tictag.resources.goal/goals component))
                 (ANY "/goal/:id" _ (tictag.resources.goal/goal component))))
       (wrap-restful-params :formats [:json-kw :edn :msgpack-kw :yaml-kw :transit-json :transit-msgpack])

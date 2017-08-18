@@ -304,8 +304,24 @@
   (when-let [v (utils/with-ns v (name t))]
     v))
 
-(defn convert [t]
+(defn get-count [db uid]
+  (:count
+   (first
+    (j/query
+     (or (:db db) db)
+     (-> (select :%count.*)
+         (from :pings)
+         (where [:= :user-id uid])
+         sql/format)))))
+
+
+(defn convert [db t]
   (case t
+    :user (fn [user]
+            (some->
+             user
+             (select-keys [:user/id :user/username :user/email :user/tz])
+             (assoc :user/ping-count (get-count db (:user/id user)))))
     :ping (fn [ping]
             (when ping
               (let [{:keys [:ping/local-time :ping/tags]} ping
@@ -318,7 +334,7 @@
 
 (defn get-one
   ([type {db :db} where]
-   ((convert type)
+   ((convert db type)
     (with-ns
       type
       (first
@@ -332,7 +348,7 @@
    (get-one type db (where-for type uid id))))
 
 (defn get-by-id [type {db :db} uid id]
-  ((convert type)
+  ((convert db type)
    (with-ns
      type
      (first
@@ -346,7 +362,7 @@
 (def sql-overrides {:ping {:order-by [[:ts :desc]]}})
 
 (defn get-by-owner-id [type {db :db} uid]
-  (map (comp (convert type) (partial with-ns type))
+  (map (comp (convert db type) (partial with-ns type))
        (j/query
         db
         (sql/format
@@ -360,7 +376,7 @@
   ([type db uid id v]
    (update-entity type db (where-for type uid id) v))
   ([type {db :db} where v]
-   ((convert type)
+   ((convert db type)
     (with-ns
       type
       (j/db-do-prepared-return-keys
@@ -372,7 +388,7 @@
          :returning (columns-for type)}))))))
 
 (defn create [type {db :db} uid v]
-  ((convert type)
+  ((convert db type)
    (with-ns
      type
      (j/db-do-prepared-return-keys
@@ -618,7 +634,7 @@
 (defn get-users [db uid]
   [(get-one :user db [:= :id uid])])
 (defn create-user [{db :db} v]
-  ((convert :user)
+  ((convert db :user)
    (with-ns
      :user
      (j/db-do-prepared-return-keys
@@ -629,7 +645,7 @@
         :returning   [:*]})))))
 
 (defn upsert-ping [db uid ping]
-  ((convert :ping)
+  ((convert db :ping)
    (with-ns
      :ping
      (j/db-do-prepared-return-keys
@@ -640,4 +656,18 @@
         :returning   (columns-for :ping)
         :upsert      {:on-conflict   [:user-id :ts]
                       :do-update-set [:tags :tz-offset]}})))))
+
+
+(defn get-freqs [db uid]
+  (let [convert-fn #((convert db :freq)
+                     (with-ns :freq %))]
+    (map convert-fn (j/query
+                     (:db db)
+                     [(str
+                       "SELECT regexp_split_to_table(tags, '\\s') as tag,"
+                       " count(*) as count"
+                       " from pings"
+                       " where user_id=?"
+                       " group by tag order by count desc")
+                      uid]))))
 

@@ -21,6 +21,15 @@
             [cljs.core.async :as a :refer [<! >! put! chan]]
             [taoensso.sente :as sente :refer [cb-success?]]))
 
+(def initial-queries
+  [[:ping/get]
+   [:freq/get]
+   [:user/get]
+   [:macro/get]
+   [:beeminder/get]
+   [:goal/get]
+   [:slack/get]])
+
 (declare merge-pending)
 
 (extend-type goog.net.XhrIo
@@ -92,7 +101,7 @@
   (reg-event-fx
    (keyword (name t) "get")
    [interceptors]
-   (fn [{:keys [db]} _]
+   (fn [{:keys [db]} [_ options]]
      (let [user-id (second (:db/authenticated-user db))]
        {:http-xhrio (authenticated-xhrio
                      {:method          :get
@@ -165,6 +174,7 @@
 (register-rest! :beeminder)
 (register-rest! :slack)
 (register-rest! :user)
+(register-rest! :freq)
 
 (reg-event-db
  :beeminder/get-success
@@ -204,6 +214,14 @@
           :ping/by-id (into {} (map (juxt :ping/id identity) v)))))
 
 (reg-event-db
+ :freq/get-success
+ [interceptors]
+ (fn [db [_ v]]
+   (assoc db
+          :freq/by-tag (into {} (map (juxt :freq/tag :freq/count) v))
+          :freq/sorted-tags (map :freq/tag v))))
+
+(reg-event-db
  :user/get-success
  [interceptors]
  (fn [db [_ v]]
@@ -219,12 +237,7 @@
      {:db             (-> db
                           (assoc :auth-token auth-token))
       :sente-connect  auth-token
-      :dispatch-n     [[:user/get]
-                       [:macro/get]
-                       [:beeminder/get]
-                       [:goal/get]
-                       [:slack/get]
-                       [:ping/get]]
+      :dispatch-n     initial-queries
       :pushy-navigate :dashboard
       :set-cookie     {:auth-token auth-token}})))
 
@@ -237,11 +250,7 @@
                           (assoc :auth-token auth-token)
                           (assoc :db/authenticated-user [:user/by-id (:user/id v)]))
       :sente-connect  auth-token
-      :dispatch-n     [[:macro/get]
-                       [:beeminder/get]
-                       [:goal/get]
-                       [:slack/get]
-                       [:ping/get]]
+      :dispatch-n     initial-queries
       :pushy-navigate :dashboard
       :set-cookie     {:auth-token auth-token
                        :user-id    (:user/id v)}})))
@@ -378,12 +387,7 @@
                                        :on-success      [:success-timezones]
                                        :on-failure      [:failed-timezones]}
     :sente-connect                    (:auth-token cookies)
-    :dispatch-n                       [[:user/get]
-                                       [:macro/get]
-                                       [:beeminder/get]
-                                       [:goal/get]
-                                       [:slack/get]
-                                       [:ping/get]]
+    :dispatch-n                       initial-queries
     :add-window-resize-event-listener nil
     :db                               (let [db {:auth-token  (:auth-token cookies)
                                                 :db/window   window-dimensions
