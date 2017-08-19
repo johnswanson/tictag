@@ -3,10 +3,8 @@
             [taoensso.timbre :as timbre]
             [buddy.core.codecs.base64 :as b64]
             [tictag.db :as db]
-            [clojure.edn :as edn]
             [clj-time.format :as f]
             [clj-time.coerce :as tc]
-            [tictag.beeminder-matching :as beeminder-matching]
             [clojure.java.io :as io]
             [ring.util.io :as ring-io]
             [ring.util.response :as response]
@@ -14,20 +12,12 @@
             [c2.svg]
             [c2.ticks]
             [tictag.jwt :as jwt]
-            [tictag.utils :as utils]))
+            [tictag.resources.utils :as utils]))
 
 (defn round [v] (Math/round (double v)))
 
 (defn user-id [{:keys [jwt]} req]
   (:user-id (jwt/unsign jwt (get-in req [:params :auth-token]))))
-
-(defn b64-encode
-  [s]
-  (String. (b64/encode (.getBytes s "UTF-8")) "UTF-8"))
-
-(defn b64-decode
-  [s]
-  (String. (b64/decode (.getBytes s "UTF-8")) "UTF-8"))
 
 (defn style [m]
   (.trim
@@ -44,16 +34,9 @@
           :height (format "%dpx" height)}
     contents]))
 
-(defn query-fn [query]
-  (if (seq query)
-    (let [q (try (edn/read-string query) (catch Exception _ query))]
-      (fn [{:keys [ping/tag-set]}]
-        (beeminder-matching/match? q tag-set)))
-    (constantly false)))
-
 (defn pings [db user-id query]
   (let [pings (db/get-pings db user-id)]
-    (filter (query-fn query) pings)))
+    (filter (utils/query-fn query) pings)))
 
 (defn cum-axis [yscale]
   [:g {:style (style {:stroke "#3E9651"})}
@@ -110,7 +93,7 @@
       (circle-for-ping ping)])])
 
 (defn get-query [req]
-  (b64-decode (get-in req [:params :query])))
+  (utils/b64-decode (get-in req [:params :query])))
 
 (defn daily-total [freqs]
   (fn [prev today]

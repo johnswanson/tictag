@@ -99,10 +99,8 @@
 
 (reg-sub
  :count-meeting-query
- (fn [_ _]
-   (subscribe [:active-pings]))
- (fn [pings _]
-   (count pings)))
+ (fn [db _]
+   (:ping-query-count db)))
 
 (reg-sub
  :sorted-active-pings

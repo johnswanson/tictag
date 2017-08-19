@@ -1,6 +1,20 @@
 (ns tictag.resources.utils
   (:require [clojure.spec.alpha :as s]
+            [clojure.edn :as edn]
+            [tictag.beeminder-matching :as beeminder-matching]
+            [buddy.core.codecs.base64 :as b64]
             [taoensso.timbre :as timbre]))
+
+(defn b64-decode
+  [s]
+  (String. (b64/decode (.getBytes s "UTF-8")) "UTF-8"))
+
+(defn query-fn [query]
+  (if (seq query)
+    (let [q (try (edn/read-string query) (catch Exception _ query))]
+      (fn [{:keys [ping/tag-set]}]
+        (beeminder-matching/match? q tag-set)))
+    (constantly false)))
 
 
 (defn id [ctx] (some-> ctx :request :route-params :id Integer.))

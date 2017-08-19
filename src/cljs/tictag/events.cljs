@@ -2,6 +2,7 @@
   (:require-macros
    [cljs.core.async.macros :as asyncm :refer (go go-loop)])
   (:require [cljs.tools.reader.edn :as edn]
+            [goog.crypt.base64 :as b64]
             [clojure.string :as str]
             [re-frame.core :refer [reg-event-fx reg-event-db reg-fx reg-cofx inject-cofx]]
             [taoensso.timbre :as timbre]
@@ -273,13 +274,26 @@
  (fn [_ [_ v]]
    {:dispatch-debounce [:upq [:update-ping-query v] 500]}))
 
-(reg-event-db
+(reg-event-fx
  :update-ping-query
  [interceptors]
- (fn [db [_ v]]
+ (fn [{:keys [db]} [_ v]]
    (if (seq v)
-     (assoc db :ping-query v)
-     (assoc db :ping-query nil))))
+     {:db (assoc db :ping-query v :ping-query-count 0)
+      :http-xhrio (authenticated-xhrio
+                   {:method          :get
+                    :uri             (str "/api/freq/" (b64/encodeString (or v "")))
+                    :response-format (transit-response-format {})
+                    :on-success      [:ping-query/get-success]
+                    :on-failure      [:ping-query/get-failure]}
+                   (:auth-token db))}
+     {:db (assoc db :ping-query nil :ping-query-count 0)})))
+
+(reg-event-db
+ :ping-query/get-success
+ [interceptors]
+ (fn [db [_ v]]
+   (assoc db :ping-query-count (:count v))))
 
 (reg-fx
  :pushy-init

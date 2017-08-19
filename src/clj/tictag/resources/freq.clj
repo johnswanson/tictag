@@ -1,7 +1,8 @@
 (ns tictag.resources.freq
-  (:require [tictag.resources.defaults :refer [collection-defaults]]
-            [tictag.resources.utils :refer [id uid params processable? process replace-keys]]
+  (:require [tictag.resources.defaults :refer [collection-defaults resource-defaults]]
+            [tictag.resources.utils :as utils :refer [id uid params processable? process replace-keys query-fn]]
             [tictag.db :as db]
+            [buddy.core.codecs.base64 :as b64]
             [liberator.core :refer [resource]]
             [clojure.spec.alpha :as s]
             [taoensso.timbre :as timbre]
@@ -10,6 +11,19 @@
             [clojure.string :as str]))
 
 (defn freq [{:keys [db]}]
+  (resource
+   resource-defaults
+   :allowed-methods [:get]
+   :authorized?
+   (fn [ctx]
+     (when-let [uid (uid ctx)]
+       {::user-id uid
+        ::query (some-> ctx :request :route-params :query utils/b64-decode)}))
+   :handle-ok (fn [ctx]
+                {:count (count (filter (query-fn (::query ctx)) (db/get-pings db (::user-id ctx))))})))
+
+
+(defn freqs [{:keys [db]}]
   (resource
    collection-defaults
    :allowed-methods [:get]
