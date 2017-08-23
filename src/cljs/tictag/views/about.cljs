@@ -26,14 +26,18 @@
                      [:i "actually goes"] "."]
                     [re-com/p
                      "So how much time do I spend coding? TicTag knows!"]
-                    [:a {:href "https://www.beeminder.com/jds02006/coding"}
-                     [:img {:width "650px"
-                            :src "https://jds.objects-us-west-1.dream.io/screenshots/2017-05-28_16.08.54.png"}]]
+                    (let [coding-link "https://agh.io/api/graph?sig=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJxdWVyeSI6IihvciBkZXYgY29kaW5nKSIsInVzZXItaWQiOjF9.MGUCMQDGJJPTKcZVZAWGkAt5Nf_g5GdTg5O2jRVA4jCdIFbPAT5Soouq84vMh0E9_CGevrICMFqtrArVGuEvxNEWblhy2nxJzYOSLZUmNITTOVqPMHil8SKDNVnEHZHwZkTPLA90ow"]
+                      [:a {:href coding-link
+                           :target :_blank}
+                       [:img {:width "850px"
+                              :src coding-link}]])
                     [re-com/p
                      "How much time do I spend working on this project? TicTag knows!"]
-                    [:a {:href "https://www.beeminder.com/jds02006/ttc"}
-                     [:img {:width "650px"
-                            :src "https://jds.objects-us-west-1.dream.io/screenshots/2017-05-28_16.09.48.png"}]]
+                    (let [ttc-link "https://agh.io/api/graph?sig=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJxdWVyeSI6InR0YyIsInVzZXItaWQiOjF9.MGQCMG9rkoU6_pBojnXLiHnl6Lr5wna2DZbMWI29Sw65SzCV95irHW7Jb4fu7jSNbo1utgIwS886Iyr_y9JGU1dG3seQ0J-6uZl0NNXgEin08YfeORLoVHAgUhsWgUevG6xwY4Fe"]
+                      [:a {:href ttc-link
+                           :target :_blank}
+                       [:img {:width "850px"
+                              :src ttc-link}]])
                     [re-com/p "TicTag also knows that on an average day, I spend:"]
                     [:ul
                      [:li "7h30m sleeping"]
