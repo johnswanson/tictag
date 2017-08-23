@@ -55,29 +55,38 @@
         time-per-day (subscribe [:time-per-day-for-tag tag])]
     [tag-table-row-view tag @count @tag-% @minutes @active? @time-per-day]))
 
+(defn graph []
+  (let [query-url (subscribe [:signed-query-url])]
+    (fn []
+      (if @query-url
+        [:a
+         {:href @query-url
+          :target :_blank}
+         [:img {:src   @query-url
+                :title "This link is safe to share and the graph will constantly update with your latest data!"
+                :width "100%"
+                :style {:margin :auto}}]]))))
+
 (defn logged-in-app
   []
   (let [tag-counts  (subscribe [:sorted-tag-counts])
         ping-query  (subscribe [:ping-query])
-        graph-src   (subscribe [:query-graph])
         window-size (subscribe [:window-size])]
     [re-com/v-box
      :gap "1em"
      :align :center
      :style {:max-width "90%"}
      :children
-     [[re-com/input-text
+     [[re-com/box
+       :child [graph]]
+      [re-com/input-text
        :style {:border-radius "0px"
                :max-width "100%"}
        :width "100%"
-       :placeholder "Query"
+       :placeholder "Query (e.g. '(and this (or that other thing))')"
        :model (reagent/atom "")
        :change-on-blur? false
        :on-change #(dispatch [:debounced-update-ping-query %])]
-      [re-com/box
-       :child [:img {:src    @graph-src
-                     :width  "100%"
-                     :style {:margin :auto}}]]
       [re-com/box
        :child
        [:table

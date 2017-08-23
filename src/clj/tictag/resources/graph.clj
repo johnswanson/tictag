@@ -14,10 +14,16 @@
             [tictag.jwt :as jwt]
             [tictag.resources.utils :as utils]))
 
-(defn round [v] (Math/round (double v)))
+(defn unsign [c req]
+  (jwt/unsign (:jwt c) (some-> req :params :sig)))
 
-(defn user-id [{:keys [jwt]} req]
-  (:user-id (jwt/unsign jwt (get-in req [:params :auth-token]))))
+(defn signed-query [c user-id query]
+  (jwt/sign (:jwt c) {:query query
+                      :user-id user-id}))
+
+
+
+(defn round [v] (Math/round (double v)))
 
 (defn style [m]
   (.trim
@@ -26,12 +32,12 @@
                   (str (name k) ":" v ";"))
                m))))
 
-(defn svg* [[x0 y0 x0 y1 :as dims] width height & contents]
+(defn svg* [contents]
   (h/html
    [:svg {:xmlns "http://www.w3.org/2000/svg"
           :version "1.1"
-          :width (format "%dpx" width)
-          :height (format "%dpx" height)}
+          :width (format "%dpx" 2000)
+          :height (format "%dpx" 1000)}
     contents]))
 
 (defn pings [db user-id query]
@@ -92,9 +98,6 @@
                                         (yscale (:ping/seconds-since-midnight ping))])}
       (circle-for-ping ping)])])
 
-(defn get-query [req]
-  (utils/b64-decode (get-in req [:params :query])))
-
 (defn daily-total [freqs]
   (fn [prev today]
     (let [[_ ytotal] (or (last prev) [0 0])]
@@ -128,65 +131,57 @@
          :height (- height scaled margin)
          :width  1}]))])
 
-(defn width [req]
-  (Integer. (get-in req [:params :width])))
-
-(defn height [req]
-  (Integer. (get-in req [:params :height])))
-
-
 (defn svg-graph [{:as c :keys [db]} req]
-  (let [width  (width req)
-        height (height req)]
+  (let [width  2000
+        height 1000]
     (svg*
-     [0 0 width height] width height
-     (let [query           (get-query req)
-           pings           (pings db (user-id c req) query)]
-       (when (seq pings)
-         (let [margin          60
-               max-height      (- height margin)
-               min-height      margin
-               min-width       margin
-               max-width       (- width margin)
-               first-ping      (last pings)
-               last-ping       (first pings)
-               day-frequencies (->> pings (map :ping/days-since-epoch) (frequencies))
-               day-scale       (c2.scale/linear :domain [(:ping/days-since-epoch first-ping)
-                                                         (:ping/days-since-epoch last-ping)]
-                                                :range [min-width max-width])
-               time-scale      (c2.scale/linear :domain [0 (* 24 60 60)]
-                                                :range [min-height max-height])
-               hours-scale     (c2.scale/linear :domain [0 24]
-                                                :range [max-height min-height])
-               count-scale     (c2.scale/linear :domain [0 (* 0.75 (count pings))]
-                                                :range [max-height min-height])]
-           [:g
-            [:g.axes {:style       (style {:stroke       "black"
-                                           :stroke-width 1
-                                           :font-weight  "100"})
-                      :font-size   "14px"
-                      :font-family "sans-serif"}
-             [:g {:transform (c2.svg/translate [max-width 0])}
-              (cum-axis count-scale)]
-             [:g {:transform (c2.svg/translate [min-width 0])}
-              (hist-axis hours-scale)]
-             [:g {:transform (c2.svg/translate [(/ width 2) 0])}
-              (time-axis time-scale)]
-             [:g {:transform (c2.svg/translate [0 max-height])}
-              (days-axis day-scale)]]
-            [:g.plots
-             [:g.matrix
-              (matrix day-scale time-scale pings)]
-             [:g.histogram
-              (histogram day-scale hours-scale height margin day-frequencies)]
-             [:g.cumulative
-              (cumulative day-scale count-scale width height margin (:ping/days-since-epoch first-ping) (:ping/days-since-epoch last-ping) day-frequencies)]]]))))))
+     (when-let [{:keys [user-id query]} (unsign c req)]
+       (let [pings (pings db user-id query)]
+         (when (seq pings)
+           (let [margin          60
+                 max-height      (- height margin)
+                 min-height      margin
+                 min-width       margin
+                 max-width       (- width margin)
+                 first-ping      (last pings)
+                 last-ping       (first pings)
+                 day-frequencies (->> pings (map :ping/days-since-epoch) (frequencies))
+                 day-scale       (c2.scale/linear :domain [(:ping/days-since-epoch first-ping)
+                                                           (:ping/days-since-epoch last-ping)]
+                                                  :range [min-width max-width])
+                 time-scale      (c2.scale/linear :domain [0 (* 24 60 60)]
+                                                  :range [min-height max-height])
+                 hours-scale     (c2.scale/linear :domain [0 24]
+                                                  :range [max-height min-height])
+                 count-scale     (c2.scale/linear :domain [0 (* 0.75 (count pings))]
+                                                  :range [max-height min-height])]
+             [:g
+              [:g.axes {:style       (style {:stroke       "black"
+                                             :stroke-width 1
+                                             :font-weight  "100"})
+                        :font-size   "14px"
+                        :font-family "sans-serif"}
+               [:g {:transform (c2.svg/translate [max-width 0])}
+                (cum-axis count-scale)]
+               [:g {:transform (c2.svg/translate [min-width 0])}
+                (hist-axis hours-scale)]
+               [:g {:transform (c2.svg/translate [(/ width 2) 0])}
+                (time-axis time-scale)]
+               [:g {:transform (c2.svg/translate [0 max-height])}
+                (days-axis day-scale)]]
+              [:g.plots
+               [:g.matrix
+                (matrix day-scale time-scale pings)]
+               [:g.histogram
+                (histogram day-scale hours-scale height margin day-frequencies)]
+               [:g.cumulative
+                (cumulative day-scale count-scale width height margin (:ping/days-since-epoch first-ping) (:ping/days-since-epoch last-ping) day-frequencies)]]])))))))
 
-
-(defn authorized? [c req]
-  (user-id c req))
+(defn get-query [req]
+  (utils/b64-decode (get-in req [:params :query])))
 
 (defn graph [c]
   (fn [req]
     {:body (svg-graph c req)
      :headers {"Content-Type" "image/svg+xml"}}))
+

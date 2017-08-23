@@ -362,12 +362,8 @@
    (:auth-token db)))
 
 (reg-sub
- :query-graph
- (fn [_ _] [(subscribe [:ping-query])
-            (subscribe [:auth-token])])
- (fn [[ping-query auth-token] _]
-   (str "/api/graph?query=" (b64/encodeString (or ping-query ""))
-        "&auth-token=" auth-token
-        "&height=1000"
-        "&width=2000")))
+ :signed-query-url
+ (fn [db _]
+   (:ping-query-url db)))
+
 

@@ -9,6 +9,7 @@
             [tictag.schemas :as schemas]
             [tictag.tagtime :as tagtime]
             [tictag.events]
+            [tictag.resources.sign]
             [tictag.resources.freq]
             [tictag.resources.config]
             [tictag.resources.timezone]
@@ -363,6 +364,7 @@ Separate commands with a newline to apply multiple commands at once
                 (ANY "/slack/:id" _ (tictag.resources.slack/slack component))
                 (ANY "/graph" _ (tictag.resources.graph/graph component))
                 (ANY "/freq/:query" _ (tictag.resources.freq/freq component))
+                (ANY "/sign/:query" _ (tictag.resources.sign/sign component))
                 (ANY "/freq" _ (tictag.resources.freq/freqs component))
                 (ANY "/goal" _ (tictag.resources.goal/goals component))
                 (ANY "/goal/:id" _ (tictag.resources.goal/goal component))))

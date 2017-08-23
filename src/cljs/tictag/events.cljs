@@ -279,21 +279,45 @@
  [interceptors]
  (fn [{:keys [db]} [_ v]]
    (if (seq v)
-     {:db (assoc db :ping-query v :ping-query-count 0)
-      :http-xhrio (authenticated-xhrio
-                   {:method          :get
-                    :uri             (str "/api/freq/" (b64/encodeString (or v "")))
-                    :response-format (transit-response-format {})
-                    :on-success      [:ping-query/get-success]
-                    :on-failure      [:ping-query/get-failure]}
-                   (:auth-token db))}
+     {:dispatch-n [[:send-freq-req v]
+                   [:send-sign-req v]]
+      :db (assoc db :ping-query v :ping-query-count 0)}
      {:db (assoc db :ping-query nil :ping-query-count 0)})))
+
+(reg-event-fx
+ :send-freq-req
+ [interceptors]
+ (fn [{:keys [db]} [_ v]]
+   {:http-xhrio (authenticated-xhrio
+                 {:method          :get
+                  :uri             (str "/api/freq/" (b64/encodeString (or v "")))
+                  :response-format (transit-response-format {})
+                  :on-success      [:ping-query/get-success]
+                  :on-failure      [:ping-query/get-failure]}
+                 (:auth-token db))}))
+(reg-event-fx
+ :send-sign-req
+ [interceptors]
+ (fn [{:keys [db]} [_ v]]
+   {:http-xhrio (authenticated-xhrio
+                 {:method          :get
+                  :uri             (str "/api/sign/" (b64/encodeString (or v "")))
+                  :response-format (transit-response-format {})
+                  :on-success      [:sign/get-success]
+                  :on-failure      [:sign/get-failure]}
+                 (:auth-token db))}))
 
 (reg-event-db
  :ping-query/get-success
  [interceptors]
  (fn [db [_ v]]
    (assoc db :ping-query-count (:count v))))
+
+(reg-event-db
+ :sign/get-success
+ [interceptors]
+ (fn [db [_ v]]
+   (assoc db :ping-query-url (:url v))))
 
 (reg-fx
  :pushy-init
