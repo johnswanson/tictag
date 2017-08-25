@@ -1,7 +1,8 @@
 CMDS = CMD*
-CMD = (BYID|BYLT|PREVPING|SLEEP|HELP) <EOL>+
+CMD = (BYID|BYLT|PREVPING|SLEEP|HELP|CONT) <EOL>+
 HELP = <#'\h'*'help'#'\h'*>
 <EOL> = '\n'
+CONT = <'!'> TAGS
 BYID = ID <' '> TAGS
 BYLT = LT <' '> TAGS
 ID = #'\d{1,3}'

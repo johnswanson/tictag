@@ -67,7 +67,8 @@
      [:li [re-com/p "Using the same syntax, respond to a ping in a thread to respond to that specific ping"]]
      [:li [re-com/p "Refer to a recent ping by its ID, like " [:code "123 foo bar"] ", to tag that ping as " [:code (pr-str ["foo" "bar"])]]]
      [:li [re-com/p "Refer to any ping by its ms-from-epoch timestamp, like " [:code "1495753682000 foo bar"] ", to tag that ping as " [:code (pr-str ["foo" "bar"])]]]
-     [:li [re-com/p "The special command " [:code "sleep"] " will tag the last contiguous series of pings as " [:code (pr-str ["sleep"])]]]
+     [:li [re-com/p "The special command " [:code "sleep"] " will tag the last contiguous series of " [:code "afk"] " pings as " [:code (pr-str ["sleep"])]]]
+     [:li [re-com/p "Similarly, " [:code "! job"] " will tag the last contiguous set of " [:code "afk"] " pings as " [:code (pr-str ["job"])]]]
      [:li [re-com/p [:code "\""] " will macro-expand to 'ditto'--in other words, the tags that the " [:span.bold "previous"] " ping had"]]
      [:li [re-com/p "You can send multiple commands at once by separating them with newlines"]]]
     [re-com/p "You can also send " [:code "help"] " to the slackbot if you need it."]]])

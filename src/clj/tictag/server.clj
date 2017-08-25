@@ -97,6 +97,14 @@
 
 (defmulti evaluate (fn [context [v & vs]] v))
 
+(defmethod evaluate :CONT [{:keys [db user] :as ctx} [_ tags]]
+  (let [pings (db/sleepy-pings db user)]
+    [:SAVE* (map
+             (fn [ping]
+               [ping (evaluate ctx tags)])
+             pings)]))
+
+
 (defmethod evaluate :CMDS [ctx [_ & vs]]
   (timbre/trace [:evaluate :CMDS vs])
   (doseq [[cmd {:keys [saved error]}] (map (partial evaluate ctx) vs)]
@@ -132,7 +140,6 @@
 
 (defmethod evaluate :SLEEP [{:keys [db user] :as ctx} _]
   (let [sleepy-pings (db/sleepy-pings db user)]
-    (trace [:sleepy-pings (:id user) (vec sleepy-pings)])
     [:SAVE*
      (map
       (fn [ping]
@@ -179,7 +186,8 @@ Tag the most recent ping (e.g. by saying `ttc`)
 Tag a specific ping by responding in a slack thread to that ping's message
 Tag a ping by its id (e.g. by saying `113 ttc`)
 Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
-`sleep` command: tag the most recent set of contiguous pings as `sleep`
+`sleep` command: tag the most recent set of contiguous `afk` pings as `sleep`
+`! vacation` will tag the most recent set of contiguous pings as `vacation`
 `\"`: macroexpands to the tags of the ping sent *before the one you're tagging*
 Separate commands with a newline to apply multiple commands at once
 ")
