@@ -14,6 +14,14 @@
             [tictag.jwt :as jwt]
             [tictag.resources.utils :as utils]))
 
+(defn format-minutes [ms]
+  (let [total-seconds (* 60 ms)
+        hours         (quot total-seconds (* 60 60))
+        in-seconds    (mod total-seconds (* 60 60))
+        minutes       (quot in-seconds 60)
+        seconds       (mod in-seconds 60)]
+    (format "%02.0f:%02.0f:%02.0f" hours minutes seconds)))
+
 (defn unsign [c req]
   (jwt/unsign (:jwt c) (some-> req :params :sig)))
 
@@ -41,8 +49,7 @@
     contents]))
 
 (defn pings [db user-id query]
-  (let [pings (db/get-pings db user-id)]
-    (filter (utils/query-fn query) pings)))
+  (db/get-pings db user-id))
 
 (defn cum-axis [yscale]
   [:g {:style (style {:stroke "#3E9651"})}
@@ -50,7 +57,7 @@
     yscale
     (conj (:ticks (c2.ticks/search (:domain yscale))) (second (:domain yscale)))
     :orientation :right
-    :label "Hours (cum)")])
+    :label "Hours (cumulative)")])
 
 (defn format-day-to-time [day]
   (let [in-seconds (* day 24 60 60 1000)]
@@ -101,12 +108,12 @@
 (defn daily-total [freqs]
   (fn [prev today]
     (let [[_ ytotal] (or (last prev) [0 0])]
-      (conj prev [today (+ (* 0.75 (or (freqs today) 0)) ytotal)]))))
+      (conj prev [today (+ (or (freqs today) 0) ytotal)]))))
 
-(defn cumulative [xscale yscale width height margin first-day last-day day-totals]
-  (let [totals (when (seq day-totals)
-                 (reduce (daily-total day-totals) [] (range first-day (inc last-day))))]
-    (when totals
+(defn cumulative [xscale yscale width height margin [first-day last-day] [first-matching-day last-matching-day] day-totals count-pings count-pings-in-range]
+  (let [cumulative-totals (when (seq day-totals)
+                            (reduce (daily-total day-totals) [] (range first-day (inc last-day))))]
+    (when cumulative-totals
       [:g
        [:g {:style (style {:fill         "none"
                            :stroke       "#3E9651"
@@ -115,8 +122,47 @@
         (c2.svg/line
          (map
           (fn [[day total]]
-            [(round (xscale day)) (round (yscale total))])
-          totals))]])))
+            [(round (xscale day))
+             (round (yscale (* 0.75 total)))])
+          cumulative-totals))]
+       (let [[_ first-total]      (first cumulative-totals)
+             [_ last-total]       (last cumulative-totals)
+             grand-total-hours    (* 0.75 count-pings)
+             grand-total-days     (/ grand-total-hours 24)
+             in-range-total-hours (* 0.75 count-pings-in-range)
+             in-range-total-days  (/ in-range-total-hours 24)
+             total-minutes        (* 45 last-total)
+             total-hours          (* 0.75 last-total)
+             avg                  (/ total-minutes grand-total-days)
+             range-avg            (/ total-minutes in-range-total-days)]
+         [:g
+          [:g {:style (style {:fill         "none"
+                              :stroke       "#535154"
+                              :stroke-width "2"
+                              :opacity      "1.0"})}
+           (c2.svg/line
+            [[(round (xscale first-day)) (round (yscale first-total))]
+             [(round (xscale last-day)) (round (yscale total-hours))]])
+           [:text
+            {:x         (+ (xscale first-day) 32)
+             :y         (- (yscale first-total) 64)
+             :stroke-width "1"
+             :font-size "14px"}
+            (format "%s / day" (format-minutes avg))]]
+          [:g {:style (style {:fill         "none"
+                              :stroke       "#CC2529"
+                              :stroke-width "2"
+                              :opacity      "1.0"})}
+
+           (c2.svg/line
+            [[(round (xscale first-matching-day)) (round (yscale first-total))]
+             [(round (xscale last-matching-day)) (round (yscale total-hours))]])
+           [:text
+            {:x         (+ (xscale first-matching-day) 96)
+             :y         (- (yscale first-total) 32)
+             :font-size "14px"
+             :stroke-width "1"}
+            (format "%s / day" (format-minutes range-avg))]]])])))
 
 (defn histogram [xscale density-yscale height margin day-totals]
   [:g {:style (style {:fill    "#DA7C30"
@@ -138,24 +184,29 @@
      (when-let [{:keys [user-id query]} (unsign c req)]
        (let [pings (pings db user-id query)]
          (when (seq pings)
-           (let [margin          60
-                 max-height      (- height margin)
-                 min-height      margin
-                 min-width       margin
-                 max-width       (- width margin)
-                 first-ping      (last pings)
-                 last-ping       (first pings)
-                 day-frequencies (->> pings (map :ping/days-since-epoch) (frequencies))
-                 day-scale       (c2.scale/linear :domain [(:ping/days-since-epoch first-ping)
-                                                           (:ping/days-since-epoch last-ping)]
-                                                  :range [min-width max-width])
-                 time-scale      (c2.scale/linear :domain [0 (* 24 60 60)]
-                                                  :range [min-height max-height])
-                 hours-scale     (c2.scale/linear :domain [0 24]
-                                                  :range [max-height min-height])
-                 count-scale     (c2.scale/linear :domain [0 (* 0.75 (count pings))]
-                                                  :range [max-height min-height])]
+           (let [matching-pings      (filter (utils/query-fn query) pings)
+                 margin              60
+                 max-height          (- height margin)
+                 min-height          margin
+                 min-width           margin
+                 max-width           (- width margin)
+                 first-ping          (last pings)
+                 last-ping           (first pings)
+                 first-matching-ping (last matching-pings)
+                 last-matching-ping  (first matching-pings)
+                 day-frequencies     (->> matching-pings (map :ping/days-since-epoch) (frequencies))
+                 day-scale           (c2.scale/linear :domain [(:ping/days-since-epoch first-ping)
+                                                               (:ping/days-since-epoch last-ping)]
+                                                      :range [min-width max-width])
+                 time-scale          (c2.scale/linear :domain [0 (* 24 60 60)]
+                                                      :range [min-height max-height])
+                 hours-scale         (c2.scale/linear :domain [0 24]
+                                                      :range [max-height min-height])
+                 count-scale         (c2.scale/linear :domain [0 (* 0.75 (count matching-pings))]
+                                                      :range [max-height min-height])]
              [:g
+              [:g.title
+               [:text {:x (/ width 2) :y (/ margin 2) :font-size "24px" :font-family "sans-serif" :text-anchor "middle"} query]]
               [:g.axes {:style       (style {:stroke       "black"
                                              :stroke-width 1
                                              :font-weight  "100"})
@@ -171,17 +222,33 @@
                 (days-axis day-scale)]]
               [:g.plots
                [:g.matrix
-                (matrix day-scale time-scale pings)]
+                (matrix day-scale time-scale matching-pings)]
                [:g.histogram
                 (histogram day-scale hours-scale height margin day-frequencies)]
                [:g.cumulative
-                (cumulative day-scale count-scale width height margin (:ping/days-since-epoch first-ping) (:ping/days-since-epoch last-ping) day-frequencies)]]])))))))
+                (cumulative
+                 day-scale
+                 count-scale
+                 width
+                 height
+                 margin
+                 [(:ping/days-since-epoch first-ping) (:ping/days-since-epoch last-ping)]
+                 [(:ping/days-since-epoch first-matching-ping) (:ping/days-since-epoch last-matching-ping)]
+                 day-frequencies
+                 (count pings)
+                 (count (filter #(and (>= (:ping/days-since-epoch %) (:ping/days-since-epoch first-matching-ping))
+                                      (<= (:ping/days-since-epoch %) (:ping/days-since-epoch last-matching-ping)))
+                                pings)))]]])))))))
 
 (defn get-query [req]
   (utils/b64-decode (get-in req [:params :query])))
 
 (defn graph [c]
   (fn [req]
-    {:body (svg-graph c req)
-     :headers {"Content-Type" "image/svg+xml"}}))
+    (try
+      {:body (svg-graph c req)
+       :headers {"Content-Type" "image/svg+xml"}}
+      (catch Exception e
+        {:body "Unknown error"
+         :status 500}))))
 
