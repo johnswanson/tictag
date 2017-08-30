@@ -22,13 +22,15 @@
                       :width "100%"
                       :placeholder "Username"
                       :model (or (:pending-user/username @user) "")
+                      :change-on-blur? false
                       :on-change #(dispatch [:user/update :temp :username %])]]
                     [:label "Password"
-                     [re-com/input-text
+                     [re-com/input-password
                       :style {:border-radius "0px"}
                       :width "100%"
                       :placeholder "Password"
                       :model (or (:pending-user/pass @user) "")
+                      :change-on-blur? false
                       :on-change #(dispatch [:user/update :temp :pass %])]]
                     (when @errs
                       [re-com/alert-box

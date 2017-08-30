@@ -29,6 +29,7 @@
                     :width "100%"
                     :placeholder "Username"
                     :model (or (:pending-user/username @user) "")
+                    :change-on-blur? false
                     :on-change #(dispatch [:user/update :temp :username %])]]
                   [:label "Password"
                    [re-com/input-password
@@ -36,6 +37,7 @@
                     :width "100%"
                     :placeholder "Password"
                     :model (or (:pending-user/pass @user) "")
+                    :change-on-blur? false
                     :on-change #(dispatch [:user/update :temp :pass %])]]
                   [:label "Email"
                    [re-com/input-text
@@ -47,6 +49,7 @@
                     :status-icon? true
                     :status-tooltip (or (:user/email @errors) "")
                     :model (or (:pending-user/email @user) "")
+                    :change-on-blur? false
                     :on-change #(dispatch [:user/update :temp :email %])]]
                   [:label "Timezone"
                    [:div
