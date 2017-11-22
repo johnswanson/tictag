@@ -78,6 +78,7 @@
    :processable?
    (fn [ctx]
      (let [e (process ::new-ping ctx [:ping/ts :ping/tags] [(partial is-valid-ping db)])]
+       (timbre/debugf "%s\n" (params ctx))
        (if (= e :tictag.resources/unprocessable)
          [false {::unprocessable "Invalid ping"}]
          [true {::ping e

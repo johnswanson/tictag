@@ -8,4 +8,6 @@
         "logout"         :logout
         "slack-callback" :slack-callback
         "about"          :about
+        "query"          :query
         ""               :dashboard}])
+

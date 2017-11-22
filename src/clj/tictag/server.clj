@@ -47,18 +47,16 @@
    [:html {:lang "en"}
     [:head
      [:meta {:charset "utf-8"}]
+     [:link {:rel="stylesheet"
+             :href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.css"}]
      [:link {:rel "icon"
              :href "/favicon.ico"}]
-     [:link {:href "https://fonts.googleapis.com/css?family=Roboto:300,400,500,700,400italic"
-             :rel "stylesheet"
+     [:link {:rel "stylesheet"
+             :href "/css/out.css"
              :type "text/css"}]
-     [:link {:href "https://fonts.googleapis.com/css?family=Roboto+Condensed:300,400"
+     [:link {:href "https://fonts.googleapis.com/css?family=Roboto:300,400,500,700,400italic|Robot+Condensed:300,400"
              :rel "stylesheet"
-             :type "text/css"}]
-     [:link {:rel "stylesheet" :href "//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap.min.css"}]
-     [:link {:rel "stylesheet" :href "/css/re-com.css"}]
-     [:link {:rel "stylesheet" :href "/css/material-design-iconic-font.min.css"}]
-     [:link {:rel "stylesheet" :href "/css/main.css"}]]
+             :type "text/css"}]]
     [:body
      [:div#app]
      [:script {} (format "var slack_client_id='%s'" (-> component :config :slack-client-id))]
@@ -70,16 +68,16 @@
    [:html {:lang "en"}
     [:head
      [:meta {:charset "utf-8"}]
-     [:link {:href "https://fonts.googleapis.com/css?family=Roboto:300,400,500,700,400italic"
-             :rel "stylesheet"
+     [:link {:rel="stylesheet"
+             :href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.css"}]
+     [:link {:rel "icon"
+             :href "/favicon.ico"}]
+     [:link {:rel "stylesheet"
+             :href "/css/out.css"
              :type "text/css"}]
-     [:link {:href "https://fonts.googleapis.com/css?family=Roboto+Condensed:300,400"
+     [:link {:href "https://fonts.googleapis.com/css?family=Roboto:300,400,500,700,400italic|Robot+Condensed:300,400"
              :rel "stylesheet"
-             :type "text/css"}]
-     [:link {:rel "stylesheet" :href "//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap.css"}]
-     [:link {:rel "stylesheet" :href "/css/re-com.css"}]
-     [:link {:rel "stylesheet" :href "/css/material-design-iconic-font.min.css"}]
-     [:link {:rel "stylesheet" :href "/css/main.css"}]]
+             :type "text/css"}]]
     [:body
      [:div#app]
      [:script {:src "/js/tictag_devcards.js"}]
@@ -339,6 +337,7 @@ Separate commands with a newline to apply multiple commands at once
              (:jwt component)))
        (GET "/devcards" _ (devcards component))
        (GET "/" _ (index component))
+       (GET "/query" _ (index component))
        (GET "/signup" _ (index component))
        (GET "/editor" _ (index component))
        (GET "/login" _ (index component))
@@ -374,6 +373,7 @@ Separate commands with a newline to apply multiple commands at once
                 (ANY "/freq/:query" _ (tictag.resources.freq/freq component))
                 (ANY "/sign/:query" _ (tictag.resources.sign/sign component))
                 (ANY "/freq" _ (tictag.resources.freq/freqs component))
+                (ANY "/q" _ (tictag.resources.freq/query component))
                 (ANY "/goal" _ (tictag.resources.goal/goals component))
                 (ANY "/goal/:id" _ (tictag.resources.goal/goal component))))
       (wrap-restful-params :formats [:json-kw :edn :msgpack-kw :yaml-kw :transit-json :transit-msgpack])
@@ -384,6 +384,12 @@ Separate commands with a newline to apply multiple commands at once
   (compojure.core/routes
    (site-routes component)
    (api-routes component)))
+
+(defn wrap-method-override [handler]
+  (fn [req]
+    (if-let [rm (get-in req [:headers "x-http-method-override"])]
+      (handler (assoc req :request-method (keyword (str/lower-case rm))))
+      (handler req))))
 
 (defrecord Server [db config tagtime ws jwt]
   component/Lifecycle
@@ -398,7 +404,8 @@ Separate commands with a newline to apply multiple commands at once
                     (wrap-log)
                     (wrap-user (:jwt component))
                     (wrap-defaults {:params {:urlencoded true
-                                             :keywordize true}}))
+                                             :keywordize true}})
+                    (wrap-method-override))
                 config)]
       (debug "Server created")
       (assoc component :stop stop)))
@@ -407,4 +414,5 @@ Separate commands with a newline to apply multiple commands at once
     (when-let [stop (:stop component)]
       (stop))
     (dissoc component :stop)))
+
 

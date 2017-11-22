@@ -1,9 +1,10 @@
 (ns tictag.views.signup
-  (:require [re-com.core :as re-com]
-            [re-frame.core :refer [dispatch subscribe]]
+  (:require [re-frame.core :refer [dispatch subscribe]]
             [reagent.core :as reagent]
             [goog.string :as gstr]
-            [taoensso.timbre :as timbre]))
+            [taoensso.timbre :as timbre]
+            [tictag.views.common :refer [input]]
+            [tictag.utils :as utils]))
 
 
 (defn signup []
@@ -12,63 +13,43 @@
         allowed-timezones (subscribe [:allowed-timezones])
         submit            #(do (dispatch [:user/save :temp])
                                (.preventDefault %))]
-    [re-com/box
-     :child
-     [:form {:on-submit submit}
-      [re-com/v-box
-       :width "400px"
-       :justify :center
-       :children [[:label "Username"
-                   [re-com/input-text
-                    :style {:border-radius "0px"}
-                    :status (when (:user/username @errors)
-                              (timbre/debug (:user/username @errors))
-                              :warning)
-                    :status-tooltip (or (:user/username @errors) "")
-                    :status-icon? true
-                    :width "100%"
-                    :placeholder "Username"
-                    :model (or (:pending-user/username @user) "")
-                    :change-on-blur? false
-                    :on-change #(dispatch [:user/update :temp :username %])]]
-                  [:label "Password"
-                   [re-com/input-password
-                    :style {:border-radius "0px"}
-                    :width "100%"
-                    :placeholder "Password"
-                    :model (or (:pending-user/pass @user) "")
-                    :change-on-blur? false
-                    :on-change #(dispatch [:user/update :temp :pass %])]]
-                  [:label "Email"
-                   [re-com/input-text
-                    :style {:border-radius "0px"}
-                    :width "100%"
-                    :placeholder "Email"
-                    :status (when (:user/email @errors)
-                              :warning)
-                    :status-icon? true
-                    :status-tooltip (or (:user/email @errors) "")
-                    :model (or (:pending-user/email @user) "")
-                    :change-on-blur? false
-                    :on-change #(dispatch [:user/update :temp :email %])]]
-                  [:label "Timezone"
-                   [:div
-                    [re-com/single-dropdown
-                     :width "100%"
-                     :choices (map (fn [tz] {:id tz :label tz}) @allowed-timezones)
-                     :model (:pending-user/tz @user)
-                     :filter-box? true
-                     :on-change #(dispatch [:user/update :temp :tz %])]]]
-                  [re-com/gap :size "10px"]
-                  [re-com/button
-                   :on-click submit
-                   :style {:width         "100%"
-                           :font-size     "22px"
-                           :font-weight   "300"
-                           :border        "1px solid black"
-                           :border-radius "0px"
-                           :padding       "20px 26px"}
-                   :label "Sign Up!"]]]]]))
+    (fn []
+      [:div
+       {:style {:width      "70%"
+                :margin     :auto
+                :margin-top "3em"}}
+       [:h1 "Signup"]
+       [:form {:on-submit submit}
+        [:div.input-field {:className (when (:user/username @errors) "input-invalid")}
+         [:label "Username"]
+         [input {:v        (:pending-user/username @user)
+                 :type     :text
+                 :on-save  #(dispatch [:user/update :temp :username %])
+                 :on-enter #(dispatch [:user/save :temp])}]]
+        [:div.input-field {:className (when (:user/pass @errors) "input-invalid")}
+         [:label "Password"]
+         [input {:v        (or (:pending-user/pass @user) "")
+                 :type     :password
+                 :on-save  #(dispatch [:user/update :temp :pass %])
+                 :on-enter #(dispatch [:user/save :temp])}]]
+
+        [:div.input-field {:className (when (:user/email @errors) "input-invalid")}
+         [:label "Email"]
+         [input {:v        (:pending-user/email @user)
+                 :type     :text
+                 :on-save  #(dispatch [:user/update :temp :email %])
+                 :on-enter #(dispatch [:user/save :temp])}]]
+        [:div.input-field {:className (when (:user/tz @errors) "input-invalid")}
+         [:label "Time Zone"]
+         [:div.input-group
+          [:select {:value     (:pending-user/tz @user)
+                    :on-change #(dispatch [:user/update :temp :tz (-> % .-target .-value)])}
+           (for [tz @allowed-timezones]
+             ^{:key tz} [:option tz])]
+          [:button.button {:type :button
+                           :on-click #(dispatch [:user/update :temp :tz (utils/local-tz)])} "Autodetect"]]]
+        [:button {:type     :button
+                  :on-click #(dispatch [:user/save :temp])} "Sign Up"]]])))
 
 
 

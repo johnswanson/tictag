@@ -1,0 +1,9 @@
+@import 'shoelace-css/source/css/shoelace.css';
+
+body {
+    margin: 0;
+}
+
+*, *:before, *:after {
+    box-sizing: border-box;
+}

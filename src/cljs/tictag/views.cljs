@@ -7,13 +7,14 @@
             [tictag.subs]
             [tictag.nav :refer [route-for]]
             [tictag.dates :refer [weeks-since-epoch days-since-epoch seconds-since-midnight]]
+            [tictag.views.query]
             [tictag.views.settings]
             [tictag.views.editor]
             [tictag.views.signup]
             [tictag.views.inputs]
             [tictag.views.login]
             [tictag.views.about]
-            [tictag.views.common :refer [page]]
+            [tictag.views.common :refer [page input]]
             [cljs-time.core :as t]
             [cljs-time.coerce :as tc]
             [cljs-time.format :as f]
@@ -23,10 +24,8 @@
              :refer-macros [debug]]
             [c2.scale]
             [c2.svg]
-            [c2.ticks]
-            [re-com.core :as re-com])
+            [c2.ticks])
   (:import [goog.date.Interval]))
-
 
 (defn tag-table-row-view [tag count tag-% minutes active? time-per-day]
   [:tr (if active?
@@ -45,7 +44,6 @@
         minutes      (subscribe [:minutes-meeting-query])
         time-per-day (subscribe [:meeting-query-per-day])]
     [tag-table-row-view query @count @tag-% @minutes true @time-per-day]))
-
 
 (defn tag-table-row [tag]
   (let [count        (subscribe [:tag-count tag])
@@ -66,37 +64,34 @@
                 :title "This link is safe to share and the graph will constantly update with your latest data!"
                 :width "100%"
                 :style {:margin :auto}}]]))))
+(defn q-input []
+  (let [model (reagent/atom "")]
+    (fn q-input []
+      [:div.input-field
+       [:label "Query"]
+       [:input {:type :text
+                :value @model
+                :on-change #(do (reset! model (-> % .-target .-value))
+                                (dispatch [:debounced-update-ping-query @model]))}]
+       [:p.input-hint [:code (pr-str '(or (and foo bar) (not baz)))]" will match pings with BOTH " [:code "foo"] " and " [:code "bar"] ", or any ping WITHOUT " [:code "baz"]]])))
 
 (defn logged-in-app
   []
   (let [tag-counts  (subscribe [:sorted-tag-counts])
         ping-query  (subscribe [:ping-query])
         window-size (subscribe [:window-size])]
-    [re-com/v-box
-     :gap "1em"
-     :align :center
-     :style {:max-width "90%"}
-     :children
-     [[re-com/box
-       :child [graph]]
-      [re-com/input-text
-       :style {:border-radius "0px"
-               :max-width "100%"}
-       :width "100%"
-       :placeholder "Query (e.g. '(and this (or that other thing))')"
-       :model (reagent/atom "")
-       :change-on-blur? false
-       :on-change #(dispatch [:debounced-update-ping-query %])]
-      [re-com/box
-       :child
-       [:table
-        {:style {:border "1px solid black"}}
-        [:tbody
-         [:tr [:th "Tag"] [:th "Count"] [:th "Percent of Pings"] [:th "Time Per Day"]]
-         (when (seq @ping-query) [query-row @ping-query])
-         (for [tag @tag-counts]
-           ^{:key (pr-str tag)}
-           [tag-table-row tag])]]]]]))
+    [:div {:style {:width "70%"
+                   :margin :auto
+                   :padding-top "3em"}}
+     [graph]
+     [q-input]
+     [:table
+      [:tbody
+       [:tr [:th "Tag"] [:th "Count"] [:th "Percent of Pings"] [:th "Time Per Day"]]
+       (when (seq @ping-query) [query-row @ping-query])
+       (for [tag @tag-counts]
+         ^{:key (pr-str tag)}
+         [tag-table-row tag])]]]))
 
 (defn app
   []
@@ -110,6 +105,7 @@
          :settings  [tictag.views.settings/settings]
          :about     [tictag.views.about/about]
          :editor    [tictag.views.editor/editor]
+         :query     [tictag.views.query/query]
          ;; if :active-panel not set yet, just wait for pushy to initialize
          [:div])])))
 

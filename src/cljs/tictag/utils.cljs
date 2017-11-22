@@ -61,3 +61,6 @@
     [:tictag.schemas/ui
      (keyword (str "pending-" (namespace t)) (name t))
      id]))
+
+(defn local-tz []
+  (.-timeZone (.resolvedOptions (js/Intl.DateTimeFormat))))

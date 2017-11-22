@@ -1,5 +1,8 @@
 (ns tictag.subs
   (:require [re-frame.core :refer [reg-sub subscribe]]
+            [reagent.ratom]
+            [ajax.core :as ajax]
+            [clojure.set]
             [cljs-time.format :as f]
             [cljs-time.core :as t]
             [goog.crypt.base64 :as b64]
@@ -290,7 +293,11 @@
  :pending-user
  (fn [db _]
    (let [pending-user (get-in db [:tictag.schemas/ui :pending-user/by-id :temp])]
-     pending-user)))
+     (timbre/debug pending-user)
+     (if (:pending-user/tz pending-user)
+       pending-user
+       (assoc pending-user :pending-user/tz "America/Los_Angeles")))))
+
 (reg-sub
  :signup-errors
  (fn [db _]
@@ -366,4 +373,92 @@
  (fn [db _]
    (:ping-query-url db)))
 
+(reg-sub
+ :pie-filters/query
+ (fn [db _] ))
+
+(reg-sub
+ :pie/result
+ (fn [db _]
+   (let [total (reduce + (vals (:pie/results db)))]
+     (->> (:pie/results db)
+          (sort #(compare (val %2) (val %1)))
+          (map (fn [[k v]] {:name k :value v :start 0 :end v}))
+          (reductions
+           (fn [accu {:keys [name value]}]
+             {:name name :start (:end accu 0) :end (+ (:end accu 0) value)}))
+          (map (fn [v] (update v :start #(/ % total))))
+          (map (fn [v] (update v :end #(/ % total))))))))
+
+(reg-sub
+ :pie/indexed-slices
+ (fn [db _]
+   (map-indexed #(zipmap [:id :query] %&) (:pie/slices db))))
+
+(reg-sub
+ :pie/pie-slices
+ (fn [db _]
+   (let [slices (conj (:pie/slices db) nil)
+         result (:q-result db)]
+     (for [q slices]
+       [q (get result (edn/read-string q))]))))
+
+(def days [:sun :mon :tue :wed :thu :fri :sat])
+
+(def weekdays #{:mon :tue :wed :thu :fri})
+(def weekends #{:sun :sat})
+
+(reg-sub
+ :pie-filters/days
+ (fn [db _]
+   (let [active-days (get-in db [:pie/filters :days])]
+     (map
+      (fn [day]
+        {:selected? (get active-days day)
+         :name      (str/capitalize (name day))
+         :key       day})
+      days))))
+
+(reg-sub
+ :pie-filters/day-set
+ (fn [db _]
+   (get-in db [:pie/filters :days])))
+
+(reg-sub
+ :pie-filters/all-days?
+ (fn [_ _] (subscribe [:pie-filters/day-set]))
+ (fn [days]
+   (= days (clojure.set/union weekdays weekends))))
+
+(reg-sub
+ :pie-filters/no-days?
+ (fn [_ _] (subscribe [:pie-filters/day-set]))
+ (fn [days] (empty? days)))
+
+(reg-sub
+ :pie-filters/weekdays-only?
+ (fn [_ _] (subscribe [:pie-filters/day-set]))
+ (fn [days] (= days weekdays)))
+
+(reg-sub
+ :pie-filters/weekends-only?
+ (fn [_ _] (subscribe [:pie-filters/day-set]))
+ (fn [days] (= days weekends)))
+
+(reg-sub
+ :pie-filters/query
+ (fn [db _]
+   (get-in db [:pie/filters :query])))
+
+(reg-sub
+ :pie-filters/start-date
+ (fn [db _]
+   (when-let [t (get-in db [:pie/filters :start-date])]
+     t)))
+
+(reg-sub
+ :pie-filters/end-date
+ (fn [db _]
+   (when-let [t (get-in db [:pie/filters :end-date])]
+     t)))
 

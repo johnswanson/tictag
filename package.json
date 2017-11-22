@@ -1,0 +1,33 @@
+{
+  "name": "tictag",
+  "version": "1.0.0",
+  "description": "[![CircleCI](https://circleci.com/gh/johnswanson/tictag.svg?style=svg)](https://circleci.com/gh/johnswanson/tictag)",
+  "main": "index.js",
+  "directories": {
+    "doc": "doc",
+    "test": "test"
+  },
+  "dependencies": {
+    "cssnano": "^3.10.0",
+    "postcss-cli": "^4.1.1",
+    "postcss-cssnext": "^3.0.2",
+    "postcss-import": "^11.0.0",
+    "postcss-url": "^7.1.2",
+    "shoelace-css": "^1.0.0-beta24"
+  },
+  "devDependencies": {},
+  "scripts": {
+      "build": "postcss resources/css/* -o resources/public/css/out.css",
+      "build:watch": "postcss resources/css/* -o resources/public/css/out.css -w"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johnswanson/tictag.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/johnswanson/tictag/issues"
+  },
+  "homepage": "https://github.com/johnswanson/tictag#readme"
+}

@@ -4,6 +4,7 @@
             [devtools.core :as devtools]
             [devcards.core :as dc]
             [tictag.views.settings :as vs]
+            [tictag.views.query :as vq]
             [c2.ticks]
             [c2.scale]
             [cljs.test :refer [is testing async]]
@@ -15,42 +16,22 @@
   [(devtools/install! [:formatters :hints :async])
    (enable-console-print!)])
 
-(def Y (c2.scale/linear :domain [0 1]
-                        :range [800 0]))
-(def X (c2.scale/linear :domain [0 1]
-                        :range [0 800]))
-
-(defn circle [{xscale :x yscale :y} x y]
-  [:circle {:cx    (xscale x)
-            :cy    (yscale y)
-            :r     3
-            :fille "black"}])
-
-(defcard-rg axis-left
-  [:svg {:width 800 :height 800}
-   (let [{yticks :ticks} (c2.ticks/search (:domain Y))
-         {xticks :ticks} (c2.ticks/search (:domain X))]
-     [:g {:stroke-width 1 :stroke "black"}
-      (c2.svg/axis Y yticks :orientation :left)
-      [:g {:transform "translate(0, 800)"}
-       (c2.svg/axis X xticks :text-margin -9 :orientation :bottom)]
-      (for [x (take 1000 (repeatedly rand))
-            :let [y (rand x)]]
-        (circle {:x X :y Y} x y))])])
+(defcard-rg foobar
+  [:svg {:height 500 :width 500}
+   [vq/pie-chart {:x 250
+                  :y 250
+                  :r 200}
+    [{:name "Test" :start 0 :end 0.4}
+     {:name "Test" :start 0.4 :end 0.5}
+     {:name "Test" :start 0.5 :end 0.75}
+     {:name "Test" :start 0.75 :end 1.0}]]
+   [:circle {:cx 250 :cy 250 :r 190 :fill "white"}]])
 
 
-(defcard-rg slack-help
-  [vs/slack-help])
-
-(defcard-rg slack-preferences
-  (let [state (reagent/atom {})]
-    [vs/slack-preferences-component
-     (fn [[ev param]]
-       (timbre/debug "Received event: " ev param)
-       (case ev
-         :slack/want-dm? (swap! state assoc :dm? param)
-         :slack/want-channel? (swap! state assoc :channel? param)
-         :slack/channel (swap! state assoc :channel param)))
-     state]))
-
-
+(dc/deftest a-test
+  "## percent-radian-coordinate conversions"
+  (testing "pct-to-angle"
+    (is (= (vq/scale [1 1] {:r 250}) [500 500]))
+    (is (= (vq/invert-y [500 500] {:r 250}) [500 0]))
+    (is (= (vq/invert-y [250 250] {:r 250}) [250 250]))
+    (is (= (vq/invert-y [300 300] {:r 250}) [300 200]))))

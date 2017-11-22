@@ -1,53 +1,36 @@
 (ns tictag.views.login
-  (:require [re-com.core :as re-com]
-            [re-frame.core :refer [dispatch subscribe]]
-            [reagent.core :as reagent]))
+  (:require [re-frame.core :refer [dispatch subscribe]]
+            [tictag.views.common :refer [input]]
+            [reagent.core :as reagent]
+            [taoensso.timbre :as timbre]))
 
 (defn login []
-  (let [user (subscribe [:pending-user])
-        errs (subscribe [:login-errors])
-        submit          #(do
-                           (dispatch [:token/create])
-                           (.preventDefault %))]
+  (let [user   (subscribe [:pending-user])
+        errs   (subscribe [:login-errors])
+        submit #(do (dispatch [:token/create])
+                    (.preventDefault %))]
     (fn []
-      [re-com/box
-       :child
+      [:div
+       {:style {:width      "70%"
+                :margin     :auto
+                :margin-top "3em"}}
+       [:h1 "Login"]
+       (when @errs [:div.alert.alert-danger {:style {:text-align :center :font-weight :bold}} "Invalid username or password"])
        [:form {:on-submit submit}
-        [re-com/v-box
-         :width "400px"
-         :justify :center
-         :children [[:label "Username"
-                     [re-com/input-text
-                      :style {:border-radius "0px"}
-                      :width "100%"
-                      :placeholder "Username"
-                      :model (or (:pending-user/username @user) "")
-                      :change-on-blur? false
-                      :on-change #(dispatch [:user/update :temp :username %])]]
-                    [:label "Password"
-                     [re-com/input-password
-                      :style {:border-radius "0px"}
-                      :width "100%"
-                      :placeholder "Password"
-                      :model (or (:pending-user/pass @user) "")
-                      :change-on-blur? false
-                      :on-change #(dispatch [:user/update :temp :pass %])]]
-                    (when @errs
-                      [re-com/alert-box
-                       :alert-type :danger
-                       :heading "Unauthorized!"])
-                    [re-com/gap :size "10px"]
-                    [:input {:type  :submit
-                             :style {:display :none}}]
-                    [re-com/button
-                     :on-click submit
-                     :style {:width         "100%"
-                             :font-size     "22px"
-                             :font-weight   "300"
-                             :border        "1px solid black"
-                             :border-radius "0px"
-                             :padding       "20px 26px"}
-                     :label "Log In!"]]]]])))
+        [:div.input-field
+         [:label "Username/Email"]
+         [input {:v       (:pending-user/username @user)
+                 :type    :text
+                 :on-save #(dispatch [:user/update :temp :username %])
+                 :on-enter #(dispatch [:token/create])}]]
+        [:div.input-field
+         [:label "Password"]
+         [input {:v       (or (:pending-user/pass @user) "")
+                 :type    :password
+                 :on-save #(dispatch [:user/update :temp :pass %])
+                 :on-enter #(dispatch [:token/create])}]]
+        [:button {:type :button
+                  :on-click #(dispatch [:token/create])} "Log In"]]])))
 
 
 

@@ -14,8 +14,8 @@
             [tictag.dates]
             [tictag.utils :as utils :refer [deep-merge*]]
             [goog.net.cookies]
-            [cljs.spec :as s]
             [cljs-time.format :as f]
+            [cljs-time.core :as t]
             [goog.events :as events]
             [goog.net.XhrIo :as xhr]
             [goog.net.EventType]
@@ -29,7 +29,8 @@
    [:macro/get]
    [:beeminder/get]
    [:goal/get]
-   [:slack/get]])
+   [:slack/get]
+   [:q/get []]])
 
 (declare merge-pending)
 
@@ -108,7 +109,6 @@
                      {:method          :get
                       :uri             (str "/api/" (name t))
                       :response-format (transit-response-format {})
-                      :request-format  (transit-request-format {})
                       :on-success      [(keyword (name t) "get-success")]
                       :on-failure      [(keyword (name t) "get-failure")]}
                      (:auth-token db))})))
@@ -275,6 +275,12 @@
    {:dispatch-debounce [:upq [:update-ping-query v] 500]}))
 
 (reg-event-fx
+ :debounced-slack/update
+ [interceptors]
+ (fn [_ v]
+   {:dispatch-debounce [:dsu (assoc v 0 :slack/update)]}))
+
+(reg-event-fx
  :update-ping-query
  [interceptors]
  (fn [{:keys [db]} [_ v]]
@@ -427,10 +433,12 @@
     :sente-connect                    (:auth-token cookies)
     :dispatch-n                       initial-queries
     :add-window-resize-event-listener nil
-    :db                               (let [db {:auth-token  (:auth-token cookies)
-                                                :db/window   window-dimensions
-                                                :macro/by-id {}
-                                                :schemas/ui  {:pending-macro/by-id {:temp {}}}}]
+    :db                               (let [db {:auth-token   (:auth-token cookies)
+                                                :pie/slices []
+                                                :db/window    window-dimensions
+                                                :macro/by-id  {}
+                                                :schemas/ui   {:pending-user/by-id {:temp {:pending-user/tz (utils/local-tz)}}
+                                                               :pending-macro/by-id {:temp {}}}}]
                                         (if-let [uid (some-> cookies :user-id js/parseInt)]
                                           (assoc db :db/authenticated-user [:user/by-id uid])
                                           db))}))
@@ -617,4 +625,165 @@
         (fn [id]
           (js/clearTimeout (@timeouts id))
           (swap! timeouts dissoc id)))
+
+(defn filters [db]
+  (:pie/filters db))
+(defn slices [db]
+  (:pie/slices db))
+
+(reg-event-fx
+ :pie/get*
+ [interceptors]
+ (fn [{:keys [db]} _]
+   {:http-xhrio {:method          :post
+                 :uri             "/api/q"
+                 :headers         {"x-http-method-override" "GET"
+                                   "Authorization"          (:auth-token db)}
+                 :params          {:slices  (slices db)
+                                   :filters (filters db)}
+                 :format          (transit-request-format {})
+                 :response-format (transit-response-format {})
+                 :on-success      [:pie/get-success]
+                 :on-failure      [:pie/get-failure]}}))
+
+(reg-event-fx
+ :pie/get
+ [interceptors]
+ (fn [_ [_ v]]
+   {:dispatch-debounce [:pieget [:pie/get*] 500]}))
+
+(reg-event-db
+ :pie/get-success
+ [interceptors]
+ (fn [db [_ v]]
+   (assoc db :pie/results v)))
+
+(reg-event-fx
+ :pie/add-slice
+ [interceptors]
+ (fn [{:keys [db]} [_ v]]
+   {:db (update-in db [:pie/slices] (fnil conj []) v)
+    :dispatch [:pie/get]}))
+
+(reg-event-fx
+ :pie/update-slice
+ [interceptors]
+ (fn [{:keys [db]} [_ idx v]]
+   {:db (update-in db [:pie/slices] (fnil assoc []) idx v)
+    :dispatch [:pie/get]}))
+
+(reg-event-fx
+ :pie/delete-slice
+ [interceptors]
+ (fn [{:keys [db]} [_ idx]]
+   {:dispatch [:pie/get]
+    :db (update-in db [:pie/slices] (fn [slices]
+                                      (vec (concat (subvec slices 0 idx)
+                                                   (subvec slices (inc idx))))))}))
+
+(reg-event-fx
+ :pie-filters/change-query
+ [interceptors]
+ (fn [{:keys [db]} [_ v]]
+   (let [v (if (seq v) v nil)]
+     {:db (assoc-in db [:pie/filters :query] v)
+      :dispatch [:pie/get]})))
+
+(reg-event-fx
+ :pie-filters/day-select
+ [interceptors]
+ (fn [{:keys [db]} [_ day val]]
+   {:db (if val
+          (update-in db [:pie/filters :days] (fnil conj #{}) day)
+          (update-in db [:pie/filters :days] (fnil disj #{}) day))
+    :dispatch [:pie/get]}))
+
+(reg-event-fx
+ :pie-filters/day-select-all
+ [interceptors]
+ (fn [{:keys [db]} _]
+   {:db (assoc-in db [:pie/filters :days] #{:sun :mon :tue :wed :thu :fri :sat})
+    :dispatch [:pie/get]}))
+
+(reg-event-fx
+ :pie-filters/day-select-none
+ [interceptors]
+ (fn [{:keys [db]} _]
+   {:db (assoc-in db [:pie/filters :days] #{})
+    :dispatch [:pie/get]}))
+
+(reg-event-fx
+ :pie-filters/day-select-weekdays-only
+ [interceptors]
+ (fn [{:keys [db]} _]
+   {:db (assoc-in db [:pie/filters :days] #{:mon :tue :wed :thu :fri})
+    :dispatch [:pie/get]}))
+
+(reg-event-fx
+ :pie-filters/day-select-weekends-only
+ [interceptors]
+ (fn [{:keys [db]} _]
+   {:db (assoc-in db [:pie/filters :days] #{:sat :sun})
+    :dispatch [:pie/get]}))
+
+(reg-cofx
+ :today
+ (fn [coeffects _]
+   (assoc coeffects :today (t/today))))
+
+(reg-event-fx
+ :pie-filters/select-today
+ [(inject-cofx :today)
+  interceptors]
+ (fn [{:keys [db today]} _]
+   {:db (-> db
+            (assoc-in [:pie/filters :start-date] (f/unparse (f/formatter "YYYY-MM-dd") today))
+            (assoc-in [:pie/filters :end-date] nil))
+    :dispatch [:pie/get]}))
+
+(reg-event-fx
+ :pie-filters/select-last-week
+ [(inject-cofx :today)
+  interceptors]
+ (fn [{:keys [db today]} _]
+   {:db (-> db
+            (assoc-in [:pie/filters :start-date] (f/unparse (f/formatter "YYYY-MM-dd") (t/plus today (t/days -7))))
+            (assoc-in [:pie/filters :end-date] nil))
+    :dispatch [:pie/get]}))
+
+(reg-event-fx
+ :pie-filters/select-last-month
+ [(inject-cofx :today)
+  interceptors]
+ (fn [{:keys [db today]} _]
+   {:db (-> db
+            (assoc-in [:pie/filters :start-date] (f/unparse (f/formatter "YYYY-MM-dd") (t/plus today (t/months -1))))
+            (assoc-in [:pie/filters :end-date] nil))
+    :dispatch [:pie/get]}))
+
+(reg-event-fx
+ :pie-filters/select-last-year
+ [(inject-cofx :today)
+  interceptors]
+ (fn [{:keys [db today]} _]
+   {:db (-> db
+            (assoc-in [:pie/filters :start-date] (f/unparse (f/formatter "YYYY-MM-dd") (t/plus today (t/years -1))))
+            (assoc-in [:pie/filters :end-date] nil))
+    :dispatch [:pie/get]}))
+
+(reg-event-fx
+ :pie-filters/select-all-dates
+ [interceptors]
+ (fn [{:keys [db]} _]
+   {:db (-> db
+            (assoc-in [:pie/filters :start-date] nil)
+            (assoc-in [:pie/filters :end-date] nil))
+    :dispatch [:pie/get]}))
+
+(reg-event-db
+ :pie-filters/set-start-date
+ [interceptors]
+ (fn [{:keys [db]} [_ v]]
+   {:db (assoc-in db [:pie/filters :start-date] v)
+    :dispatch [:pie/get]}))
 

@@ -1,8 +1,7 @@
 (ns tictag.schemas
   (:require #?(:clj [clj-time.core :as t]
                :cljs [cljs-time.core :as t])
-            #?(:clj [clojure.spec.alpha :as s]
-               :cljs [cljs.spec :as s])
+            [clojure.spec.alpha :as s]
             #?(:clj [clojure.edn :refer [read-string]]
                :cljs [cljs.reader :refer [read-string]])
             [struct.core :as st]
