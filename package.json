@@ -17,8 +17,8 @@
   },
   "devDependencies": {},
   "scripts": {
-      "build": "postcss resources/css/* -o resources/public/css/out.css",
-      "build:watch": "postcss resources/css/* -o resources/public/css/out.css -w"
+    "build": "postcss resources/css/* -o resources/public/css/out.css",
+    "build:watch": "postcss resources/css/* -o resources/public/css/out.css -w"
   },
   "repository": {
     "type": "git",

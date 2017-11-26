@@ -3,7 +3,7 @@ jobs:
   build:
     working_directory: ~/tictag
     docker:
-      - image: clojure:lein-2.7.1
+      - image: johnswanson/docker-clojure:latest
     environment:
       LEIN_ROOT=nbd
       TIMBRE_LEVEL=':warn'
@@ -11,6 +11,14 @@ jobs:
       - checkout
       - restore_cache:
           key: deps-<< checksum "project.clj" >>
+      - restore_cache:
+          key: deps-<< checksum "package.json" >>
+      - run: npm i
+      - save_cache:
+          paths:
+            - ~/tictag/node_modules
+          key: deps-<< checksum "project.clj" >>
+      - run: node_modules/postcss-cli/bin/postcss resources/css/* -o resources/public/css/out.css
       - run: lein deps
       - save_cache:
           paths:
