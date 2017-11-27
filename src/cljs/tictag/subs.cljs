@@ -411,7 +411,7 @@
 (reg-sub
  :pie-filters/days
  (fn [db _]
-   (let [active-days (get-in db [:pie/filters :days])]
+   (let [active-days (get-in db [:pie/filters :days] (set days))]
      (map
       (fn [day]
         {:selected? (get active-days day)
@@ -428,12 +428,14 @@
  :pie-filters/all-days?
  (fn [_ _] (subscribe [:pie-filters/day-set]))
  (fn [days]
-   (= days (clojure.set/union weekdays weekends))))
+   (or (nil? days)
+       (= days (clojure.set/union weekdays weekends)))))
 
 (reg-sub
  :pie-filters/no-days?
  (fn [_ _] (subscribe [:pie-filters/day-set]))
- (fn [days] (empty? days)))
+ (fn [days] (and (empty? days)
+                 (not (nil? days)))))
 
 (reg-sub
  :pie-filters/weekdays-only?
