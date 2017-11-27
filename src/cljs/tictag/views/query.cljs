@@ -89,7 +89,9 @@
   [:g
    (for [[i slice] (map-indexed vector slices)]
      ^{:key i}
-     [pie-slice m (assoc slice :color (nth colors i))])])
+     [pie-slice m (if (nil? (:name slice))
+                    (-> slice (assoc :name "no match") (assoc :color "#eee"))
+                    (assoc slice :color (nth colors i)))])])
 
 (defn pie-chart* [{:keys [x y r opts] :as m}]
   (let [sub (subscribe [:pie/result])]

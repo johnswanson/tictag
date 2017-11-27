@@ -375,14 +375,14 @@
 
 (reg-sub
  :pie-filters/query
- (fn [db _] ))
+ (fn [db _] (get-in db [:pie/filters :query])))
 
 (reg-sub
  :pie/result
  (fn [db _]
    (let [total (reduce + (vals (:pie/results db)))]
      (->> (:pie/results db)
-          (sort #(compare (val %2) (val %1)))
+          (sort-by (juxt #(not (nil? (key %))) val) #(compare %2 %1))
           (map (fn [[k v]] {:name k :value v :start 0 :end v}))
           (reductions
            (fn [accu {:keys [name value]}]

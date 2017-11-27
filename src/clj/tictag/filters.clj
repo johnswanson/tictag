@@ -37,7 +37,6 @@
         :end-date (match-end-date? ping v)
         :days (match-days? ping v)))
     (catch Exception e
-      (timbre/error e)
       true)))
 
 (defn matching [pings filters]
