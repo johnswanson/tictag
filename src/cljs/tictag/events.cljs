@@ -734,10 +734,16 @@
             (assoc-in [:pie/filters :end-date] nil))
     :dispatch [:pie/get]}))
 
-(reg-event-db
+(reg-event-fx
  :pie-filters/set-start-date
  [interceptors]
  (fn [{:keys [db]} [_ v]]
    {:db (assoc-in db [:pie/filters :start-date] v)
     :dispatch [:pie/get]}))
 
+(reg-event-fx
+ :pie-filters/set-end-date
+ [interceptors]
+ (fn [{:keys [db]} [_ v]]
+   {:db (assoc-in db [:pie/filters :end-date] v)
+    :dispatch [:pie/get]}))

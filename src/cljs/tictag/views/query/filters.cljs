@@ -19,7 +19,7 @@
        [:div.input-group
         [:input {:type :date
                  :value @start-date
-                 :on-change #(js/console.log (-> % .-target .-value))}]]])))
+                 :on-change #(dispatch [:pie-filters/set-start-date (-> % .-target .-value)])}]]])))
 
 (defn date-end []
   (let [date (subscribe [:pie-filters/end-date])]
@@ -29,7 +29,7 @@
        [:div.input-group
         [:input {:type :date
                  :value @date
-                 :on-change #(js/console.log (-> % .-target .-value))}]]])))
+                 :on-change #(dispatch [:pie-filters/set-end-date (-> % .-target .-value)])}]]])))
 
 
 (defn date-range []
