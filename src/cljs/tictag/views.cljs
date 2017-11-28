@@ -18,7 +18,6 @@
             [cljs-time.core :as t]
             [cljs-time.coerce :as tc]
             [cljs-time.format :as f]
-            [goog.string :as gstring]
             [goog.string.format]
             [taoensso.timbre :as timbre
              :refer-macros [debug]]
@@ -26,72 +25,6 @@
             [c2.svg]
             [c2.ticks])
   (:import [goog.date.Interval]))
-
-(defn tag-table-row-view [tag count tag-% minutes active? time-per-day]
-  [:tr (if active?
-         {:style {:background-color "#333"
-                  :color            "#ddd"}}
-         {:style {:background-color "#ddd"
-                  :color            "#333"}})
-   [:td tag]
-   [:td count]
-   [:td (gstring/format "%.1f%%" tag-%)]
-   [:td time-per-day]])
-
-(defn query-row [query]
-  (let [count        (subscribe [:count-meeting-query])
-        tag-%        (subscribe [:query-%])
-        minutes      (subscribe [:minutes-meeting-query])
-        time-per-day (subscribe [:meeting-query-per-day])]
-    [tag-table-row-view query @count @tag-% @minutes true @time-per-day]))
-
-(defn tag-table-row [tag]
-  (let [count        (subscribe [:tag-count tag])
-        tag-%        (subscribe [:tag-% tag])
-        minutes      (subscribe [:minutes-for-tag tag])
-        active?      (subscribe [:tag-active? tag])
-        time-per-day (subscribe [:time-per-day-for-tag tag])]
-    [tag-table-row-view tag @count @tag-% @minutes @active? @time-per-day]))
-
-(defn graph []
-  (let [query-url (subscribe [:signed-query-url])]
-    (fn []
-      (if @query-url
-        [:a
-         {:href @query-url
-          :target :_blank}
-         [:img {:src   @query-url
-                :title "This link is safe to share and the graph will constantly update with your latest data!"
-                :width "100%"
-                :style {:margin :auto}}]]))))
-(defn q-input []
-  (let [model (reagent/atom "")]
-    (fn q-input []
-      [:div.input-field
-       [:label "Query"]
-       [:input {:type :text
-                :value @model
-                :on-change #(do (reset! model (-> % .-target .-value))
-                                (dispatch [:debounced-update-ping-query @model]))}]
-       [:p.input-hint [:code (pr-str '(or (and foo bar) (not baz)))]" will match pings with BOTH " [:code "foo"] " and " [:code "bar"] ", or any ping WITHOUT " [:code "baz"]]])))
-
-(defn logged-in-app
-  []
-  (let [tag-counts  (subscribe [:sorted-tag-counts])
-        ping-query  (subscribe [:ping-query])
-        window-size (subscribe [:window-size])]
-    [:div {:style {:width "70%"
-                   :margin :auto
-                   :padding-top "3em"}}
-     [graph]
-     [q-input]
-     [:table
-      [:tbody
-       [:tr [:th "Tag"] [:th "Count"] [:th "Percent of Pings"] [:th "Time Per Day"]]
-       (when (seq @ping-query) [query-row @ping-query])
-       (for [tag @tag-counts]
-         ^{:key (pr-str tag)}
-         [tag-table-row tag])]]]))
 
 (defn app
   []
@@ -101,11 +34,10 @@
        (case @active-panel
          :signup    [tictag.views.signup/signup]
          :login     [tictag.views.login/login]
-         :dashboard [logged-in-app]
+         :dashboard [tictag.views.query/query]
          :settings  [tictag.views.settings/settings]
          :about     [tictag.views.about/about]
          :editor    [tictag.views.editor/editor]
-         :query     [tictag.views.query/query]
          ;; if :active-panel not set yet, just wait for pushy to initialize
          [:div])])))
 

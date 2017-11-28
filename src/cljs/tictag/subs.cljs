@@ -380,8 +380,8 @@
 (reg-sub
  :pie/result
  (fn [db _]
-   (let [total (reduce + (vals (:pie/results db)))]
-     (->> (:pie/results db)
+   (let [total (reduce + (vals (get-in db [:pie/results :pie/shares])))]
+     (->> (get-in db [:pie/results :pie/shares])
           (sort-by (juxt #(not (nil? (key %))) val) #(compare %2 %1))
           (map (fn [[k v]] {:name k :value v :start 0 :end v}))
           (reductions
@@ -389,6 +389,26 @@
              {:name name :start (:end accu 0) :end (+ (:end accu 0) value)}))
           (map (fn [v] (update v :start #(/ % total))))
           (map (fn [v] (update v :end #(/ % total))))))))
+
+(reg-sub
+ :pie/daily-totals
+ (fn [db [_ v]]
+   (let [vs (into (sorted-map) (get-in db [:pie/results :pie/histogram v]))
+         min-day (first (keys vs))
+         max-day (last (keys vs))]
+     (for [day (range min-day max-day)]
+       [day (get vs day 0)]))))
+
+(reg-sub
+ :pie/daily-limits
+ (fn [db _]
+   (let [days (remove nil? (flatten (map keys (vals (get-in db [:pie/results :pie/histogram])))))]
+     [(apply min days) (apply max days)])))
+
+(reg-sub
+ :pie/others
+ (fn [db _]
+   (map key (take 10 (get-in db [:pie/results :pie/others])))))
 
 (reg-sub
  :pie/indexed-slices

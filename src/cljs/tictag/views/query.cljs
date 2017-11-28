@@ -5,7 +5,9 @@
             [reagent.core :as reagent]
             [tictag.constants :refer [ENTER]]
             [taoensso.timbre :as timbre]
-            [clojure.string :as str]))
+            [goog.string :as gstring]
+            [clojure.string :as str]
+            [c2.scale]))
 
 (defn pct-to-angle [pct]
   (- (* 2 Math/PI) (* 2 Math/PI pct)))
@@ -65,17 +67,19 @@
 (defn pie-slice [{:keys [x y r] :as m} {:keys [name start end color]}]
   (let [id (gensym "slice")]
     [:g
-     [:path {:d (arc-path (update m :r #(* 1.05 %)) start end)
-             :id id
-             :fill :none
+     [:path {:d      (arc-path (update m :r #(* 1.01 %)) start end)
+             :id     id
+             :fill   :none
              :stroke :none}]
      [:path {:d    (arc-path+origin m start end)
              :fill color}]
      [:text
       [:textPath
-       {:xlink-href (str "#" id)
+       {:xlink-href   (str "#" id)
         :start-offset "50%"
-        :style {:text-anchor :middle :font-size "0.75rem"}}
+        :style        {:text-anchor :middle
+                       :font-size   "0.75rem"
+                       :font-weight :bold}}
        name]]]))
 
 (def colors (cycle ["Tomato"
@@ -90,7 +94,7 @@
    (for [[i slice] (map-indexed vector slices)]
      ^{:key i}
      [pie-slice m (if (nil? (:name slice))
-                    (-> slice (assoc :name "no match") (assoc :color "#eee"))
+                    (-> slice (assoc :name "[no match]") (assoc :color "#eee"))
                     (assoc slice :color (nth colors i)))])])
 
 (defn pie-chart* [{:keys [x y r opts] :as m}]
@@ -118,6 +122,26 @@
                                       27 (stop)
                                       nil)})])))
 
+(defn query-sparkline* [freqs day-limits]
+  (let [[min-day max-day] day-limits
+        xscale            (c2.scale/linear :domain [min-day max-day]
+                                           :range [0 80])
+        yscale            (c2.scale/linear :domain [0 (apply max (vals freqs))]
+                                           :range [16 0])]
+    [:span {:style {:padding "0 0.5rem" :float :right}}
+     [:svg {:height "16px" :width "80px"}
+      [:g {:fill :none :stroke "#111"}
+       (c2.svg/line
+        (map
+         (fn [[d freq]]
+           [(xscale d) (yscale freq)])
+         freqs))]]]))
+
+(defn query-sparkline [query]
+  (let [freqs      (subscribe [:pie/daily-totals query])
+        day-limits (subscribe [:pie/daily-limits])]
+    [query-sparkline* @freqs @day-limits]))
+
 (defn query-item []
   (let [editing? (reagent/atom false)]
     (fn [{:keys [id query]}]
@@ -130,7 +154,8 @@
            {:query query
             :on-save #(dispatch [:pie/update-slice id %])
             :on-stop #(reset! editing? false)}]
-          [:span {:on-click #(reset! editing? true)} query])]])))
+          [:span {:on-click #(reset! editing? true)} query])]
+       [query-sparkline query]])))
 
 (defn query-list []
   (let [queries (subscribe [:pie/indexed-slices])]
@@ -148,12 +173,43 @@
                                   :background-color (nth colors i)}}
                        name])])))
 
+(defn query-hint []
+  (let [vs (subscribe [:pie/others])]
+    (fn []
+      (when (seq @vs)
+        [:div.input-hint
+         "Suggestions: " (str/join ", " @vs)]))))
+
 (defn queries []
   [:div {:style {:margin "2rem 0"}}
    [:h2 "Queries"]
    [query-list]
-   [input {:query ""
-           :on-save #(dispatch [:pie/add-slice %])}]])
+   [:div.input-field
+    [input {:query ""
+            :on-save #(dispatch [:pie/add-slice %])}]
+    [query-hint]]])
+
+
+(defn tag-table-row-view [tag count tag-% minutes active? time-per-day]
+  [:tr (if active?
+         {:style {:background-color "#333"
+                  :color            "#ddd"}}
+         {:style {:background-color "#ddd"
+                  :color            "#333"}})
+   [:td tag]
+   [:td count]
+   [:td (gstring/format "%.1f%%" tag-%)]
+   [:td time-per-day]])
+
+
+
+(defn tag-table-row [tag]
+  (let [count        (subscribe [:tag-count tag])
+        tag-%        (subscribe [:tag-% tag])
+        minutes      (subscribe [:minutes-for-tag tag])
+        active?      (subscribe [:tag-active? tag])
+        time-per-day (subscribe [:time-per-day-for-tag tag])]
+    [tag-table-row-view tag @count @tag-% @minutes @active? @time-per-day]))
 
 (defn query []
   [:div {:style {:height "100vh"
@@ -174,9 +230,7 @@
     [:div {:style {:padding "3rem"
                    :margin "3rem"
                    :background-color "white"}}
-     [:h1 "Pie Chart"]
      [:div
       [:svg {:width 600 :height 600 :style {:display :block :margin :auto}}
        [pie-chart* {:x 300 :y 300 :r 250}]
        [:circle {:cx 300 :cy 300 :r 225 :fill "white"}]]]]]])
-

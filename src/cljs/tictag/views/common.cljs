@@ -42,9 +42,8 @@
 (def light-grey (:light-grey colors))
 
 (def icon
-  {:query     [:i.fa.fa-fw.fa-pie-chart]
-   :about     [:i.fa.fa-fw.fa-question-circle-o]
-   :dashboard [:i.fa.fa-fw.fa-tachometer]
+  {:about     [:i.fa.fa-fw.fa-question-circle-o]
+   :dashboard [:i.fa.fa-fw.fa-pie-chart]
    :settings  [:i.fa.fa-fw.fa-cog]
    :editor    [:i.fa.fa-fw.fa-pencil]
    :logout    [:i.fa.fa-fw.fa-sign-out]
@@ -86,7 +85,6 @@
    (when-not user [link :login current-page])
    (when-not user [link :signup current-page])
    (when-not user [link :about current-page])
-   (when user [link :query current-page])
    (when user [link :dashboard current-page])
    (when user [link :settings current-page])
    (when user [link :editor current-page])

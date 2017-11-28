@@ -22,6 +22,12 @@
             [cljs.core.async :as a :refer [<! >! put! chan]]
             [taoensso.sente :as sente :refer [cb-success?]]))
 
+(defn filters [db]
+  (:pie/filters db))
+(defn slices [db]
+  (:pie/slices db))
+
+
 (def initial-queries
   [[:ping/get]
    [:freq/get]
@@ -269,61 +275,10 @@
 (def formatter (f/formatters :basic-date-time))
 
 (reg-event-fx
- :debounced-update-ping-query
- [interceptors]
- (fn [_ [_ v]]
-   {:dispatch-debounce [:upq [:update-ping-query v] 500]}))
-
-(reg-event-fx
  :debounced-slack/update
  [interceptors]
  (fn [_ v]
    {:dispatch-debounce [:dsu (assoc v 0 :slack/update)]}))
-
-(reg-event-fx
- :update-ping-query
- [interceptors]
- (fn [{:keys [db]} [_ v]]
-   (if (seq v)
-     {:dispatch-n [[:send-freq-req v]
-                   [:send-sign-req v]]
-      :db (assoc db :ping-query v :ping-query-count 0)}
-     {:db (assoc db :ping-query nil :ping-query-count 0)})))
-
-(reg-event-fx
- :send-freq-req
- [interceptors]
- (fn [{:keys [db]} [_ v]]
-   {:http-xhrio (authenticated-xhrio
-                 {:method          :get
-                  :uri             (str "/api/freq/" (b64/encodeString (or v "")))
-                  :response-format (transit-response-format {})
-                  :on-success      [:ping-query/get-success]
-                  :on-failure      [:ping-query/get-failure]}
-                 (:auth-token db))}))
-(reg-event-fx
- :send-sign-req
- [interceptors]
- (fn [{:keys [db]} [_ v]]
-   {:http-xhrio (authenticated-xhrio
-                 {:method          :get
-                  :uri             (str "/api/sign/" (b64/encodeString (or v "")))
-                  :response-format (transit-response-format {})
-                  :on-success      [:sign/get-success]
-                  :on-failure      [:sign/get-failure]}
-                 (:auth-token db))}))
-
-(reg-event-db
- :ping-query/get-success
- [interceptors]
- (fn [db [_ v]]
-   (assoc db :ping-query-count (:count v))))
-
-(reg-event-db
- :sign/get-success
- [interceptors]
- (fn [db [_ v]]
-   (assoc db :ping-query-url (:url v))))
 
 (reg-fx
  :pushy-init
@@ -626,11 +581,6 @@
           (js/clearTimeout (@timeouts id))
           (swap! timeouts dissoc id)))
 
-(defn filters [db]
-  (:pie/filters db))
-(defn slices [db]
-  (:pie/slices db))
-
 (reg-event-fx
  :pie/get*
  [interceptors]
@@ -646,11 +596,15 @@
                  :on-success      [:pie/get-success]
                  :on-failure      [:pie/get-failure]}}))
 
+
+
 (reg-event-fx
  :pie/get
  [interceptors]
  (fn [_ [_ v]]
    {:dispatch-debounce [:pieget [:pie/get*] 500]}))
+
+
 
 (reg-event-db
  :pie/get-success

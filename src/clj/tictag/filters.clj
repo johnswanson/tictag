@@ -45,13 +45,25 @@
           pings))
 
 (defn sieve [pings {filters :filters slices :slices}]
-  (->> slices
-       (reduce
-        (fn [accu f]
-          (let [{:keys [yes no]} (group-by #(if (bm/match? f (:ping/tag-set %)) :yes :no) (get accu nil))]
-            (-> accu
-                (assoc f yes)
-                (assoc nil no))))
-        {nil (matching pings filters)})
-       (map (fn [[k v]] [k (count v)]))
-       (into {})))
+  (let [pings          (matching pings filters)
+        filtered-pings (->> slices
+                            (reduce
+                             (fn [accu f]
+                               (let [{:keys [yes no]} (group-by #(if (bm/match? f (:ping/tag-set %)) :yes :no) (get accu nil))]
+                                 (-> accu
+                                     (assoc f yes)
+                                     (assoc nil no))))
+                             {nil pings}))]
+    {:pie/shares    (->> filtered-pings
+                         (map (fn [[k v]] [k (count v)]))
+                         (into {}))
+     :pie/others    (->> (filtered-pings nil)
+                         (map :ping/tag-set)
+                         (apply concat)
+                         (frequencies)
+                         (sort-by val #(compare %2 %1)))
+     :pie/histogram (into {} (for [s slices]
+                               [s (->>
+                                   (filter #(bm/match? s (:ping/tag-set %)) pings)
+                                   (map :ping/days-since-epoch)
+                                   (frequencies))]))}))
