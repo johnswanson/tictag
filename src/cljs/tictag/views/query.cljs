@@ -129,7 +129,7 @@
         yscale            (c2.scale/linear :domain [0 (apply max (vals freqs))]
                                            :range [16 0])]
     [:span {:style {:padding "0 0.5rem" :float :right}}
-     [:svg {:height "16px" :width "80px"}
+     [:svg {:height "16px" :width "160px"}
       [:g {:fill :none :stroke "#111"}
        (c2.svg/line
         (map

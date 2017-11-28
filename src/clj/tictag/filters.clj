@@ -49,7 +49,8 @@
         filtered-pings (->> slices
                             (reduce
                              (fn [accu f]
-                               (let [{:keys [yes no]} (group-by #(if (bm/match? f (:ping/tag-set %)) :yes :no) (get accu nil))]
+                               (let [f-data           (try (edn/read-string f) (catch Exception e f))
+                                     {:keys [yes no]} (group-by #(if (bm/match? f-data (:ping/tag-set %)) :yes :no) (get accu nil))]
                                  (-> accu
                                      (assoc f yes)
                                      (assoc nil no))))
@@ -63,7 +64,8 @@
                          (frequencies)
                          (sort-by val #(compare %2 %1)))
      :pie/histogram (into {} (for [s slices]
-                               [s (->>
-                                   (filter #(bm/match? s (:ping/tag-set %)) pings)
-                                   (map :ping/days-since-epoch)
-                                   (frequencies))]))}))
+                               (let [f-data (try (edn/read-string s) (catch Exception _ s))]
+                                 [s (->>
+                                     (filter #(bm/match? f-data (:ping/tag-set %)) pings)
+                                     (map :ping/days-since-epoch)
+                                     (frequencies))])))}))
