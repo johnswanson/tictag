@@ -31,14 +31,14 @@
   [(* r (Math/cos theta))
    (* r (Math/sin theta))])
 
-(defn arc-path [{:keys [x y r] :as m} pct0 pct1]
-  (let [[x0 y0]           (-> pct0
+(defn arc-path [{:keys [x y r] :as m} pct0 pct1 {:keys [reverse?]}]
+  (let [[x0 y0]           (-> (if reverse? pct1 pct0)
                               pct-to-angle
                               angle-to-cart
                               (scale m)
                               (invert-y m)
                               (move-to-origin m))
-        [x1 y1]           (-> pct1
+        [x1 y1]           (-> (if reverse? pct0 pct1)
                               pct-to-angle
                               angle-to-cart
                               (scale m)
@@ -56,13 +56,13 @@
       (if (< 0.5 (- pct1 pct0)) 1 0)
 
       ;; sweep-flag, always go clockwise
-      1
+      (if reverse? 0 1)
 
       ;; x y
       x1 y1])))
 
 (defn arc-path+origin [{x :x y :y :as m} pct0 pct1]
-  (str (arc-path m pct0 pct1) " L " x " " y))
+  (str (arc-path m pct0 pct1 {}) " L " x " " y))
 
 (defn pie-slice [{:keys [x y r] :as m} {:keys [name start end color]}]
   (let [id (gensym "slice")
@@ -71,9 +71,10 @@
       (when (> (- end start) 0)
         [:g
          [:path {:d      (arc-path
-                          (update m :r #(* % (if @over? 1.1 1.02)))
+                          (update m :r #(* % (if @over? 1.1 1.04)))
                           (- start 0.2)
-                          (+ end 0.2))
+                          (+ end 0.2)
+                          {:reverse? (> 0.75 (+ start (/ (- end start) 2)) 0.25)})
                  :id     id
                  :fill   :none
                  :stroke :none}]
@@ -89,10 +90,11 @@
            {:xlink-href   (str "#" id)
             :start-offset "50%"
             :style        {:text-anchor :middle
+                           :font-family "Roboto"
                            :font-size   (if @over? "1rem" "0.75rem")
-                           :font-weight :normal}}
+                           :font-weight 300}}
            (if @over?
-             (str name " (" hours-per-day " / day)")
+             (str "(" hours-per-day " / day)")
              name)]]]))))
 
 (def colors (cycle ["Tomato"
