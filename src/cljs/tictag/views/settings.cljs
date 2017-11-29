@@ -289,7 +289,7 @@
 (defn settings []
   [:div {:style {:width "70%"
                  :margin :auto
-                 :padding-top "3em"}}
+                 :padding "3em 0"}}
    [slack]
    [:hr]
    [beeminder]

@@ -239,12 +239,10 @@
      [queries]
      [filters]]]
    [:div {:style {:grid-area "chart"
-                  :overflow-y :scroll
-                  :background-color common/white}}
+                  :overflow-y :scroll}}
     [:div {:style {:padding "3rem"
-                   :margin "3rem"
                    :background-color "white"}}
      [:div
-      [:svg {:width 600 :height 600 :style {:display :block :margin :auto}}
-       [pie-chart* {:x 300 :y 300 :r 250}]
-       [:circle {:cx 300 :cy 300 :r 225 :fill "white"}]]]]]])
+      [:svg {:viewBox "0 0 800 800" :style {:display :block :margin :auto}}
+       [pie-chart* {:x 400 :y 400 :r 350}]
+       [:circle {:cx 400 :cy 400 :r 300 :fill "white"}]]]]]])
