@@ -55,7 +55,7 @@
 (defn slack-help []
   [:div
    [:h2 "Slackbot instructions:"]
-   [:p "Every time a ping goes out, you'll get a slack mesmsage like " [:code "ping 689 [1510831434000]"] ". To respond, you can: "]
+   [:p "Every time a ping goes out, you'll get a slack message like " [:code "ping 689 [1510831434000]"] ". To respond, you can: "]
    [:ol
     [:li "Just send something like " [:code "foo bar"] " to tag the most recent ping as " [:code (pr-str ["foo" "bar"])]]
     [:li "Using the same syntax, respond to a ping in a thread to respond to that specific ping"]
