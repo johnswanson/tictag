@@ -34,6 +34,7 @@
   :plugins [[lein-cljsbuild "1.1.5"]]
   :test-paths ["test/clj"]
   :profiles {:uberjar {:aot        :all
+                       :jvm-opts ["-Xms1024m -Xmx2048m"]
                        :prep-tasks ["compile" ["cljsbuild" "once" "prod"]]}
              :dev     [:dev-secrets {:source-paths ["dev" "test/clj"]
                                      :dependencies [[org.clojure/tools.namespace "0.2.11"]
