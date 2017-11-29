@@ -22,11 +22,20 @@
             [cljs.core.async :as a :refer [<! >! put! chan]]
             [taoensso.sente :as sente :refer [cb-success?]]))
 
+(reg-cofx
+ :local-store-slices
+ (fn [cofx _]
+   (assoc
+    cofx
+    :local-store-slices
+    (edn/read-string
+     (.getItem js/localStorage "ttc-dashboard")))))
+
+
 (defn filters [db]
   (:pie/filters db))
 (defn slices [db]
   (:pie/slices db))
-
 
 (def initial-queries
   [[:ping/get]
@@ -36,7 +45,8 @@
    [:beeminder/get]
    [:goal/get]
    [:slack/get]
-   [:q/get []]])
+   [:q/get []]
+   [:pie/get]])
 
 (declare merge-pending)
 
@@ -375,8 +385,9 @@
  [(inject-cofx :cookie :auth-token)
   (inject-cofx :cookie :user-id)
   (inject-cofx :window-dimensions nil)
+  (inject-cofx :local-store-slices)
   interceptors]
- (fn [{:keys [cookies db window-dimensions]} _]
+ (fn [{:keys [cookies db window-dimensions local-store-slices]} _]
    {:pushy-init                       true
     :http-xhrio                       {:method          :get
                                        :uri             "/api/timezones"
@@ -388,12 +399,13 @@
     :sente-connect                    (:auth-token cookies)
     :dispatch-n                       initial-queries
     :add-window-resize-event-listener nil
-    :db                               (let [db {:auth-token   (:auth-token cookies)
-                                                :pie/slices []
-                                                :db/window    window-dimensions
-                                                :macro/by-id  {}
-                                                :schemas/ui   {:pending-user/by-id {:temp {:pending-user/tz (utils/local-tz)}}
-                                                               :pending-macro/by-id {:temp {}}}}]
+    :db                               (let [db {:auth-token  (:auth-token cookies)
+                                                :pie/slices  (:pie/slices local-store-slices)
+                                                :pie/filters (:pie/filters local-store-slices)
+                                                :db/window   window-dimensions
+                                                :macro/by-id {}
+                                                :schemas/ui  {:pending-user/by-id  {:temp {:pending-user/tz (utils/local-tz)}}
+                                                              :pending-macro/by-id {:temp {}}}}]
                                         (if-let [uid (some-> cookies :user-id js/parseInt)]
                                           (assoc db :db/authenticated-user [:user/by-id uid])
                                           db))}))
@@ -597,38 +609,43 @@
                  :on-failure      [:pie/get-failure]}}))
 
 
+(defn pie->local-store [db]
+  (timbre/debug (select-keys db [:pie/slices :pie/filters]))
+  (.setItem js/localStorage "ttc-dashboard" (select-keys db [:pie/slices :pie/filters])))
+
+(def ->local-store (re-frame.core/after pie->local-store))
+
+(def pie-interceptors [interceptors ->local-store])
 
 (reg-event-fx
  :pie/get
- [interceptors]
+ [pie-interceptors]
  (fn [_ [_ v]]
    {:dispatch-debounce [:pieget [:pie/get*] 500]}))
 
-
-
 (reg-event-db
  :pie/get-success
- [interceptors]
+ [pie-interceptors]
  (fn [db [_ v]]
    (assoc db :pie/results v)))
 
 (reg-event-fx
  :pie/add-slice
- [interceptors]
+ [pie-interceptors]
  (fn [{:keys [db]} [_ v]]
    {:db (update-in db [:pie/slices] (fnil conj []) v)
     :dispatch [:pie/get]}))
 
 (reg-event-fx
  :pie/update-slice
- [interceptors]
+ [pie-interceptors]
  (fn [{:keys [db]} [_ idx v]]
    {:db (update-in db [:pie/slices] (fnil assoc []) idx v)
     :dispatch [:pie/get]}))
 
 (reg-event-fx
  :pie/delete-slice
- [interceptors]
+ [pie-interceptors]
  (fn [{:keys [db]} [_ idx]]
    {:dispatch [:pie/get]
     :db (update-in db [:pie/slices] (fn [slices]
@@ -637,7 +654,7 @@
 
 (reg-event-fx
  :pie-filters/change-query
- [interceptors]
+ [pie-interceptors]
  (fn [{:keys [db]} [_ v]]
    (let [v (if (seq v) v nil)]
      {:db (assoc-in db [:pie/filters :query] v)
@@ -645,7 +662,7 @@
 
 (reg-event-fx
  :pie-filters/day-select
- [interceptors]
+ [pie-interceptors]
  (fn [{:keys [db]} [_ day val]]
    {:db (if val
           (update-in db [:pie/filters :days] (fnil conj #{}) day)
@@ -654,28 +671,28 @@
 
 (reg-event-fx
  :pie-filters/day-select-all
- [interceptors]
+ [pie-interceptors]
  (fn [{:keys [db]} _]
    {:db (assoc-in db [:pie/filters :days] #{:sun :mon :tue :wed :thu :fri :sat})
     :dispatch [:pie/get]}))
 
 (reg-event-fx
  :pie-filters/day-select-none
- [interceptors]
+ [pie-interceptors]
  (fn [{:keys [db]} _]
    {:db (assoc-in db [:pie/filters :days] #{})
     :dispatch [:pie/get]}))
 
 (reg-event-fx
  :pie-filters/day-select-weekdays-only
- [interceptors]
+ [pie-interceptors]
  (fn [{:keys [db]} _]
    {:db (assoc-in db [:pie/filters :days] #{:mon :tue :wed :thu :fri})
     :dispatch [:pie/get]}))
 
 (reg-event-fx
  :pie-filters/day-select-weekends-only
- [interceptors]
+ [pie-interceptors]
  (fn [{:keys [db]} _]
    {:db (assoc-in db [:pie/filters :days] #{:sat :sun})
     :dispatch [:pie/get]}))
@@ -688,7 +705,7 @@
 (reg-event-fx
  :pie-filters/select-today
  [(inject-cofx :today)
-  interceptors]
+  pie-interceptors]
  (fn [{:keys [db today]} _]
    {:db (-> db
             (assoc-in [:pie/filters :start-date] (f/unparse (f/formatter "YYYY-MM-dd") today))
@@ -698,7 +715,7 @@
 (reg-event-fx
  :pie-filters/select-last-week
  [(inject-cofx :today)
-  interceptors]
+  pie-interceptors]
  (fn [{:keys [db today]} _]
    {:db (-> db
             (assoc-in [:pie/filters :start-date] (f/unparse (f/formatter "YYYY-MM-dd") (t/plus today (t/days -7))))
@@ -708,7 +725,7 @@
 (reg-event-fx
  :pie-filters/select-last-month
  [(inject-cofx :today)
-  interceptors]
+  pie-interceptors]
  (fn [{:keys [db today]} _]
    {:db (-> db
             (assoc-in [:pie/filters :start-date] (f/unparse (f/formatter "YYYY-MM-dd") (t/plus today (t/months -1))))
@@ -718,7 +735,7 @@
 (reg-event-fx
  :pie-filters/select-last-year
  [(inject-cofx :today)
-  interceptors]
+  pie-interceptors]
  (fn [{:keys [db today]} _]
    {:db (-> db
             (assoc-in [:pie/filters :start-date] (f/unparse (f/formatter "YYYY-MM-dd") (t/plus today (t/years -1))))
@@ -727,7 +744,7 @@
 
 (reg-event-fx
  :pie-filters/select-all-dates
- [interceptors]
+ [pie-interceptors]
  (fn [{:keys [db]} _]
    {:db (-> db
             (assoc-in [:pie/filters :start-date] nil)
@@ -736,14 +753,14 @@
 
 (reg-event-fx
  :pie-filters/set-start-date
- [interceptors]
+ [pie-interceptors]
  (fn [{:keys [db]} [_ v]]
    {:db (assoc-in db [:pie/filters :start-date] v)
     :dispatch [:pie/get]}))
 
 (reg-event-fx
  :pie-filters/set-end-date
- [interceptors]
+ [pie-interceptors]
  (fn [{:keys [db]} [_ v]]
    {:db (assoc-in db [:pie/filters :end-date] v)
     :dispatch [:pie/get]}))

@@ -106,10 +106,9 @@
 
 (defn pie-chart [{:keys [x y r opts] :as m} slices]
   [:g
-   (for [[i slice] (map-indexed vector slices)]
+   (for [[i slice] (map-indexed vector (filter :name slices))]
      ^{:key i}
-     (when (:name slice)
-       [pie-slice m (assoc slice :color (nth colors i))]))])
+     [pie-slice m (assoc slice :color (nth colors i))])])
 
 (defn pie-chart* [{:keys [x y r opts] :as m}]
   (let [sub (subscribe [:pie/result])]
@@ -177,16 +176,6 @@
      (for [q @queries]
        ^{:key (:id q)} [query-item q])]))
 
-(defn piechart []
-  (let [sub  (subscribe [:pie/result])]
-    (let [total (reduce + (map second @sub))]
-      [:div {:style {:width "300px" :height "50vh"}}
-       (for [[i [name n]] (map-indexed vector @sub)]
-         ^{:key i} [:div {:style {:width "300px"
-                                  :height (str (* 100 (/ n total)) "%")
-                                  :background-color (nth colors i)}}
-                       name])])))
-
 (defn query-hint []
   (let [vs (subscribe [:pie/others])]
     (fn []
@@ -242,7 +231,6 @@
                   :overflow-y :scroll}}
     [:div {:style {:padding "3rem"
                    :background-color "white"}}
-     [:div
-      [:svg {:viewBox "0 0 800 800" :style {:display :block :margin :auto}}
-       [pie-chart* {:x 400 :y 400 :r 350}]
-       [:circle {:cx 400 :cy 400 :r 300 :fill "white"}]]]]]])
+     [:svg {:viewBox "0 0 800 800" :style {:display :block :margin :auto}}
+      [pie-chart* {:x 400 :y 400 :r 350}]
+      [:circle {:cx 400 :cy 400 :r 300 :fill "white"}]]]]])
