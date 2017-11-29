@@ -44,8 +44,8 @@
             (every? #(match? p %) filters))
           pings))
 
-(defn sieve [pings {filters :filters slices :slices}]
-  (let [pings          (matching pings filters)
+(defn sieve [all-pings {filters :filters slices :slices}]
+  (let [pings          (matching all-pings filters)
         filtered-pings (->> slices
                             (reduce
                              (fn [accu f]
@@ -55,17 +55,18 @@
                                      (assoc f yes)
                                      (assoc nil no))))
                              {nil pings}))]
-    {:pie/shares    (->> filtered-pings
-                         (map (fn [[k v]] [k (count v)]))
-                         (into {}))
-     :pie/others    (->> (filtered-pings nil)
-                         (map :ping/tag-set)
-                         (apply concat)
-                         (frequencies)
-                         (sort-by val #(compare %2 %1)))
-     :pie/histogram (into {} (for [s slices]
-                               (let [f-data (try (edn/read-string s) (catch Exception _ s))]
-                                 [s (->>
-                                     (filter #(bm/match? f-data (:ping/tag-set %)) pings)
-                                     (map :ping/days-since-epoch)
-                                     (frequencies))])))}))
+    {:pie/denominator (count (matching all-pings (select-keys filters [:start-date :end-date :days])))
+     :pie/shares      (->> filtered-pings
+                           (map (fn [[k v]] [k (count v)]))
+                           (into {}))
+     :pie/others      (->> (filtered-pings nil)
+                           (map :ping/tag-set)
+                           (apply concat)
+                           (frequencies)
+                           (sort-by val #(compare %2 %1)))
+     :pie/histogram   (into {} (for [s slices]
+                                 (let [f-data (try (edn/read-string s) (catch Exception _ s))]
+                                   [s (->>
+                                       (filter #(bm/match? f-data (:ping/tag-set %)) pings)
+                                       (map :ping/days-since-epoch)
+                                       (frequencies))])))}))

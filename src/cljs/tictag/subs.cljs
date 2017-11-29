@@ -293,7 +293,6 @@
  :pending-user
  (fn [db _]
    (let [pending-user (get-in db [:tictag.schemas/ui :pending-user/by-id :temp])]
-     (timbre/debug pending-user)
      (if (:pending-user/tz pending-user)
        pending-user
        (assoc pending-user :pending-user/tz "America/Los_Angeles")))))
@@ -380,13 +379,25 @@
 (reg-sub
  :pie/result
  (fn [db _]
-   (let [total (reduce + (vals (get-in db [:pie/results :pie/shares])))]
+   (let [total      (reduce + (vals (get-in db [:pie/results :pie/shares])))
+         count-time (get-in db [:pie/results :pie/denominator])]
      (->> (get-in db [:pie/results :pie/shares])
           (sort-by (juxt #(not (nil? (key %))) val) #(compare %2 %1))
-          (map (fn [[k v]] {:name k :value v :start 0 :end v}))
+          (map (fn [[k v]] {:name          k
+                            :value         v
+                            :start         0
+                            :end           v
+                            :count         v
+                            :hours         (* v 0.75)
+                            :hours-per-day (f/unparse-duration (t/hours (* 24 (/ v count-time))))}))
           (reductions
            (fn [accu {:keys [name value]}]
-             {:name name :start (:end accu 0) :end (+ (:end accu 0) value)}))
+             {:name          name
+              :start         (:end accu 0)
+              :end           (+ (:end accu 0) value)
+              :count         value
+              :hours         (* value 0.75)
+              :hours-per-day (f/unparse-duration (t/hours (* 24 (/ value count-time))))}))
           (map (fn [v] (update v :start #(/ % total))))
           (map (fn [v] (update v :end #(/ % total))))))))
 

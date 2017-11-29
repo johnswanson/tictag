@@ -65,22 +65,35 @@
   (str (arc-path m pct0 pct1) " L " x " " y))
 
 (defn pie-slice [{:keys [x y r] :as m} {:keys [name start end color]}]
-  (let [id (gensym "slice")]
-    [:g
-     [:path {:d      (arc-path (update m :r #(* 1.01 %)) start end)
-             :id     id
-             :fill   :none
-             :stroke :none}]
-     [:path {:d    (arc-path+origin m start end)
-             :fill color}]
-     [:text
-      [:textPath
-       {:xlink-href   (str "#" id)
-        :start-offset "50%"
-        :style        {:text-anchor :middle
-                       :font-size   "0.75rem"
-                       :font-weight :bold}}
-       name]]]))
+  (let [id (gensym "slice")
+        over? (reagent/atom false)]
+    (fn [{:keys [x y r] :as m} {:keys [name start end color hours hours-per-day] :as p}]
+      (when (> (- end start) 0)
+        [:g
+         [:path {:d      (arc-path
+                          (update m :r #(* % (if @over? 1.1 1.02)))
+                          (- start 0.2)
+                          (+ end 0.2))
+                 :id     id
+                 :fill   :none
+                 :stroke :none}]
+         [:path {:d    (arc-path+origin
+                        (if @over? (update m :r #(* 1.02 %)) m)
+                        start
+                        end)
+                 :on-mouse-over #(reset! over? true)
+                 :on-mouse-leave #(reset! over? false)
+                 :fill color}]
+         [:text
+          [:textPath
+           {:xlink-href   (str "#" id)
+            :start-offset "50%"
+            :style        {:text-anchor :middle
+                           :font-size   (if @over? "1rem" "0.75rem")
+                           :font-weight :normal}}
+           (if @over?
+             (str name " (" hours-per-day " / day)")
+             name)]]]))))
 
 (def colors (cycle ["Tomato"
                     "Turquoise"
@@ -93,9 +106,8 @@
   [:g
    (for [[i slice] (map-indexed vector slices)]
      ^{:key i}
-     [pie-slice m (if (nil? (:name slice))
-                    (-> slice (assoc :name "[no match]") (assoc :color "#eee"))
-                    (assoc slice :color (nth colors i)))])])
+     (when (:name slice)
+       [pie-slice m (assoc slice :color (nth colors i))]))])
 
 (defn pie-chart* [{:keys [x y r opts] :as m}]
   (let [sub (subscribe [:pie/result])]
