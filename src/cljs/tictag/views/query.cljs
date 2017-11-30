@@ -64,7 +64,7 @@
 (defn arc-path+origin [{x :x y :y :as m} pct0 pct1]
   (str (arc-path m pct0 pct1 {}) " L " x " " y))
 
-(defn arc [m {:keys [start end label]}]
+(defn arc [m {:keys [start end label label-style]}]
   (let [id (gensym "slice")]
     [:g
      [:path {:d      (arc-path
@@ -79,34 +79,43 @@
       [:textPath
        {:xlink-href   (str "#" id)
         :start-offset "50%"
-        :style        {:text-anchor :middle
-                       :font-family "Roboto"
-                       :font-size   "0.75rem"
-                       :font-weight 300}}
+        :style        (merge {:text-anchor :middle
+                              :font-family "Roboto"
+                              :font-size   "0.75rem"
+                              :background-color "white"
+                              :font-weight 300}
+                             label-style)}
        label]]]))
 
 (defn pie-slice [{:keys [x y r] :as m} {:keys [name start end color]}]
   (let [id    (gensym "slice")
         over? (reagent/atom false)]
     (fn [{:keys [x y r] :as m} {:keys [name start end color hours hours-per-day] :as p}]
-      (when (> (- end start) 0)
-        [:g
-         [:path {:d              (arc-path+origin
-                                  (if @over? (update m :r #(* 1.02 %)) m)
-                                  start
-                                  end)
-                 :on-mouse-over  #(reset! over? true)
-                 :on-mouse-leave #(reset! over? false)
-                 :fill           color}]
-         [arc (update m :r #(* % (if @over? 1.1 1.04)))
-          {:start (- start 0.2)
-           :end   (+ end 0.2)
-           :label (if @over? (str hours-per-day " / day") name)}]
-         (when @over?
-           [arc (update m :r #(* % 1.06))
-            {:start (- start 0.2)
-             :end   (+ end 0.2)
-             :label hours}])]))))
+      (let [arc-config {:start (- start 0.2)
+                        :end (+ end 0.2)}]
+        (when (> (- end start) 0)
+          [:g
+           [:path {:d              (arc-path+origin
+                                    (if @over? (update m :r #(* 1.03 %)) m)
+                                    start
+                                    end)
+                   :on-mouse-over  #(reset! over? true)
+                   :on-mouse-leave #(reset! over? false)
+                   :fill           color}]
+           (if @over?
+             [:g
+              [arc
+               (update m :r #(* % 1.06))
+               (assoc arc-config :label name :label-style {:font-weight :bold})]
+              [arc
+               (update m :r #(* % 1.09))
+               (assoc arc-config :label (str hours-per-day " / day"))]
+              [arc
+               (update m :r #(* % 1.12))
+               (assoc arc-config :label hours)]]
+             [arc
+              (update m :r #(* % 1.03))
+              (assoc {:start start :end end} :label name :label-style {:font-weight :bold})])])))))
 
 (def colors (cycle ["Tomato"
                     "Turquoise"
