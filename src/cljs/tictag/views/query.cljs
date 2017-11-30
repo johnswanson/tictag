@@ -64,38 +64,49 @@
 (defn arc-path+origin [{x :x y :y :as m} pct0 pct1]
   (str (arc-path m pct0 pct1 {}) " L " x " " y))
 
+(defn arc [m {:keys [start end label]}]
+  (let [id (gensym "slice")]
+    [:g
+     [:path {:d      (arc-path
+                      m
+                      start
+                      end
+                      {:reverse? (> 0.75 (+ start (/ (- end start) 2)) 0.25)})
+             :id     id
+             :fill   :none
+             :stroke :none}]
+     [:text
+      [:textPath
+       {:xlink-href   (str "#" id)
+        :start-offset "50%"
+        :style        {:text-anchor :middle
+                       :font-family "Roboto"
+                       :font-size   "0.75rem"
+                       :font-weight 300}}
+       label]]]))
+
 (defn pie-slice [{:keys [x y r] :as m} {:keys [name start end color]}]
-  (let [id (gensym "slice")
+  (let [id    (gensym "slice")
         over? (reagent/atom false)]
     (fn [{:keys [x y r] :as m} {:keys [name start end color hours hours-per-day] :as p}]
       (when (> (- end start) 0)
         [:g
-         [:path {:d      (arc-path
-                          (update m :r #(* % (if @over? 1.1 1.04)))
-                          (- start 0.2)
-                          (+ end 0.2)
-                          {:reverse? (> 0.75 (+ start (/ (- end start) 2)) 0.25)})
-                 :id     id
-                 :fill   :none
-                 :stroke :none}]
-         [:path {:d    (arc-path+origin
-                        (if @over? (update m :r #(* 1.02 %)) m)
-                        start
-                        end)
-                 :on-mouse-over #(reset! over? true)
+         [:path {:d              (arc-path+origin
+                                  (if @over? (update m :r #(* 1.02 %)) m)
+                                  start
+                                  end)
+                 :on-mouse-over  #(reset! over? true)
                  :on-mouse-leave #(reset! over? false)
-                 :fill color}]
-         [:text
-          [:textPath
-           {:xlink-href   (str "#" id)
-            :start-offset "50%"
-            :style        {:text-anchor :middle
-                           :font-family "Roboto"
-                           :font-size   (if @over? "1rem" "0.75rem")
-                           :font-weight 300}}
-           (if @over?
-             (str "(" hours-per-day " / day)")
-             name)]]]))))
+                 :fill           color}]
+         [arc (update m :r #(* % (if @over? 1.1 1.04)))
+          {:start (- start 0.2)
+           :end   (+ end 0.2)
+           :label (if @over? (str hours-per-day " / day") name)}]
+         (when @over?
+           [arc (update m :r #(* % 1.06))
+            {:start (- start 0.2)
+             :end   (+ end 0.2)
+             :label hours}])]))))
 
 (def colors (cycle ["Tomato"
                     "Turquoise"

@@ -388,7 +388,7 @@
                             :start         0
                             :end           v
                             :count         v
-                            :hours         (* v 0.75)
+                            :hours         (f/unparse-duration (t/hours (* v 0.75)))
                             :hours-per-day (f/unparse-duration (t/hours (* 24 (/ v count-time))))}))
           (reductions
            (fn [accu {:keys [name value]}]
@@ -396,7 +396,7 @@
               :start         (:end accu 0)
               :end           (+ (:end accu 0) value)
               :count         value
-              :hours         (* value 0.75)
+              :hours         (f/unparse-duration (t/hours (* value 0.75)))
               :hours-per-day (f/unparse-duration (t/hours (* 24 (/ value count-time))))}))
           (map (fn [v] (update v :start #(/ % total))))
           (map (fn [v] (update v :end #(/ % total))))))))
