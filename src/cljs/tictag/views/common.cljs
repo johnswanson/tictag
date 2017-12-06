@@ -57,10 +57,9 @@
                :font-weight (if (= current-page route-name)
                               :bold
                               nil)
-               :color (if (= current-page route-name)
-                        white
-                        grey)}}
-   [:div
+               :color white}}
+   [:div {:style (when (= current-page route-name)
+                   {:background-color black})}
     [:span {:style {:margin-left "1em"}}]
     (icon route-name)
     [:span {:style {:margin-left "1em"}} (str/capitalize (name route-name))]]])
