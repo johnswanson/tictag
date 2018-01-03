@@ -1,10 +1,9 @@
 (ns tictag.views.settings
   (:require [re-frame.core :refer [subscribe dispatch]]
             [tictag.views.common :refer [input]]
-            [tictag.utils :as utils]
+            [tictag.utils :as utils :refer [dispatch-n]]
             [reagent.core :as reagent]
             [tictag.constants :refer [ENTER]]
-            [tictag.utils :refer [dispatch-n]]
             [goog.string :as str]
             [cljs.reader :as edn]
             [taoensso.timbre :as timbre]))
@@ -211,19 +210,21 @@
 
 (defn timezone []
   (let [user              (subscribe [:authorized-user])
-        allowed-timezones (subscribe [:allowed-timezones])]
+        allowed-timezones (subscribe [:allowed-timezones])
+        client-tz         (utils/local-tz)]
     [:div
      [:h1 "Timezone"]
      [:div.input-group
-      [:select {:value (:user/tz @user)
-                :on-change #(dispatch-n [:user/update (:user/id @user) :user/tz %]
+      [:select {:value     (:user/tz @user)
+                :on-change #(dispatch-n [:user/update (:user/id @user) :user/tz (-> % .-target .-value)]
                                         [:user/save (:user/id @user)])}
        (for [tz @allowed-timezones]
          ^{:key tz} [:option tz])]
-      [:button.button {:type :button
-                       :on-click #(dispatch-n [:user/update (:user/id @user) :user/tz (utils/local-tz)]
-                                              [:user/save (:user/id @user)])}
-       "Autodetect"]]]))
+      (when (and client-tz ((set @allowed-timezones) client-tz))
+        [:button.button {:type     :button
+                         :on-click #(dispatch-n [:user/update (:user/id @user) :user/tz client-tz]
+                                                [:user/save (:user/id @user)])}
+         "Autodetect"])]]))
 
 (defn download []
   (let [pings (subscribe [:raw-pings])

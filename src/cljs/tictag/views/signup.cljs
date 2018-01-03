@@ -12,7 +12,8 @@
         errors            (subscribe [:signup-errors])
         allowed-timezones (subscribe [:allowed-timezones])
         submit            #(do (dispatch [:user/save :temp])
-                               (.preventDefault %))]
+                               (.preventDefault %))
+        client-tz         (utils/local-tz)]
     (fn []
       [:div
        {:style {:width      "70%"
@@ -46,8 +47,9 @@
                     :on-change #(dispatch [:user/update :temp :tz (-> % .-target .-value)])}
            (for [tz @allowed-timezones]
              ^{:key tz} [:option tz])]
-          [:button.button {:type :button
-                           :on-click #(dispatch [:user/update :temp :tz (utils/local-tz)])} "Autodetect"]]]
+          (when (and client-tz ((set @allowed-timezones) client-tz))
+            [:button.button {:type     :button
+                             :on-click #(dispatch [:user/update :temp :tz client-tz])} "Autodetect"])]]
         [:button {:type     :button
                   :on-click #(dispatch [:user/save :temp])} "Sign Up"]]])))
 
