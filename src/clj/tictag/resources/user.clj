@@ -33,6 +33,18 @@
 (defn hash-password [u]
   (update u :user/pass hashp))
 
+(defn valid-timezone? [db tz]
+  (timbre/debug (first (db/timezones db)))
+  (when ((set (map :name (db/timezones db))) tz)
+    true))
+
+(defn validate-tz [db user]
+  (timbre/debug (:user/tz user))
+  (timbre/debug (valid-timezone? db (:user/tz user)))
+  (if (valid-timezone? db (:user/tz user))
+    user
+    :tictag.resources/unprocessable))
+
 (defn users [{:keys [db jwt]}]
   (resource
    collection-defaults
@@ -52,7 +64,7 @@
    :handle-ok ::users
    :processable?
    (fn [ctx]
-     (let [e (process ::new-user ctx [:user/tz :user/pass :user/username :user/email] [hash-password])]
+     (let [e (process ::new-user ctx [:user/tz :user/pass :user/username :user/email] [hash-password (partial validate-tz db)])]
        (if (= e :tictag.resources/unprocessable)
          [false {::not-processable (s/explain-data ::new-user (params ctx))}]
          [true {::user e}])))
@@ -91,7 +103,7 @@
    :handle-ok ::user
    :processable?
    (fn [ctx]
-     (let [e (process ::existing-user ctx [:user/tz])]
+     (let [e (process ::existing-user ctx [:user/tz] (partial validate-tz db))]
        (if (= e :tictag.resources/unprocessable)
          [false nil]
          [true {::changes e}])))
