@@ -157,7 +157,8 @@
 (defn local-day [local-time] (f/unparse ymd local-time))
 
 (defn to-ping [{:keys [local_time ts tags user_id]}]
-  {:tags       (set (str/split tags #" "))
+  {:ts         ts
+   :tags       (set (str/split tags #" "))
    :user-id    user_id
    :local-time local_time
    :local-day  (local-day local_time)
@@ -345,6 +346,11 @@
           :where where}))))))
   ([type db uid id]
    (get-one type db (where-for type uid id))))
+
+(defn raw-query [{db :db} query]
+  (j/query
+   db
+   (sql/format query)))
 
 (defn get-by-id [type {db :db} uid id]
   ((convert db type)

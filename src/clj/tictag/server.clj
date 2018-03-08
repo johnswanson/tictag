@@ -121,7 +121,10 @@
     (do (slack/send-message user (format "Warning: can't find ping from time: `%s`" lt-str)) nil)))
 
 (defmethod evaluate :DITTO [{:keys [db user]} _]
-  (vec (:tags (second (db/last-pings db user 2)))))
+  [::ditto])
+
+(defmethod evaluate :PLUS [{:keys [db user]} _]
+  [::plus])
 
 (defmethod evaluate :TAG [{{macros :macros} :user} [_ tag]]
   (let [lc (str/lower-case tag)]
@@ -144,11 +147,37 @@
         [ping ["sleep"]])
       sleepy-pings)]))
 
-(defn update-pings [pings]
+(defn tags-before [db user ping]
+  (timbre/debug (:ts ping))
+  (str/split
+   (:tags (let [p (first (db/raw-query db
+                                       {:select   [:ts :tags]
+                                        :from     [:pings]
+                                        :where    [:and
+                                                   [:= :user-id (:id user)]
+                                                   [:< :ts (:ts ping)]]
+                                        :order-by [[:ts :desc]]}))]
+            (timbre/debug (:ts p))
+            p))
+   #" "))
+
+(defn replace-special [db user ping tags]
+  (into #{}
+        (flatten
+         (map (fn [tag]
+                (case tag
+                  ::plus  (vec (:tags ping))
+                  ::ditto (vec (tags-before db user ping))
+                  [tag]))
+              tags))))
+
+(defn update-pings [db user pings]
   (->> pings
        (map (fn [[p t]]
+              (timbre/trace p)
               (when p
-                (assoc p :tags (set t) :_old-tags (:tags p)))))
+                (let [t* (replace-special db user p t)]
+                  (assoc p :tags t* :_old-tags (:tags p))))))
        (remove nil?)))
 
 (defn save-pings [{:keys [db user]} pings]
@@ -167,7 +196,7 @@
 
 (defn save* [{:keys [db user] :as ctx} ps]
   (trace [:save* (:id user) ps])
-  (let [new (update-pings ps)]
+  (let [new (update-pings db user ps)]
     (try (do (save-pings ctx new)
              {:saved new})
          (catch Exception e
