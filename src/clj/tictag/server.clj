@@ -216,6 +216,7 @@ Tag a ping by its long-time (e.g. by saying `1494519002000 ttc`)
 `sleep` command: tag the most recent set of contiguous `afk` pings as `sleep`
 `! vacation` will tag the most recent set of contiguous pings as `vacation`
 `\"`: macroexpands to the tags of the ping sent *before the one you're tagging*
+`+`: macroexpands to the tags of the current ping, so `+foo` will just add the foo tag to existing tags.
 Separate commands with a newline to apply multiple commands at once
 ")
   nil)

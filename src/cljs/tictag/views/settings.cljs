@@ -62,6 +62,9 @@
     [:li "Refer to any ping by its ms-from-epoch timestamp, like " [:code "1495753682000 foo bar"] ", to tag that ping as " [:code (pr-str ["foo" "bar"])]]
     [:li "The special command " [:code "sleep"] " will tag the last contiguous series of " [:code "afk"] " pings as " [:code (pr-str ["sleep"])]]
     [:li "Similarly, " [:code "! job"] " will tag the last contiguous set of " [:code "afk"] " pings as " [:code (pr-str ["job"])]]
+    [:li [:code "+"] " will macro-expand to the existing tags of the ping you're editing. "
+     "In other words: " [:code "+foo"] " or " [:code "foo +"] " or " [:code "foo+"] " will "
+     "all just " [:span.bold "add"] " the " [:code "foo"] " tag to a ping"]
     [:li [:code "\""] " will macro-expand to 'ditto'--in other words, the tags that the " [:span.bold "previous"] " ping had"]
     [:li "You can send multiple commands at once by separating them with newlines"]]
    [:p "You can also send " [:code "help"] " to the slackbot if you need it."]])
