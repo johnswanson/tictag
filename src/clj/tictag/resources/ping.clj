@@ -2,6 +2,7 @@
   (:require [tictag.resources.defaults :refer [collection-defaults resource-defaults]]
             [tictag.resources.utils :refer [id uid params processable? process replace-keys]]
             [tictag.db :as db]
+            [tictag.constants :refer [tags-regexp]]
             [liberator.core :refer [resource]]
             [clojure.spec.alpha :as s]
             [taoensso.timbre :as timbre]
@@ -9,7 +10,7 @@
             [clj-time.core :as t]
             [clojure.string :as str]))
 
-(s/def :ping/tags (s/and string? #(re-matches #"^[-:.\p{L}][-:.\p{L}0-9 ]*$" %)))
+(s/def :ping/tags (s/and string? #(re-matches tags-regexp %)))
 
 (s/def ::existing-ping
   (s/keys :opt [:ping/tags]))

@@ -2,6 +2,7 @@
   (:require [tictag.resources.defaults :refer [collection-defaults resource-defaults]]
             [tictag.resources.utils :refer [id uid params processable?]]
             [tictag.db :as db]
+            [tictag.constants :refer [tags-regexp tag-regexp]]
             [liberator.core :refer [resource]]
             [clojure.spec.alpha :as s]
             [taoensso.timbre :as timbre]))
@@ -17,8 +18,8 @@
 
 (def macro-keys [:macro/expands-from :macro/expands-to])
 
-(s/def :macro/expands-from (s/and string? #(re-matches #"^[-:.\p{L}][-:.\p{L}0-9]*$" %)))
-(s/def :macro/expands-to (s/and string? #(re-matches #"^[-:.\p{L}][-:.\p{L}0-9 ]*$" %)))
+(s/def :macro/expands-from (s/and string? #(re-matches tag-regexp %)))
+(s/def :macro/expands-to (s/and string? #(re-matches tags-regexp %)))
 
 (s/def ::new-macro
   (s/keys :req [:macro/expands-from :macro/expands-to]))
