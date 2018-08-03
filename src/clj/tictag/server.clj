@@ -349,7 +349,7 @@ Separate commands with a newline to apply multiple commands at once
                 (ANY "/beeminder/:id" _ (tictag.resources.beeminder/beeminder component))
                 (ANY "/slack" _ (tictag.resources.slack/slacks component))
                 (ANY "/slack/:id" _ (tictag.resources.slack/slack component))
-                (ANY "/goal" _ (tictag.resources.goal/goal component))
+                (ANY "/goal" _ (tictag.resources.goal/goals component))
                 (ANY "/goal/:id" _ (tictag.resources.goal/goal component))))
       (wrap-restful-params)
       (wrap-defaults (-> api-defaults (assoc :proxy true)))))

@@ -1,10 +1,11 @@
 (ns tictag.resources.beeminder
   (:require [tictag.resources.defaults :refer [collection-defaults resource-defaults]]
-            [tictag.resources.utils :refer [id uid params process processable?]]
+            [tictag.resources.utils :refer [id uid params process processable? replace-keys]]
             [tictag.db :as db]
             [liberator.core :refer [resource]]
             [clojure.spec.alpha :as s]
-            [taoensso.timbre :as timbre]))
+            [taoensso.timbre :as timbre]
+            [tictag.beeminder :as beeminder]))
 
 (defn update! [db uid id beeminder]
   (db/update-beeminder db uid id beeminder))
@@ -13,15 +14,32 @@
   (db/create-beeminder db uid beeminder))
 
 (defn location [e]
-  (str "/beeminder/" (:beeminder/id e)))
-
-(def beeminder-keys [:beeminder/beeminder :beeminder/tags])
+  (str "/api/beeminder/" (:beeminder/id e)))
 
 (s/def ::existing-beeminder
-  (s/keys :opt [:beeminder/is-enabled?]))
+  (s/keys :opt [:beeminder/is-enabled]))
 
 (s/def ::new-beeminder
   (s/keys :req [:beeminder/token]))
+
+(defn new-beeminder [db bm]
+  (let [{:keys [beeminder/token]} bm
+        user                      (beeminder/user-for token)
+        {:keys [encrypted iv]}    (db/encrypt db token)]
+    (timbre/debug user)
+    (if user
+      (-> bm
+          (dissoc :beeminder/token)
+          (assoc :beeminder/encrypted-token encrypted)
+          (assoc :beeminder/encryption-iv iv)
+          (assoc :beeminder/is-enabled false)
+          (assoc :beeminder/username (:username user)))
+      :tictag.resources/unprocessable)))
+
+(defn out [beeminder]
+  (-> beeminder
+      (dissoc :beeminder/encrypted-token :beeminder/encryption-iv)
+      (replace-keys {:beeminder/is-enabled :beeminder/enabled?})))
 
 (defn beeminder [{:keys [db]}]
   (resource
@@ -47,14 +65,18 @@
      (db/delete-beeminder db (::user-id ctx) (::beeminder-id ctx)))
    :processable?
    (fn [ctx]
-     (let [[valid? e] (processable? ::existing-beeminder ctx beeminder-keys)]
-       [valid? {::changes e}]))
+     (let [e (process ::existing-beeminder ctx [:beeminder/enabled?] [#(replace-keys % {:beeminder/enabled?
+                                                                                        :beeminder/is-enabled})])]
+       (if (= e :tictag.resources/unprocessable)
+         [false {::unprocessable {:beeminder/error "unknown"}}]
+         [true {::changes e}])))
    :put!
    (fn [ctx]
      {::beeminder (update! db (::user-id ctx) (::beeminder-id ctx) (::changes ctx))})
    :new? false
    :respond-with-entity? true
-   :handle-ok ::beeminder))
+   :handle-unprocessable-entity ::unprocessable
+   :handle-ok #(out (::beeminder %))))
 
 (defn beeminders [{:keys [db]}]
   (resource
@@ -66,7 +88,7 @@
    :handle-unprocessable-entity ::not-processable
    :processable?
    (fn [ctx]
-     (let [e (process ::new-beeminder ctx beeminder-keys)]
+     (let [e (process ::new-beeminder ctx [:beeminder/token] (partial new-beeminder db))]
        (if (= e :tictag.resources/unprocessable)
          [false {::not-processable {:beeminder/token "Invalid beeminder token"}}]
          [true {::beeminder e}])))
@@ -76,4 +98,6 @@
        {::beeminders beeminders}))
    :post!
    (fn [ctx]
-     {:location (location (create! db (::user-id ctx) (::beeminder ctx)))})))
+     {:location (location (create! db (::user-id ctx) (::beeminder ctx)))})
+   :post-redirect? true
+   :handle-ok #(map out (::beeminders %))))
