@@ -151,17 +151,17 @@
    :local-day  (local-day local_time)
    :timestamp  (coerce/to-long ts)})
 
-(defn get-pings [db query]
+(defn get-pings* [db query]
   (map to-ping (j/query db (sql/format query))))
 
 (defn get-pings-by-user [db user]
-  (get-pings db (-> ping-select
+  (get-pings* db (-> ping-select
                     (where [:= :pings.user_id (:id user)]))))
 
 (defn ping-from-id [db user id]
   (let [timestamp (pending-timestamp db id)]
     (first
-     (get-pings
+     (get-pings*
       (:db db)
       (-> ping-select
           (where [:= :ts timestamp]
@@ -169,13 +169,12 @@
           (limit 1))))))
 
 (defn last-pings [db user count]
-  (get-pings
+  (get-pings*
    (:db db)
    (-> ping-select
        (where [:= :user_id (:id user)])
        (merge-where
         (when-let [now (:_last-ping db)]
-          (timbre/trace "looking for last-pings with <= ts " now)
           [:<= :ts now]))
        (order-by [:ts :desc])
        (limit count))))
@@ -210,7 +209,7 @@
            (where [:= :user_id (:id user)])
            (order-by [:ts :desc])
            (limit 100))
-       (get-pings db)
+       (get-pings* db)
        (drop-while #(-> % :tags (get "afk") not))
        (take-while #(-> % :tags (get "afk" )))))
 

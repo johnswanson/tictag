@@ -351,7 +351,7 @@ Separate commands with a newline to apply multiple commands at once
                 (ANY "/slack/:id" _ (tictag.resources.slack/slack component))
                 (ANY "/goal" _ (tictag.resources.goal/goals component))
                 (ANY "/goal/:id" _ (tictag.resources.goal/goal component))))
-      (wrap-restful-params)
+      (wrap-restful-params :formats [:json-kw :edn :msgpack-kw :yaml-kw :transit-json :transit-msgpack])
       (wrap-defaults (-> api-defaults (assoc :proxy true)))))
 
 
