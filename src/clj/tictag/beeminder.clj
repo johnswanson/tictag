@@ -69,7 +69,7 @@
           {:user     (:id user)
            :enabled? (:enabled? (:beeminder user))}])
   (when (:enabled? (:beeminder user))
-    (when-let [goals (seq (db/get-goals db (:beeminder user)))]
+    (when-let [goals (seq (db/get-goals* db (:beeminder user)))]
       (trace [:beeminder-sync
               {:goals goals}])
       (let [in-past-week? (past-week-days)

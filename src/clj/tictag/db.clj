@@ -501,7 +501,7 @@
                [:= :user-id user-id])
         sql/format))))
 
-(defn get-goals [db beeminder-user]
+(defn get-goals* [db beeminder-user]
   (map
    #(clojure.core/update % :goal/tags edn/read-string)
    (get-goals-raw db beeminder-user)))
