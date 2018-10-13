@@ -32,11 +32,9 @@
   (let [resp (http/post (method-url cmd) opts)]
     (future
       (let [resp (update @resp :body json/parse-string true)]
-        (if-not (success? resp)
-          (timbre/error [:slack-error-resp resp])
-          (timbre/trace [:slack-resp resp]))
-        (when (success? resp)
-          resp)))))
+        (when-not (success? resp)
+          (throw (ex-info "Failed to post to slack" resp)))
+        resp))))
 
 (defn im-open [token user-id]
   (:body @(post "im.open" {:form-params {:token token :user user-id}})))
