@@ -17,6 +17,8 @@
                    :slack-client-id          (env :slack-client-id)
                    :slack-client-secret      (env :slack-client-secret)
                    :slack-verification-token (env :slack-verification-token)}
+   :rollcage      {:token (some-> env :rollcage-token)
+                   :environment (some-> env :rollcage-environment)}
    :db            {:dbtype   "postgresql"
                    :dbname   (env :pg-database)
                    :host     (env :pg-host "127.0.0.1")

@@ -54,6 +54,7 @@
                  [org.clojure/tools.cli "0.3.5"]
                  [org.clojure/java.jdbc "0.7.3"]
                  [org.clojure/math.combinatorics "0.1.4"]
+                 [circleci/rollcage "1.0.148"]
                  [org.clojars.jds02006/tictagapi "0.1.0-SNAPSHOT"]
                  [clj-iterate "0.96"]
                  [instaparse "1.4.8"]
