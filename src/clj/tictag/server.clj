@@ -105,8 +105,7 @@
 
 (defmethod evaluate :CMDS [ctx [_ & vs]]
   (timbre/trace [:evaluate :CMDS vs])
-  (doseq [[cmd {:keys [saved error]}] (map (partial evaluate ctx) vs)]
-    (when error (timbre/error error))))
+  (doall (map (partial evaluate ctx) vs)))
 
 (defmethod evaluate :ID [{:keys [db user]} [_ id-str]]
   (if-let [ping (db/ping-from-id db user id-str)]
@@ -197,11 +196,8 @@
 (defn save* [{:keys [db user] :as ctx} ps]
   (trace [:save* (:id user) ps])
   (let [new (update-pings db user ps)]
-    (try (do (save-pings ctx new)
-             {:saved new})
-         (catch Exception e
-           {:error {:exception e
-                    :saving    ps}}))))
+    (save-pings ctx new)
+    {:saved new}))
 
 (defn save [ctx p]
   (save* ctx [p]))
@@ -227,10 +223,7 @@ Separate commands with a newline to apply multiple commands at once
      (case cmd
        :SAVE  (save ctx args)
        :SAVE* (save* ctx args)
-       :HELP  (help ctx)
-       {:error {:exception :unknown-command
-                :cmd cmd
-                :args args}})]))
+       :HELP  (help ctx))]))
 
 (defmethod evaluate :BYID [ctx [_ & args]]
   [:SAVE (map (partial evaluate ctx) args)])
@@ -255,9 +248,7 @@ Separate commands with a newline to apply multiple commands at once
                  (pr-str parse-result)
                  "If you can't figure out what went wrong, let me know!"))
         (timbre/error "PARSE ERROR" (:user ctx) s parse-result))
-      (try (evaluate ctx parse-result)
-           (catch Exception e
-             (timbre/error "EVAL ERROR" (:user ctx) e s parse-result))))))
+      (evaluate ctx parse-result))))
 
 (defn slack-msg [{:keys [db tagtime] :as component} {:keys [params]}]
   (taoensso.timbre/logged-future

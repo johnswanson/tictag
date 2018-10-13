@@ -110,7 +110,7 @@
                 delete-futures           (doall (map #(delete-datapoint! token username goal %) to-delete))]
             (doseq [resp (concat save-futures delete-futures)]
               (if-not (utils/success? @resp)
-                (timbre/error @resp)
+                (throw (ex-info "Failue to update beeminder" @resp))
                 (timbre/trace (get-in @resp [:opts :method]) (:status @resp))))))))))
 
 (defn user-for [token]
