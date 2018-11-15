@@ -107,17 +107,17 @@
   (timbre/trace [:evaluate :CMDS vs])
   (doall (map (partial evaluate ctx) vs)))
 
-(defmethod evaluate :ID [{:keys [db user]} [_ id-str]]
+(defmethod evaluate :ID [{:keys [db user slack]} [_ id-str]]
   (if-let [ping (db/ping-from-id db user id-str)]
     ping
-    (do (slack/send-message user (format "Warning: can't find ping with id: `%s`" id-str)) nil)))
+    (do (slack/send-message slack user (format "Warning: can't find ping with id: `%s`" id-str)) nil)))
 
-(defmethod evaluate :LT [{:keys [db user]} [_ lt-str]]
+(defmethod evaluate :LT [{:keys [db user slack]} [_ lt-str]]
   (if-let [ping (db/get-ping db [:and
                                  [:= :user-id (:id user)]
                                  [:= :ts (Long. lt-str)]])]
     ping
-    (do (slack/send-message user (format "Warning: can't find ping from time: `%s`" lt-str)) nil)))
+    (do (slack/send-message slack user (format "Warning: can't find ping from time: `%s`" lt-str)) nil)))
 
 (defmethod evaluate :DITTO [{:keys [db user]} _]
   [::ditto])
@@ -179,10 +179,11 @@
                   (assoc p :tags t* :_old-tags (:tags p))))))
        (remove nil?)))
 
-(defn save-pings [{:keys [db user]} pings]
+(defn save-pings [{:keys [db user slack]} pings]
   (trace [:save-pings (:id user) pings])
   (db/update-tags! db pings)
   (slack/send-messages
+   slack
    user
    (map
     (fn [{:keys [local-time tags _old-tags] :as ping}]
@@ -203,7 +204,7 @@
   (save* ctx [p]))
 
 (defn help [{:keys [slack user]}]
-  (slack/send-message user "TicTag will ping you every 45 minutes, on average.
+  (slack/send-message slack user "TicTag will ping you every 45 minutes, on average.
 Pings look like this: `ping <id> [<long-time>]`
 Tag the most recent ping (e.g. by saying `ttc`)
 Tag a specific ping by responding in a slack thread to that ping's message
@@ -237,17 +238,18 @@ Separate commands with a newline to apply multiple commands at once
       (warn "INVALID SLACK MESSAGE RECEIVED: %s" params))
     valid?))
 
-(defn eval-command [ctx s]
+(defn eval-command [{:keys [slack user] :as ctx} s]
   (let [parse-result (command-parser s)]
     (if (insta/failure? parse-result)
       (do
         (slack/send-message
-         (:user ctx)
+         slack
+         user
          (format "%s\n```%s```\n%s"
                  "Uh-oh! We had an error parsing your response! Maybe this will help:"
                  (pr-str parse-result)
                  "If you can't figure out what went wrong, let me know!"))
-        (timbre/error "PARSE ERROR" (:user ctx) s parse-result))
+        (timbre/error "PARSE ERROR" user s parse-result))
       (evaluate ctx parse-result))))
 
 (defn slack-msg [{:keys [db tagtime] :as component} {:keys [params]}]
@@ -298,7 +300,7 @@ Separate commands with a newline to apply multiple commands at once
          :headers {"Content-Type" "text/plain"}
          :body "ERROR - NO DB CONNECTION"}))))
 
-(defn slack-callback [{:keys [config db] :as component} {:keys [params user-id]}]
+(defn slack-callback [{:keys [config db slack] :as component} {:keys [params user-id]}]
   (if user-id
     (let [code                   (:code params)
           token-resp             (slack/oauth-access-token (:slack-client-id config)
@@ -308,8 +310,8 @@ Separate commands with a newline to apply multiple commands at once
           access-token           (token-resp :access-token)
           bot-access-token       (-> token-resp :bot :bot-access-token)
           slack-user-id          (:user-id token-resp)
-          {:keys [user]}         (slack/users-info access-token slack-user-id)
-          {:keys [channel]}      (slack/im-open bot-access-token slack-user-id)
+          {:keys [user]}         (slack/users-info slack access-token slack-user-id)
+          {:keys [channel]}      (slack/im-open slack bot-access-token slack-user-id)
           {:keys [encrypted iv]} (db/encrypt db bot-access-token)]
       (if (and user-id user bot-access-token channel (:id channel) slack-user-id)
         (do

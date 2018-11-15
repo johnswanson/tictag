@@ -8,7 +8,8 @@
             [tictag.db :as db]
             [tictag.repl :as repl]
             [tictag.logging :as logging]
-            [tictag.rollcage :as rollcage]))
+            [tictag.rollcage :as rollcage]
+            [tictag.slack :as slack]))
 
 (logging/configure!)
 
@@ -34,12 +35,12 @@
 
    :chimer (component/using
             (server-chimer/map->ServerChimer {})
-            [:db])
+            [:db :slack])
 
    :rollcage (rollcage/map->RollcageClient (:rollcage config))
 
    :beeminder (component/using {} [:db :tagtime])
-   :slack {}
+   :slack (slack/map->SlackClient {})
 
    :tester (tester/->Tester (:run-tests? config))))
 

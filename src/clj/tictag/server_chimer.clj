@@ -10,7 +10,7 @@
             [clj-time.format :as f]
             [tictag.utils :as utils]))
 
-(defn chime! [{db :db}]
+(defn chime! [{db :db slack :slack}]
   (let [state (atom (cycle (shuffle (range 1000))))
         next! (fn [] (swap! state next) (str (first @state)))]
     (fn [time]
@@ -27,11 +27,11 @@
                             (map #(f/with-zone utils/wtf %))
                             (map #(format "%s\n`ping %s [%s]`" (f/unparse % time) id long-time)))
               responses (doall
-                         (slack/send-chime! slacks messages))]
+                         (slack/send-chime! slack slacks messages))]
           (db/update-tags-with-slack-ts db time responses))
         (timbre/debugf "CHIME %s: All done!" id)))))
 
-(defrecord ServerChimer [db]
+(defrecord ServerChimer [db slack]
   component/Lifecycle
   (start [component]
     (assoc
@@ -43,5 +43,4 @@
   (stop [component]
     (when-let [stop (:stop component)]
       (stop))
-
     (dissoc component :stop)))

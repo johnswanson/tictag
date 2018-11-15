@@ -93,6 +93,8 @@
                  [com.taoensso/sente "1.11.0"]
                  [com.fzakaria/slf4j-timbre "0.3.7"]
                  [environ "1.1.0"]
+                 [diehard "0.7.2"]
+                 [com.climate/claypoole "1.1.4"]
                  [buddy "2.0.0"]
                  [buddy/buddy-hashers "1.3.0"]
                  [funcool/struct "1.1.0"]

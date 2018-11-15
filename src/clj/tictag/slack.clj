@@ -5,9 +5,23 @@
             [clojure.string :as str]
             [oauth.v2 :as v2]
             [taoensso.timbre :as timbre]
-            [tictag.utils :as utils]))
+            [tictag.utils :as utils]
+            [diehard.core :as dh]
+            [com.climate.claypoole :as cp]))
+
+(defrecord SlackClient []
+  component/Lifecycle
+  (start [component]
+    (assoc component ::threadpool (cp/threadpool 100)))
+  (stop [component]
+    (when-let [pool (:threadpool component)]
+      (cp/shutdown pool))
+    (dissoc component ::threadpool))
 
 (timbre/refer-timbre)
+
+(dh/defretrypolicy
+  {:backoff-ms [100 5000 2]})
 
 (def oauth-access-token-url "https://slack.com/api/oauth.access")
 (def oauth-authorization-url "https://slack.com/oauth/authorize")
@@ -28,25 +42,24 @@
   (if (utils/success? resp)
     (get-in resp [:body :ok])))
 
-(defn post [cmd opts]
+(defn post [client cmd opts]
   (let [resp (http/post (method-url cmd) opts)]
-    (future
+    (cp/future
+      pool
       (let [resp (update @resp :body json/parse-string true)]
-        (when-not (success? resp)
-          (throw (ex-info "Failed to post to slack" resp)))
-        resp))))
+        (when (success? resp)
+          resp)))))
 
-(defn im-open [token user-id]
-  (:body @(post "im.open" {:form-params {:token token :user user-id}})))
+(defn im-open [client token user-id]
+  (:body @(post client "im.open" {:form-params {:token token :user user-id}})))
 
 (defn users-info [token user-id]
-  (:body @(post "users.info" {:form-params {:token token :user user-id}})))
+  (:body @(post client "users.info" {:form-params {:token token :user user-id}})))
 
-(defn channels [token]
+(defn channels [client token]
   (into {}
         (map (juxt :name_normalized :id)
-             (-> "channels.list"
-                 (post {:form-params {:token token}})
+             (-> (post "channels.list" client {:form-params {:token token}})
                  deref
                  :body
                  :channels))))
@@ -56,14 +69,15 @@
 
 (defn send-messages
   "Send one user MULTIPLE messages"
-  [user messages]
+  [client user messages]
   (when-let [{:keys [dm-id bot-access-token]} (:slack user)]
     (timbre/trace [:send-messages
                    {:user (:id user)
                     :messages messages}])
     (doall
      (map (fn [{:keys [text thread-ts channel]}]
-            (post "chat.postMessage"
+            (post client
+                  "chat.postMessage"
                   {:form-params {:token           bot-access-token
                                  :channel         (or channel dm-id)
                                  :text            text
@@ -71,18 +85,18 @@
                                  :reply_broadcast true}}))
           messages))))
 
-(defn send-message [user message]
-  (send-messages user [{:text message}]))
+(defn send-message [client user message]
+  (send-messages client user [{:text message}]))
 
 (defn send-message!
-  [params]
-  (post "chat.postMessage" {:form-params params}))
+  [client params]
+  (post client "chat.postMessage" {:form-params params}))
 
 (defn send-messages*
   "Send multiple users messages"
-  [slacks bodies]
+  [client slacks bodies]
   (->> (map #(assoc %1 :text %2) slacks bodies)
-       (map send-message!)))
+       (map (partial send-message! client))))
 
-(defn send-chime! [slacks messages]
-  (send-messages* slacks messages))
+(defn send-chime! [client slacks messages]
+  (send-messages* client slacks messages))
