@@ -21,7 +21,10 @@
 (timbre/refer-timbre)
 
 (dh/defretrypolicy
-  {:backoff-ms [100 5000 2]})
+  {:backoff-ms [250 5000 2]
+   :max-retries 8
+   :retry-if (fn [{:keys [error]} e]
+               (or error e))})
 
 (def oauth-access-token-url "https://slack.com/api/oauth.access")
 (def oauth-authorization-url "https://slack.com/oauth/authorize")
