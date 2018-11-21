@@ -16,15 +16,9 @@
   (stop [component]
     (when-let [pool (:threadpool component)]
       (cp/shutdown pool))
-    (dissoc component ::threadpool))
+    (dissoc component ::threadpool)))
 
 (timbre/refer-timbre)
-
-(dh/defretrypolicy
-  {:backoff-ms [250 5000 2]
-   :max-retries 8
-   :retry-if (fn [{:keys [error]} e]
-               (or error e))})
 
 (def oauth-access-token-url "https://slack.com/api/oauth.access")
 (def oauth-authorization-url "https://slack.com/oauth/authorize")
@@ -45,18 +39,28 @@
   (if (utils/success? resp)
     (get-in resp [:body :ok])))
 
+(dh/defretrypolicy retry-policy
+  {:backoff-ms [250 5000]
+   :max-retries 8
+   :retry-if (fn [{:keys [error]} exception]
+               (or error exception))})
+
 (defn post [client cmd opts]
-  (let [resp (http/post (method-url cmd) opts)]
-    (cp/future
-      pool
-      (let [resp (update @resp :body json/parse-string true)]
+  (cp/future
+    (::threadpool client)
+    (dh/with-retry {:policy retry-policy}
+      (let [resp (-> cmd
+                     (method-url)
+                     (http/post opts)
+                     (deref)
+                     (update :body json/parse-string true))]
         (when (success? resp)
           resp)))))
 
 (defn im-open [client token user-id]
   (:body @(post client "im.open" {:form-params {:token token :user user-id}})))
 
-(defn users-info [token user-id]
+(defn users-info [client token user-id]
   (:body @(post client "users.info" {:form-params {:token token :user user-id}})))
 
 (defn channels [client token]
