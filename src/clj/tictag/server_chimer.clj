@@ -8,9 +8,10 @@
             [taoensso.timbre :as timbre]
             [tictag.slack :as slack]
             [clj-time.format :as f]
-            [tictag.utils :as utils]))
+            [tictag.utils :as utils]
+            [com.climate.claypoole :as cp]))
 
-(defn chime! [{db :db slack :slack}]
+(defn chime! [{db :db slack :slack {pool :pool} :threadpool}]
   (let [state (atom (cycle (shuffle (range 1000))))
         next! (fn [] (swap! state next) (str (first @state)))]
     (fn [time]
@@ -25,11 +26,30 @@
                             (map :tz)
                             (map t/time-zone-for-id)
                             (map #(f/with-zone utils/wtf %))
-                            (map #(format "%s\n`ping %s [%s]`" (f/unparse % time) id long-time)))
-              responses (doall
-                         (slack/send-chime! slack slacks messages))]
-          (db/update-tags-with-slack-ts db time responses))
+                            (map #(format "%s\n`ping %s [%s]`" (f/unparse % time) id long-time)))]
+          (doall
+           (for [[params message] (zipmap slacks messages)]
+             (cp/future pool
+               (when-let [{:keys [body]} (slack/send-message!
+                                          slack
+                                          (-> params
+                                              (assoc :text message)
+                                              (dissoc :slack-id)))]
+                 (db/update-ping-threads
+                  db
+                  (:slack-id params)
+                  time
+                  (:ts body)))))))
         (timbre/debugf "CHIME %s: All done!" id)))))
+
+(defrecord Threadpool []
+  component/Lifecycle
+  (start [component]
+    (assoc component :pool (cp/threadpool 100)))
+  (stop [component]
+    (when-let [{pool :pool} component]
+      (cp/shutdown pool))
+    (dissoc component :pool)))
 
 (defrecord ServerChimer [db slack]
   component/Lifecycle
@@ -43,4 +63,6 @@
   (stop [component]
     (when-let [stop (:stop component)]
       (stop))
-    (dissoc component :stop)))
+    (when-let [threadpool (:threadpool component)]
+      (cp/shutdown threadpool))
+    (dissoc component :stop :threadpool)))

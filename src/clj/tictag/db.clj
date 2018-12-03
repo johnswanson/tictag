@@ -52,12 +52,14 @@
 
 (defn with-last-ping
   "This is SUPER hacky and only works for the `db/last-pings` fn."
-  [db {id :id} ts]
+  [db {{id :id} :slack} ts]
   (timbre/trace "Using thread-ts" ts)
   (if-let [[ping] (j/query (:db db)
                            (-> (select :ping-ts)
                                (from :ping-threads)
-                               (where [:= :ping-threads.slack-ts ts])
+                               (where [:and
+                                       [:= :ping-threads.slack-ts ts]
+                                       [:= :ping-threads.slack-id id]])
                                sql/format))]
     (assoc db :_last-ping (:ping_ts ping))
     db))
@@ -195,15 +197,13 @@
 (defn last-ping [db user]
   (first (last-pings db user 1)))
 
-
-(defn update-tags-with-slack-ts [{db :db} time c]
-  (j/with-db-transaction [db db]
-    (doseq [resp (remove #(nil? @%) c)]
-      (j/execute! db (-> (insert-into :ping-threads)
-                         (values
-                          [{:slack-ts (get-in @resp [:body :ts])
-                            :ping-ts  time}])
-                         sql/format)))))
+(defn update-ping-threads [{db :db} slack-id time ts]
+  (j/execute! db (-> (insert-into :ping-threads)
+                     (values
+                      [{:slack-ts ts
+                        :ping-ts time
+                        :slack-id slack-id}])
+                     (sql/format))))
 
 (defn update-tags! [{db :db} pings]
   (timbre/tracef "Updating pings: %s" (pr-str pings))
@@ -482,6 +482,7 @@
         (-> (select :slack.channel-id
                     :slack.encrypted-bot-access-token
                     :slack.encryption-iv
+                    :slack.user-id
                     :users.tz)
             (from :slack)
             (left-join :users [:= :slack.user_id :users.id])
@@ -492,11 +493,13 @@
        (partition-by :channel_id)
        (map first)
        (map (fn [{token   :encrypted_bot_access_token
+                  user-id :user_id
                   iv      :encryption_iv
                   channel :channel_id
                   tz      :tz}]
               {:token   (decrypt db token iv)
                :channel channel
+               :user-id user-id
                :tz      tz}))))
 
 (defn get-all-slack-dms [db]
@@ -505,6 +508,7 @@
         (-> (select :slack.dm-id
                     :slack.encrypted-bot-access-token
                     :slack.encryption-iv
+                    :slack.user-id
                     :users.tz)
             (from :slack)
             (left-join :users [:= :slack.user_id :users.id])
@@ -515,6 +519,7 @@
        (map first)
        (map (fn [{token   :encrypted_bot_access_token
                   iv      :encryption_iv
+                  user-id :user_id
                   channel :dm_id
                   tz      :tz}]
               {:token   (decrypt db token iv)

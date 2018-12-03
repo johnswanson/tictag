@@ -35,12 +35,14 @@
 
    :chimer (component/using
             (server-chimer/map->ServerChimer {})
-            [:db :slack])
+            [:db :slack :threadpool])
+
+   :threadpool (server-chimer/->Threadpool)
 
    :rollcage (rollcage/map->RollcageClient (:rollcage config))
 
    :beeminder (component/using {} [:db :tagtime])
-   :slack (slack/map->SlackClient {})
+   :slack {}
 
    :tester (tester/->Tester (:run-tests? config))))
 

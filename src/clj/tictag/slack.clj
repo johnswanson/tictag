@@ -6,17 +6,7 @@
             [oauth.v2 :as v2]
             [taoensso.timbre :as timbre]
             [tictag.utils :as utils]
-            [diehard.core :as dh]
-            [com.climate.claypoole :as cp]))
-
-(defrecord SlackClient []
-  component/Lifecycle
-  (start [component]
-    (assoc component ::threadpool (cp/threadpool 100)))
-  (stop [component]
-    (when-let [pool (:threadpool component)]
-      (cp/shutdown pool))
-    (dissoc component ::threadpool)))
+            [diehard.core :as dh]))
 
 (timbre/refer-timbre)
 
@@ -46,28 +36,25 @@
                (or error exception))})
 
 (defn post [client cmd opts]
-  (cp/future
-    (::threadpool client)
-    (dh/with-retry {:policy retry-policy}
-      (let [resp (-> cmd
-                     (method-url)
-                     (http/post opts)
-                     (deref)
-                     (update :body json/parse-string true))]
-        (when (success? resp)
-          resp)))))
+  (dh/with-retry {:policy retry-policy}
+    (let [resp (-> cmd
+                   (method-url)
+                   (http/post opts)
+                   (deref)
+                   (update :body json/parse-string true))]
+      (when (success? resp)
+        resp))))
 
 (defn im-open [client token user-id]
-  (:body @(post client "im.open" {:form-params {:token token :user user-id}})))
+  (:body (post client "im.open" {:form-params {:token token :user user-id}})))
 
 (defn users-info [client token user-id]
-  (:body @(post client "users.info" {:form-params {:token token :user user-id}})))
+  (:body (post client "users.info" {:form-params {:token token :user user-id}})))
 
 (defn channels [client token]
   (into {}
         (map (juxt :name_normalized :id)
              (-> (post "channels.list" client {:form-params {:token token}})
-                 deref
                  :body
                  :channels))))
 
@@ -98,12 +85,3 @@
 (defn send-message!
   [client params]
   (post client "chat.postMessage" {:form-params params}))
-
-(defn send-messages*
-  "Send multiple users messages"
-  [client slacks bodies]
-  (->> (map #(assoc %1 :text %2) slacks bodies)
-       (map (partial send-message! client))))
-
-(defn send-chime! [client slacks messages]
-  (send-messages* client slacks messages))
