@@ -5,10 +5,11 @@
 (defrecord RollcageClient [token environment]
   component/Lifecycle
   (start [component]
-    (when (and environment token)
+    (if (and environment token)
       (let [client (rollcage/client token {:environment environment})]
         (rollcage/setup-uncaught-exception-handler client)
-        (assoc component :client client))))
+        (assoc component :client client))
+      component))
   (stop [component]
-    {}))
+    component))
 
