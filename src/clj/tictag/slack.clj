@@ -27,15 +27,21 @@
 
 (defn success? [resp]
   (if (utils/success? resp)
-    (get-in resp [:body :ok])))
+    (get-in resp [:body :ok])
+    (timbre/debug "Failed to send message" (:body resp))))
 
 (dh/defretrypolicy retry-policy
   {:backoff-ms [250 5000]
    :max-retries 8
    :retry-if (fn [{:keys [error]} exception]
+               (when error
+                 (timbre/debugf "Retrying due to error: %s" (pr-str error)))
+               (when exception
+                 (timbre/debugf "Retrying due to exception: %s" (.getMessage exception)))
                (or error exception))})
 
 (defn post [client cmd opts]
+  (timbre/debug cmd)
   (dh/with-retry {:policy retry-policy}
     (let [resp (-> cmd
                    (method-url)
@@ -65,19 +71,16 @@
   "Send one user MULTIPLE messages"
   [client user messages]
   (when-let [{:keys [dm-id bot-access-token]} (:slack user)]
-    (timbre/trace [:send-messages
-                   {:user (:id user)
-                    :messages messages}])
-    (doall
-     (map (fn [{:keys [text thread-ts channel]}]
-            (post client
-                  "chat.postMessage"
-                  {:form-params {:token           bot-access-token
-                                 :channel         (or channel dm-id)
-                                 :text            text
-                                 :thread_ts       thread-ts
-                                 :reply_broadcast true}}))
-          messages))))
+    (timbre/debug "Sending messages" {:user (:id user)
+                                      :messages messages})
+    (doseq [{:keys [text thread-ts channel]} messages]
+      (post client
+            "chat.postMessage"
+            {:form-params {:token           bot-access-token
+                           :channel         (or channel dm-id)
+                           :text            text
+                           :thread_ts       thread-ts
+                           :reply_broadcast true}}))))
 
 (defn send-message [client user message]
   (send-messages client user [{:text message}]))

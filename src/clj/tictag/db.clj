@@ -95,15 +95,6 @@
       (hikari/close-datasource ds))
     (dissoc component :db)))
 
-(defn add-pings!
-  "At this point, just used for parsed TagTime data"
-  [db pings]
-  (j/execute!
-   (:db db)
-   (-> (insert-into :pings)
-       (values pings)
-       sql/format)))
-
 (defn tz-offset [uid time]
   (-> (select (sql/call :-
                     (sql/call :timezone
@@ -206,7 +197,7 @@
                      (sql/format))))
 
 (defn update-tags! [{db :db} pings]
-  (timbre/tracef "Updating pings: %s" (pr-str pings))
+  (timbre/debugf "Updating pings: %s" (pr-str pings))
   (j/with-db-transaction [db db]
     (doseq [{:keys [tags user-id timestamp]} pings]
       (j/execute! db (-> (h/update :pings)
