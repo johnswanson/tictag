@@ -187,7 +187,7 @@
    user
    (map
     (fn [{:keys [local-time tags _old-tags] :as ping}]
-      (timbre/trace ping)
+      (timbre/trace "saving ping" ping)
       {:text      (format "updated `%s: %s -> %s`"
                           (f/unparse utils/wtf local-time)
                           _old-tags

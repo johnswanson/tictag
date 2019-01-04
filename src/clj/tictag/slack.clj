@@ -28,7 +28,7 @@
 (defn success? [resp]
   (if (utils/success? resp)
     (get-in resp [:body :ok])
-    (timbre/debug "Failed to send message" (:body resp))))
+    (timbre/debug "Failed to send message" resp)))
 
 (dh/defretrypolicy retry-policy
   {:backoff-ms [250 5000]
