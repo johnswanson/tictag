@@ -26,30 +26,33 @@
 (defn method-url [m] (str slack-api-url m))
 
 (defn success? [resp]
-  (if (utils/success? resp)
-    (get-in resp [:body :ok])
-    (timbre/debug "Failed to send message" resp)))
+  (when (and (utils/success? resp)
+             (get-in resp [:body :ok]))
+    resp))
 
 (dh/defretrypolicy retry-policy
-  {:backoff-ms [250 5000]
-   :max-retries 8
-   :retry-if (fn [{:keys [error]} exception]
-               (when error
-                 (timbre/debugf "Retrying due to error: %s" (pr-str error)))
-               (when exception
-                 (timbre/debugf "Retrying due to exception: %s" (.getMessage exception)))
-               (or error exception))})
+  {:backoff-ms [11 1009]
+   :jitter-ms 0.1
+   :max-retries 8})
+
 
 (defn post [client cmd opts]
   (timbre/debug cmd)
-  (dh/with-retry {:policy retry-policy}
-    (let [resp (-> cmd
-                   (method-url)
-                   (http/post opts)
-                   (deref)
-                   (update :body json/parse-string true))]
-      (when (success? resp)
-        resp))))
+  (dh/with-retry {:policy retry-policy
+                  :on-retry (fn [_ e] (timbre/debug "Retry" cmd (.getMessage e)))
+                  :on-abort (fn [_ e] (timbre/error "Retries failed, aborting" cmd (.getMessage e)))}
+    (let [{:keys [error] :as response} (-> cmd
+                                           (method-url)
+                                           (http/post opts)
+                                           (deref 5000 {:error :timeout}))]
+      (when error
+        (throw (ex-info "HTTP Exception occurred" {:exception exception
+                                                   :cmd cmd
+                                                   :opts opts})))
+      (some-> response
+              (update :body json/parse-string true)
+              (success?)))))
+
 
 (defn im-open [client token user-id]
   (:body (post client "im.open" {:form-params {:token token :user user-id}})))
