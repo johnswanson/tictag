@@ -32,7 +32,7 @@
 
 (dh/defretrypolicy retry-policy
   {:backoff-ms [11 1009]
-   :jitter-ms 0.1
+   :jitter-factor 0.1
    :max-retries 8})
 
 
@@ -46,7 +46,7 @@
                                            (http/post opts)
                                            (deref 5000 {:error :timeout}))]
       (when error
-        (throw (ex-info "HTTP Exception occurred" {:exception exception
+        (throw (ex-info "HTTP Exception occurred" {:exception error
                                                    :cmd cmd
                                                    :opts opts})))
       (some-> response
