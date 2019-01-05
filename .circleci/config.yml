@@ -1,4 +1,4 @@
-version: 2
+version: 2.1
 jobs:
   build:
     working_directory: ~/tictag
@@ -10,21 +10,18 @@ jobs:
     steps:
       - checkout
       - restore_cache:
-          key: deps-<< checksum "project.clj" >>
-      - restore_cache:
-          key: deps-<< checksum "package.json" >>
+          keys:
+            - deps-{{ checksum "project.clj" }}-{{ checksum "package.json" }}
+            - deps-{{ checksum "project.clj" }}
+            - deps-
       - run: npm i
-      - save_cache:
-          paths:
-            - ~/tictag/node_modules
-          key: deps-<< checksum "project.clj" >>
       - run: node_modules/postcss-cli/bin/postcss resources/css/* -o resources/public/css/out.css
       - run: lein deps
       - save_cache:
           paths:
+            - ~/tictag/node_modules
             - ~/.m2
-            - ~/.lein
-          key: deps-<< checksum "project.clj" >>
+          key: deps-{{ checksum "project.clj" }}-{{ checksum "package.json" }}
       - run: lein do test, uberjar
       - store_artifacts:
           path: target/uberjar/tictag.jar
